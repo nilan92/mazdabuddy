@@ -7,6 +7,29 @@ This guide explains how to publish your app to GitHub Pages for free hosting.
 1.  A GitHub Account.
 2.  A GitHub Repository for this project.
 
+## Step 0: Initialize Git (First Time Only)
+
+If you see errors like `fatal: not a git repository`, run these commands in your project folder first:
+
+```bash
+# Initialize a new git repository
+git init
+
+# Add all files
+git add .
+
+# Save changes
+git commit -m "First commit"
+
+# Rename branch to main
+git branch -M main
+
+# Link to your new repository
+git remote add origin https://github.com/nilan92/mazdabuddy.git
+```
+
+Then proceed to **Step 1**.
+
 ## Step 1: Configure Base URL
 
 1.  Open `vite.config.ts`.
