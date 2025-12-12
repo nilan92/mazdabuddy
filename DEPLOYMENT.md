@@ -50,6 +50,19 @@ Then proceed to **Step 1**.
     git push origin main
     ```
 
+If you see `Authentication failed` or `Password authentication is not supported`:
+
+1.  Go to GitHub.com > **Settings** (top right profile icon) > **Developer settings** (bottom of sidebar).
+2.  Select **Personal access tokens** > **Tokens (classic)**.
+3.  Click **Generate new token (classic)**.
+4.  Give it a Note (e.g., "MazdaBuddy Deploy").
+5.  **Select Scopes**: Check `repo` (Full control of private repositories) and `workflow` (needed for Actions).
+6.  Click **Generate token**.
+7.  **COPY THIS TOKEN**. You won't see it again.
+8.  Back in your terminal, run `git push -u origin main` again.
+9.  **Username**: Your GitHub username.
+10. **Password**: Paste the **Token** you just copied (NOT your account password).
+
 ## Step 3: Configure GitHub Pages
 
 1.  Go to your Repository on GitHub.
@@ -58,7 +71,24 @@ Then proceed to **Step 1**.
 4.  The action I created (`.github/workflows/deploy.yml`) will automatically run.
 5.  Wait a few minutes. You can check progress in the **Actions** tab.
 
-## Step 4: Supabase Configuration (Crucial!)
+## Step 4: Configure GitHub Secrets (Crucial for Build)
+
+Since we didn't push the `.env` file (for security), you must tell GitHub these values so it can build your app.
+
+1.  Go to your GitHub Repository.
+2.  Click **Settings** > **Secrets and variables** > **Actions**.
+3.  Click **New repository secret**.
+4.  Add the following two secrets (copy values from your local `.env` file):
+    - **Name**: `VITE_SUPABASE_URL`
+    - **Value**: (Your Supabase URL)
+    - Click **Add secret**.
+    - **Name**: `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`
+    - **Value**: (Your Supabase Anon Key)
+    - Click **Add secret**.
+
+Once these are added, go to the **Actions** tab and re-run the failed workflow (or push a new commit).
+
+## Step 5: Supabase Configuration (Crucial!)
 
 For Login to work on the live site, you must update Supabase.
 
