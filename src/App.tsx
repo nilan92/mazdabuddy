@@ -9,6 +9,7 @@ import { SmartScan } from './components/SmartScan';
 import { Customers } from './components/Customers';
 import { Settings } from './components/Settings';
 import { Login } from './components/Login';
+import { Register } from './components/Register';
 import { useAuth } from './context/AuthContext';
 import { Expenses } from './components/Expenses';
 
@@ -27,6 +28,7 @@ function App() {
     <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           
           <Route path="/*" element={
               <AuthGuard>

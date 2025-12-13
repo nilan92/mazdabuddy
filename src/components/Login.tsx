@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Lock, AlertCircle, User } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
 
 export const Login = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
-    const [email, setEmail] = useState('');
+    const [loginInput, setLoginInput] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
 
@@ -15,8 +15,22 @@ export const Login = () => {
         setLoading(true);
         setError(null);
 
+        let emailToUse = loginInput.trim();
+
+        // 1. Detect if input is username (no @ symbol)
+        if (!emailToUse.includes('@')) {
+            const { data, error: funcError } = await supabase.rpc('get_email_by_username', { input_username: emailToUse });
+            
+            if (funcError || !data) {
+                setError("Username not found.");
+                setLoading(false);
+                return;
+            }
+            emailToUse = data; // Resolved to email
+        }
+
         const { error } = await supabase.auth.signInWithPassword({
-            email,
+            email: emailToUse,
             password,
         });
 
@@ -48,18 +62,18 @@ export const Login = () => {
                         )}
                         
                         <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Email Address</label>
+                            <label className="block text-sm font-medium text-slate-400 mb-1">Email or Username</label>
                             <div className="relative">
                                 <div className="absolute left-3 top-3 text-slate-500">
-                                    <Mail size={18} />
+                                    <User size={18} />
                                 </div>
                                 <input 
-                                    type="email" 
+                                    type="text" 
                                     required
                                     className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none"
-                                    placeholder="technician@mazdabuddy.com"
-                                    value={email}
-                                    onChange={e => setEmail(e.target.value)}
+                                    placeholder="username or email@example.com"
+                                    value={loginInput}
+                                    onChange={e => setLoginInput(e.target.value)}
                                 />
                             </div>
                         </div>
@@ -88,12 +102,13 @@ export const Login = () => {
                         >
                             {loading ? 'Authenticating...' : 'Sign In'}
                         </button>
+
+                        <div className="text-center pt-4 border-t border-slate-800">
+                            <p className="text-slate-500 text-sm">Don't have an account?</p>
+                            <Link to="/register" className="text-cyan-400 hover:text-cyan-300 font-bold text-sm">Create Technician Account</Link>
+                        </div>
                     </form>
                 </div>
-                
-                <p className="text-center text-slate-600 text-sm mt-8">
-                    Authorized Personnel Only. <br/> Integrated with Supabase Auth.
-                </p>
             </div>
         </div>
     );

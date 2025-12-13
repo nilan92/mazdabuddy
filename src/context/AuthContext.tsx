@@ -78,9 +78,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setProfile(null);
     };
 
+    // If loading, show a global splash screen so the user doesn't see a blank white page
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mb-4"></div>
+                <div className="text-cyan-500 font-mono text-sm animate-pulse">Initializing MazdaBuddy...</div>
+            </div>
+        );
+    }
+
     return (
         <AuthContext.Provider value={{ session, user, profile, loading, signOut }}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 };

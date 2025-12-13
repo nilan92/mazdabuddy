@@ -1,11 +1,32 @@
--- RUN THIS IN SUPABASE SQL EDITOR
+-- 1. Add username column to profiles if it doesn't exist
+do $$
+begin
+    if not exists (select 1 from information_schema.columns where table_name = 'profiles' and column_name = 'username') then
+        alter table public.profiles add column username text unique;
+    end if;
+end $$;
 
--- 1. Add new columns to job_cards
-ALTER TABLE job_cards 
-ADD COLUMN IF NOT EXISTS assigned_technician_id uuid REFERENCES profiles(id),
-ADD COLUMN IF NOT EXISTS archived boolean DEFAULT false,
-ADD COLUMN IF NOT EXISTS estimated_hours numeric DEFAULT 0;
+-- 2. Create a secure function to lookup email by username
+-- This is SECURITY DEFINER so it can access auth.users (which normal users can't see)
+-- It returns the email ONLY if the username exists in public.profiles and links to that user.
 
--- 2. Update user_expenses to ensure job_id is linked (if not already)
--- (It was in v2, but safely ensuring it exists here just in case)
--- ALTER TABLE user_expenses ADD COLUMN IF NOT EXISTS job_id uuid REFERENCES job_cards(id) ON DELETE SET NULL;
+create or replace function public.get_email_by_username(input_username text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    found_email text;
+begin
+    select u.email into found_email
+    from auth.users u
+    join public.profiles p on p.id = u.id
+    where lower(p.username) = lower(input_username);
+
+    return found_email;
+end;
+$$;
+
+-- Grant execution to everyone (authenticated and anon) so login page can use it
+grant execute on function public.get_email_by_username(text) to anon, authenticated, service_role;

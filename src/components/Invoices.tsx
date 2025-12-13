@@ -172,7 +172,33 @@ export const Invoices = () => {
                                 <p className="text-sm">{selectedJob.vehicle}</p>
                             </div>
                             
-                            <div className="flex-1">
+                            {/* Mobile Card View */}
+                            <div className="block md:hidden flex-1 space-y-4">
+                                <div className="bg-slate-100 p-4 rounded-lg shadow-sm">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h3 className="font-bold text-slate-800 text-lg">Invoice Details</h3>
+                                            <div className="text-slate-500 text-xs">#{selectedJob.id.slice(0, 8)}</div>
+                                        </div>
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${selectedJob.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                            {selectedJob.status}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-end">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Description</div>
+                                            <div className="text-sm text-slate-700">Full Service & Repair Charges</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Amount</div>
+                                            <div className="text-lg font-mono text-cyan-600 font-bold">LKR {selectedJob.total.toLocaleString()}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Desktop Table View */}
+                            <div className="hidden md:block flex-1">
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="border-b border-slate-200">
