@@ -33,34 +33,55 @@ export const Expenses = () => {
         job_id: ''
     });
 
-    const fetchExpenses = async () => {
-        const { data } = await supabase
-            .from('user_expenses')
-            // @ts-ignore
-            .select('*, job_cards(vehicles(license_plate))')
-            .eq('user_id', user?.id)
-            .order('date', { ascending: false });
+    const fetchExpenses = async (signal?: AbortSignal) => {
+        try {
+            const { data } = await supabase
+                .from('user_expenses')
+                // @ts-ignore
+                .select('*, job_cards(vehicles(license_plate))')
+                .eq('user_id', user?.id)
+                .order('date', { ascending: false })
+                .abortSignal(signal!);
             
-        if (data) setExpenses(data as any);
+            if (signal?.aborted) return;
+            if (data) setExpenses(data as any);
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching expenses:', error);
+            }
+        }
     };
 
-    const fetchActiveJobs = async () => {
+    const fetchActiveJobs = async (signal?: AbortSignal) => {
         // Fetch jobs for dropdown (in progress or pending)
-        const { data } = await supabase
-            .from('job_cards')
-            // @ts-ignore
-            .select('*, vehicles(license_plate, make, model)')
-            .in('status', ['pending', 'in_progress', 'waiting_parts'])
-            .order('created_at', { ascending: false });
+        try {
+            const { data } = await supabase
+                .from('job_cards')
+                // @ts-ignore
+                .select('*, vehicles(license_plate, make, model)')
+                .in('status', ['pending', 'in_progress', 'waiting_parts'])
+                .order('created_at', { ascending: false })
+                .abortSignal(signal!);
             
-        if(data) setActiveJobs(data as JobCard[]);
+            if (signal?.aborted) return;
+            if(data) setActiveJobs(data as JobCard[]);
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching active jobs:', error);
+            }
+        }
     };
 
     useEffect(() => {
-        if(user) {
-            fetchExpenses();
-            fetchActiveJobs();
-        }
+        if(!user) return;
+        
+        const controller = new AbortController();
+        fetchExpenses(controller.signal);
+        fetchActiveJobs(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, [user]);
 
     const handleSubmit = async (e: React.FormEvent) => {

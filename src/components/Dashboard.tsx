@@ -3,17 +3,17 @@ import { Briefcase, DollarSign, Users, Activity } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
-  <div className="bg-slate-900/50 backdrop-blur border border-slate-800 p-6 rounded-2xl relative overflow-hidden group">
-    <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
-      <Icon size={64} />
+  <div className="bg-slate-900/50 backdrop-blur border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
+    <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
+      <Icon size={48} />
     </div>
-    <div className="flex items-center gap-4 mb-4">
-      <div className={`p-3 rounded-xl ${color} bg-opacity-10 text-white`}>
-        <Icon size={24} className={color.replace('bg-', 'text-')} />
+    <div className="flex items-center gap-3 mb-2">
+      <div className={`p-2 rounded-xl ${color} bg-opacity-10 text-white`}>
+        <Icon size={20} className={color.replace('bg-', 'text-')} />
       </div>
       <h3 className="text-slate-400 font-medium text-sm">{title}</h3>
     </div>
-    <div className="text-3xl font-bold text-white mb-1">{value}</div>
+    <div className="text-2xl font-bold text-white mb-1">{value}</div>
     <div className="text-xs text-slate-500">{subtext}</div>
   </div>
 );
@@ -36,11 +36,17 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const controller = new AbortController();
+    
     const fetchDashboardData = async () => {
       setLoading(true);
-      // 1. Fetch Stats & Efficiency
-      const { data: jobs } = await supabase.from('job_cards').select('id, estimated_hours, status, estimated_cost_lkr');
-      const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
+      try {
+          // 1. Fetch Stats & Efficiency
+          const { data: jobs } = await supabase.from('job_cards').select('id, estimated_hours, status, estimated_cost_lkr').abortSignal(controller.signal);
+          if (controller.signal.aborted) return;
+          
+          const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).abortSignal(controller.signal);
+          if (controller.signal.aborted) return;
       
       // Calculate Revenue & Active
       const totalRevenue = jobs?.filter(j => j.status === 'completed').reduce((acc, curr) => acc + (curr.estimated_cost_lkr || 0), 0) || 0;
@@ -48,7 +54,7 @@ export const Dashboard = () => {
 
       // Calculate Efficiency (Global)
       // Note: In real app, might want to limit to last 30 days
-      const { data: allLabor } = await supabase.from('job_labor').select('hours');
+      const { data: allLabor } = await supabase.from('job_labor').select('hours').abortSignal(controller.signal);
       const totalActualHours = allLabor?.reduce((sum, l) => sum + l.hours, 0) || 0;
       
       // Approximate Total Estimated (simplistic: sum of ALL jobs est hours)
@@ -77,23 +83,41 @@ export const Dashboard = () => {
         // @ts-ignore
         .select('*, vehicles(license_plate, make, model)')
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(5)
+        .abortSignal(controller.signal);
+      
+      if (controller.signal.aborted) return;
       
       if (recent) setRecentJobs(recent);
 
-      // 3. Fetch Low Stock
-      const { data: lowStockParts } = await supabase
-        .from('parts')
-        .select('*')
-        .lte('stock_quantity', 5)
-        .limit(5);
-
-      if (lowStockParts) setLowStock(lowStockParts);
-      
-      setLoading(false);
+          // 3. Fetch Low Stock
+          const { data: lowStockParts } = await supabase
+            .from('parts')
+            .select('*')
+            .lte('stock_quantity', 5)
+            .limit(5)
+            .abortSignal(controller.signal);
+    
+          if (controller.signal.aborted) return;
+    
+          if (lowStockParts) setLowStock(lowStockParts);
+          
+      } catch (error: any) {
+          if (error.name !== 'AbortError') {
+             console.error('Error loading dashboard:', error);
+          }
+      } finally {
+          if (!controller.signal.aborted) {
+              setLoading(false);
+          }
+      }
     };
 
     fetchDashboardData();
+    
+    return () => {
+        controller.abort();
+    };
   }, []);
 
   const SkeletonCard = () => (

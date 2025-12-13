@@ -22,20 +22,37 @@ export const Inventory = () => {
         cost_lkr: 0
     });
 
-    const fetchParts = async () => {
+    const fetchParts = async (signal?: AbortSignal) => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('parts')
-            .select('*')
-            .order('name');
-        
-        if (error) console.error('Error fetching parts:', error);
-        else setParts(data as Part[]);
-        setLoading(false);
+        try {
+            const { data, error } = await supabase
+                .from('parts')
+                .select('*')
+                .order('name')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            
+            if (error) console.error('Error fetching parts:', error);
+            else setParts(data as Part[]);
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching parts:', error);
+            }
+        } finally {
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
+        }
     };
 
     useEffect(() => {
-        fetchParts();
+        const controller = new AbortController();
+        fetchParts(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, []);
 
     const openAddModal = () => {
@@ -115,7 +132,7 @@ export const Inventory = () => {
                 </div>
                 <div className="flex gap-2">
                     <button 
-                        onClick={fetchParts}
+                        onClick={() => fetchParts()}
                         className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
                         title="Refresh"
                     >

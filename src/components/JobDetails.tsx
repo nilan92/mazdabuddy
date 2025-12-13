@@ -33,55 +33,93 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const [aiKey, setAiKey] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
 
-    const fetchJobDetails = async () => {
-        // Job Info
-        const { data: jobData } = await supabase
-            .from('job_cards')
-            // @ts-ignore
-            .select('*, vehicles(*)')
-            .eq('id', jobId)
-            .single();
+    const fetchJobDetails = async (signal?: AbortSignal) => {
+        try {
+            // Job Info
+            const { data: jobData } = await supabase
+                .from('job_cards')
+                // @ts-ignore
+                .select('*, vehicles(*)')
+                .eq('id', jobId)
+                .abortSignal(signal!)
+                .single();
 
-        if (jobData) {
-            setJob(jobData as JobCard);
-            setMileage(jobData.mileage?.toString() || '');
-            setTechNotes(jobData.technician_notes || '');
-            setStatus(jobData.status);
-            setAssignedTech(jobData.assigned_technician_id || '');
-            setEstimatedHours(jobData.estimated_hours?.toString() || '');
-        }
+            if (signal?.aborted) return;
 
-        // Parts
-        const { data: partsData } = await supabase
-            .from('job_parts')
-            // @ts-ignore
-            .select('*, parts(*)')
-            .eq('job_id', jobId);
-        if (partsData) setJobParts(partsData as JobPart[]);
+            if (jobData) {
+                setJob(jobData as JobCard);
+                setMileage(jobData.mileage?.toString() || '');
+                setTechNotes(jobData.technician_notes || '');
+                setStatus(jobData.status);
+                setAssignedTech(jobData.assigned_technician_id || '');
+                setEstimatedHours(jobData.estimated_hours?.toString() || '');
+            }
 
-        // Labor
-        const { data: laborData } = await supabase.from('job_labor').select('*').eq('job_id', jobId);
-        if (laborData) setJobLabor(laborData);
+            // Parts
+            const { data: partsData } = await supabase
+                .from('job_parts')
+                // @ts-ignore
+                .select('*, parts(*)')
+                .eq('job_id', jobId)
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if (partsData) setJobParts(partsData as JobPart[]);
 
-        // Inventory list (for dropdown)
-        const { data: invData } = await supabase.from('parts').select('*');
-        if (invData) setAllParts(invData);
+            // Labor
+            const { data: laborData } = await supabase
+                .from('job_labor')
+                .select('*')
+                .eq('job_id', jobId)
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if (laborData) setJobLabor(laborData);
 
-        // Profiles (for assignment)
-        const { data: profileData } = await supabase.from('profiles').select('id, full_name');
-        if(profileData) setProfiles(profileData);
-        
-        // Settings (Default labor & AI Key)
-        const { data: settingsData } = await supabase.from('shop_settings').select('*');
-        if (settingsData) {
-            const settings = settingsData.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>);
-            if (settings['default_labor_rate']) setLaborForm(prev => ({ ...prev, hourly_rate_lkr: settings['default_labor_rate'] }));
-            if (settings['ai_api_key']) setAiKey(settings['ai_api_key']);
+            // Inventory list (for dropdown)
+            const { data: invData } = await supabase
+                .from('parts')
+                .select('*')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if (invData) setAllParts(invData);
+
+            // Profiles (for assignment)
+            const { data: profileData } = await supabase
+                .from('profiles')
+                .select('id, full_name')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if(profileData) setProfiles(profileData);
+            
+            // Settings (Default labor & AI Key)
+            const { data: settingsData } = await supabase
+                .from('shop_settings')
+                .select('*')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if (settingsData) {
+                const settings = settingsData.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>);
+                if (settings['default_labor_rate']) setLaborForm(prev => ({ ...prev, hourly_rate_lkr: settings['default_labor_rate'] }));
+                if (settings['ai_api_key']) setAiKey(settings['ai_api_key']);
+            }
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching job details:', error);
+            }
         }
     };
 
     useEffect(() => {
-        fetchJobDetails();
+        const controller = new AbortController();
+        fetchJobDetails(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, [jobId]);
 
     const handleUpdateJob = async () => {

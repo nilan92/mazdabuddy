@@ -18,28 +18,63 @@ export const Settings = () => {
     const [editForm, setEditForm] = useState({ full_name: '', role: '' });
     const [usersLoading, setUsersLoading] = useState(false);
 
-    const fetchSettings = async () => {
+    const fetchSettings = async (signal?: AbortSignal) => {
         setLoading(true);
-        const { data } = await supabase.from('shop_settings').select('*');
-        if (data) {
-            const map: Record<string, string> = {};
-            data.forEach(item => map[item.key] = item.value);
-            setSettings(map);
+        try {
+            const { data } = await supabase
+                .from('shop_settings')
+                .select('*')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            
+            if (data) {
+                const map: Record<string, string> = {};
+                data.forEach(item => map[item.key] = item.value);
+                setSettings(map);
+            }
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching settings:', error);
+            }
+        } finally {
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
         }
-        setLoading(false);
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (signal?: AbortSignal) => {
         if (!isAdmin) return;
         setUsersLoading(true);
-        const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: true });
-        if (data) setUsers(data);
-        setUsersLoading(false);
+        try {
+            const { data } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: true })
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if (data) setUsers(data);
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching users:', error);
+            }
+        } finally {
+            if (!signal?.aborted) {
+                setUsersLoading(false);
+            }
+        }
     };
 
     useEffect(() => {
-        fetchSettings();
-        if (isAdmin) fetchUsers();
+        const controller = new AbortController();
+        fetchSettings(controller.signal);
+        if (isAdmin) fetchUsers(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, [isAdmin]);
 
     // General Settings Handlers

@@ -24,25 +24,45 @@ export const Jobs = () => {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [newJobForm, setNewJobForm] = useState({ vehicle_id: '', description: '' });
 
-    const fetchJobs = async () => {
+    const fetchJobs = async (signal?: AbortSignal) => {
         setLoading(true);
-        const { data } = await supabase
-            .from('job_cards')
-            // @ts-ignore
-            .select('*, vehicles(id, make, model, license_plate), profiles(full_name)')
-            .order('created_at', { ascending: false });
+        try {
+            const { data } = await supabase
+                .from('job_cards')
+                // @ts-ignore
+                .select('*, vehicles(id, make, model, license_plate), profiles(full_name)')
+                .order('created_at', { ascending: false })
+                .abortSignal(signal!);
             
-        if (data) setJobs(data as JobCard[]);
-        
-        // Fetch vehicles for dropdown
-        const { data: vData } = await supabase.from('vehicles').select('*');
-        if (vData) setVehicles(vData);
-
-        setLoading(false);
+            if (signal?.aborted) return;
+            if (data) setJobs(data as JobCard[]);
+            
+            // Fetch vehicles for dropdown
+            const { data: vData } = await supabase
+                .from('vehicles')
+                .select('*')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            if (vData) setVehicles(vData);
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching jobs:', error);
+            }
+        } finally {
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
+        }
     };
 
     useEffect(() => {
-        fetchJobs();
+        const controller = new AbortController();
+        fetchJobs(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, []);
 
     // Initial role check
@@ -134,7 +154,7 @@ export const Jobs = () => {
                         <Archive size={16} /> {showArchived ? 'Archived' : 'Active'}
                      </button>
 
-                     <button onClick={fetchJobs} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
+                     <button onClick={() => fetchJobs()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
                     <button onClick={() => setIsNewJobModalOpen(true)} className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-cyan-500/20">

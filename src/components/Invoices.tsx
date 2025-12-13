@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Printer, Download, FileText, RefreshCcw } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
@@ -8,34 +8,47 @@ export const Invoices = () => {
     const [selectedJob, setSelectedJob] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
-    const fetchCompletedJobs = async () => {
+    const fetchCompletedJobs = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('job_cards')
-            .select('*, vehicles(license_plate, make, model, customers(name))')
-            .eq('status', 'completed')
-            .order('created_at', { ascending: false });
-        
-        if (error) {
-            console.error('Error fetching jobs:', error);
-        } else {
-            // Transform data to match UI expectations
-            const formatted = data?.map(job => ({
-                id: job.id,
-                customer: job.vehicles?.customers?.name || 'Unknown',
-                vehicle: `${job.vehicles?.make} ${job.vehicles?.model} (${job.vehicles?.license_plate})`,
-                total: job.estimated_cost_lkr || 0,
-                status: 'Completed',
-                date: new Date(job.created_at).toLocaleDateString()
-            }));
-            setJobs(formatted || []);
+        try {
+            let query = supabase
+                .from('job_cards')
+                .select('*, vehicles(license_plate, make, model, customers(name))')
+                .eq('status', 'completed')
+                .order('created_at', { ascending: false })
+                .limit(50); // Limit to prevent lag
+
+            if (signal) query = query.abortSignal(signal);
+
+            const { data, error } = await query;
+            if (signal?.aborted) return;
+
+            if (error) {
+                console.error('Error fetching jobs:', error);
+            } else {
+                // Transform data to match UI expectations
+                const formatted = data?.map(job => ({
+                    id: job.id,
+                    customer: job.vehicles?.customers?.name || 'Unknown',
+                    vehicle: `${job.vehicles?.make} ${job.vehicles?.model} (${job.vehicles?.license_plate})`,
+                    total: job.estimated_cost_lkr || 0,
+                    status: 'Completed',
+                    date: new Date(job.created_at).toLocaleDateString()
+                }));
+                setJobs(formatted || []);
+            }
+        } catch (err: any) {
+             if (err.name !== 'AbortError') console.error(err);
+        } finally {
+             if (!signal?.aborted) setLoading(false);
         }
-        setLoading(false);
-    };
+    }, []);
 
     useEffect(() => {
-        fetchCompletedJobs();
-    }, []);
+        const controller = new AbortController();
+        fetchCompletedJobs(controller.signal);
+        return () => controller.abort();
+    }, [fetchCompletedJobs]);
 
     const generatePDF = (job: any) => {
         const doc = new jsPDF();
@@ -110,7 +123,7 @@ export const Invoices = () => {
                      <p className="text-slate-400 mb-8">Generate and manage invoices.</p>
                 </div>
                  <button 
-                    onClick={fetchCompletedJobs}
+                    onClick={() => fetchCompletedJobs()}
                     className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors mr-2 mb-6"
                     title="Refresh"
                 >
@@ -127,7 +140,7 @@ export const Invoices = () => {
                             <div 
                                 key={job.id} 
                                 onClick={() => setSelectedJob(job)}
-                                className={`p-5 rounded-xl border cursor-pointer transition-all min-h-[44px] ${selectedJob?.id === job.id ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-slate-800/30 border-slate-800 hover:bg-slate-800 active:bg-slate-700'}`}
+                                className={`p-4 rounded-xl border cursor-pointer transition-all min-h-[44px] ${selectedJob?.id === job.id ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-slate-800/30 border-slate-800 hover:bg-slate-800 active:bg-slate-700'}`}
                             >
                                 <div className="flex justify-between items-start mb-1">
                                     <div className="font-medium text-white">{job.customer}</div>

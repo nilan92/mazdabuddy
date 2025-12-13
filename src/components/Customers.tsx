@@ -27,18 +27,44 @@ export const Customers = () => {
     const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
     const [vehicleForm, setVehicleForm] = useState({ make: '', model: '', year: '', license_plate: '', color: '', vin: '' });
 
-    const fetchData = async () => {
+    const fetchData = async (signal?: AbortSignal) => {
         setLoading(true);
-        const { data: custData } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
-        const { data: vehicleData } = await supabase.from('vehicles').select('*');
-        
-        if (custData) setCustomers(custData);
-        if (vehicleData) setVehicles(vehicleData);
-        setLoading(false);
+        try {
+            const { data: custData } = await supabase
+                .from('customers')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            
+            const { data: vehicleData } = await supabase
+                .from('vehicles')
+                .select('*')
+                .abortSignal(signal!);
+            
+            if (signal?.aborted) return;
+            
+            if (custData) setCustomers(custData);
+            if (vehicleData) setVehicles(vehicleData);
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching data:', error);
+            }
+        } finally {
+            if (!signal?.aborted) {
+                setLoading(false);
+            }
+        }
     };
 
     useEffect(() => {
-        fetchData();
+        const controller = new AbortController();
+        fetchData(controller.signal);
+        
+        return () => {
+            controller.abort();
+        };
     }, []);
 
     const handleSaveCustomer = async (e: React.FormEvent) => {
@@ -168,7 +194,7 @@ export const Customers = () => {
                     <p className="text-slate-400">Manage client profiles and history.</p>
                 </div>
                 <div className="flex gap-4">
-                    <button onClick={fetchData} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
+                    <button onClick={() => fetchData()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
                     <button 
