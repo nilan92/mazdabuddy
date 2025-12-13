@@ -6,15 +6,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MazdaBuddy</title>
     <script>
-      // Suppress annoying extension errors that confuse users
+      // Aggressive error suppression for Chrome extensions that break the app
       window.addEventListener('error', function(e) {
-        if (e.message && (e.message.includes('injectTMButton') || e.message.includes('chrome-extension'))) {
+        var msg = e.message || '';
+        if (msg.includes('injectTMButton') || 
+            msg.includes('chrome-extension') || 
+            msg.includes('message channel closed')) {
           e.stopImmediatePropagation();
           e.preventDefault();
-          console.warn('Suppressed external extension error:', e.message);
+          console.warn('[Extension Error Suppressed]:', msg);
           return true;
         }
-      });
+      }, true);
+
+      // Catch unhandled promise rejections from extensions
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = (e.reason && e.reason.message) || String(e.reason) || '';
+        if (reason.includes('message channel closed') || 
+            reason.includes('chrome-extension') ||
+            reason.includes('Extension context invalidated')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          console.warn('[Extension Promise Rejection Suppressed]:', reason);
+          return true;
+        }
+      }, true);
     </script>
     <style>
       /* Static loader for before React mounts */

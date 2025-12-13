@@ -32,13 +32,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // Init
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setUser(session?.user ?? null);
-            if(session?.user) fetchProfile(session.user.id);
-            else setLoading(false);
-        });
+        let timeout: number;
+        
+        // Safety timeout: prevent infinite loading if auth hangs
+        timeout = setTimeout(() => {
+            console.warn('[Auth Timeout] Auth did not respond in 10s, assuming no session');
+            setLoading(false);
+        }, 10000);
+
+        // Init with error handling
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => {
+                clearTimeout(timeout);
+                setSession(session);
+                setUser(session?.user ?? null);
+                if(session?.user) fetchProfile(session.user.id);
+                else setLoading(false);
+            })
+            .catch((error) => {
+                clearTimeout(timeout);
+                console.error('[Auth Init Error]', error);
+                setLoading(false); // Fail gracefully
+            });
 
         // Listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange( async (_event, session) => {
