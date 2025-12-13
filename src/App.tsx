@@ -11,7 +11,7 @@ import { Settings } from './components/Settings';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { useAuth } from './context/AuthContext';
-import { Expenses } from './components/Expenses';
+import { Expenses } from './components/Expenses.tsx';
 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     const { session, loading } = useAuth();

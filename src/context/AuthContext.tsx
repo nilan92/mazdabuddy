@@ -32,61 +32,62 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        let timeout: number;
-        
-        // Safety timeout: prevent infinite loading if auth hangs
-        timeout = setTimeout(() => {
-            console.warn('[Auth Timeout] Auth did not respond in 10s, assuming no session');
-            setLoading(false);
-        }, 10000);
-
-        // Init with error handling
+        // Init without timeout
         supabase.auth.getSession()
             .then(({ data: { session } }) => {
-                clearTimeout(timeout);
                 setSession(session);
                 setUser(session?.user ?? null);
-                if(session?.user) fetchProfile(session.user.id);
-                else setLoading(false);
+                if (session?.user) {
+                    fetchProfile(session.user.id);
+                } else {
+                    setLoading(false);
+                }
             })
             .catch((error) => {
-                clearTimeout(timeout);
                 console.error('[Auth Init Error]', error);
-                setLoading(false); // Fail gracefully
+                setLoading(false);
             });
 
         // Listener
-        const { data: { subscription } } = supabase.auth.onAuthStateChange( async (_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
             setSession(session);
             setUser(session?.user ?? null);
-            if(session?.user) {
-                 await fetchProfile(session.user.id);
+            if (session?.user) {
+                await fetchProfile(session.user.id);
             } else {
                 setProfile(null);
                 setLoading(false);
             }
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            subscription.unsubscribe();
+        };
+
     }, []);
 
     const fetchProfile = async (userId: string) => {
-        // First try to get profile
-        let { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        
-        if (error || !data) {
-             // If trigger failed or didn't run (e.g. existing user), create a default profile on the fly
-             // This is a safety fallback for your existing test user!
-             const newProfile = { id: userId, full_name: 'Staff Member', role: 'admin' }; // Giving admin for first user ease
-             const { error: insertError } = await supabase.from('profiles').upsert(newProfile);
-             if (!insertError) {
-                 // @ts-ignore
-                 setProfile(newProfile);
-             }
-        } else {
-            setProfile(data as UserProfile);
+        try {
+            // First try to get profile
+            let { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+            
+            if (error || !data) {
+                // If trigger failed or didn't run (e.g. existing user), create a default profile on the fly
+                // This is a safety fallback for your existing test user!
+                const newProfile = { id: userId, full_name: 'Staff Member', role: 'admin' }; // Giving admin for first user ease
+                const { error: insertError } = await supabase.from('profiles').upsert(newProfile);
+                if (!insertError) {
+                    // @ts-ignore
+                    setProfile(newProfile);
+                }
+            } else {
+                setProfile(data as UserProfile);
+            }
+        } catch (e) {
+            console.error('[fetchProfile error]', e);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const signOut = async () => {

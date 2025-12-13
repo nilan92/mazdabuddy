@@ -118,16 +118,16 @@ export const Invoices = () => {
                 </button>
             </div>
             
-            <div className="flex gap-6 h-full">
-                {/* List */}
-                <div className="w-1/3 bg-slate-900/50 border border-slate-800 rounded-2xl p-4 overflow-y-auto">
+            <div className="flex flex-col md:flex-row gap-6 h-full">
+                {/* List - Hidden on mobile when job is selected */}
+                <div className={`w-full md:w-1/3 bg-slate-900/50 border border-slate-800 rounded-2xl p-4 overflow-y-auto ${selectedJob ? 'hidden md:block' : 'block'}`}>
                     <h2 className="text-sm font-semibold text-slate-400 uppercase mb-4 tracking-wider">Recent Jobs</h2>
                     <div className="space-y-3">
                         {jobs.map(job => (
                             <div 
                                 key={job.id} 
                                 onClick={() => setSelectedJob(job)}
-                                className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedJob?.id === job.id ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-slate-800/30 border-slate-800 hover:bg-slate-800'}`}
+                                className={`p-5 rounded-xl border cursor-pointer transition-all min-h-[44px] ${selectedJob?.id === job.id ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-slate-800/30 border-slate-800 hover:bg-slate-800 active:bg-slate-700'}`}
                             >
                                 <div className="flex justify-between items-start mb-1">
                                     <div className="font-medium text-white">{job.customer}</div>
@@ -150,10 +150,21 @@ export const Invoices = () => {
                     </div>
                 </div>
 
-                {/* Preview */}
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center p-8 relative">
+                {/* Preview - Hidden on mobile when no job selected */}
+                <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl flex items-center justify-center p-4 md:p-8 relative overflow-y-auto ${!selectedJob ? 'hidden md:flex' : 'flex'}`}>
                     {selectedJob ? (
-                        <div className="bg-white text-slate-900 aspect-[1/1.4] h-full shadow-2xl p-8 flex flex-col relative animate-fade-in">
+                        <div className="bg-white text-slate-900 w-full md:aspect-[1/1.4] md:h-full shadow-2xl p-6 md:p-8 flex flex-col relative animate-fade-in">
+                            {/* Mobile Back Button */}
+                            <button 
+                                onClick={() => setSelectedJob(null)}
+                                className="md:hidden flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-4 -ml-2 p-2 rounded-lg hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                                <span className="text-sm font-medium">Back to Jobs</span>
+                            </button>
+                            
                             {/* Paper UI */}
                             <div className="flex justify-between items-start mb-8">
                                 <div>
@@ -222,17 +233,19 @@ export const Invoices = () => {
                                 </div>
                             </div>
                             
-                            {/* Valid actions */}
-                            <div className="absolute -right-20 top-0 flex flex-col gap-2">
+                            {/* Action Buttons - Responsive positioning */}
+                            <div className="relative md:absolute md:-right-20 md:top-0 flex flex-row md:flex-col gap-2 mt-4 md:mt-0 justify-center md:justify-start">
                                 <button 
                                     onClick={() => generatePDF(selectedJob)}
-                                    className="p-3 bg-cyan-600 text-white rounded-full shadow-lg hover:bg-cyan-500 transition-transform hover:scale-105" 
+                                    className="flex-1 md:flex-none p-3 md:p-3 bg-cyan-600 text-white rounded-lg md:rounded-full shadow-lg hover:bg-cyan-500 active:bg-cyan-700 transition-all hover:scale-105 min-h-[44px] min-w-[44px] flex items-center justify-center gap-2" 
                                     title="Download PDF"
                                 >
                                     <Download size={20} />
+                                    <span className="md:hidden text-sm font-medium">Download PDF</span>
                                 </button>
-                                <button className="p-3 bg-slate-700 text-white rounded-full shadow-lg hover:bg-slate-600 transition-transform hover:scale-105" title="Print">
+                                <button className="flex-1 md:flex-none p-3 md:p-3 bg-slate-700 text-white rounded-lg md:rounded-full shadow-lg hover:bg-slate-600 active:bg-slate-800 transition-all hover:scale-105 min-h-[44px] min-w-[44px] flex items-center justify-center gap-2" title="Print">
                                     <Printer size={20} />
+                                    <span className="md:hidden text-sm font-medium">Print</span>
                                 </button>
                             </div>
                         </div>
