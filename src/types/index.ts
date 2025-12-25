@@ -1,7 +1,28 @@
+export interface Tenant {
+    id: string;
+    name: string;
+    logo_url?: string;
+    address?: string;
+    phone?: string;
+    terms_and_conditions?: string;
+    currency?: string;
+    brand_color?: string;
+    created_at: string;
+}
+
+export interface UserProfile {
+    id: string;
+    full_name: string;
+    role: 'admin' | 'manager' | 'technician' | 'accountant';
+    tenant_id: string;
+    tenants?: Tenant;
+}
+
 export type JobStatus = 'pending' | 'in_progress' | 'waiting_parts' | 'completed' | 'cancelled';
 
 export interface Customer {
     id: string;
+    tenant_id: string;
     name: string;
     phone: string;
     email?: string;
@@ -10,6 +31,7 @@ export interface Customer {
 
 export interface Vehicle {
     id: string;
+    tenant_id: string;
     customer_id: string;
     make: string;
     model: string;
@@ -22,6 +44,7 @@ export interface Vehicle {
 
 export interface Part {
     id: string;
+    tenant_id: string;
     name: string;
     part_number?: string;
     stock_quantity: number;
@@ -33,6 +56,7 @@ export interface Part {
 
 export interface JobCard {
   id: string;
+  tenant_id: string;
   vehicle_id: string;
   description: string;
   status: 'pending' | 'in_progress' | 'waiting_parts' | 'completed' | 'cancelled';
@@ -40,22 +64,24 @@ export interface JobCard {
   technician_notes?: string;
   estimated_cost_lkr?: number;
   mileage?: number;
-  assigned_technician_id?: string; // New
-  archived?: boolean; // New
-  estimated_hours?: number; // New
+  assigned_technician_id?: string;
+  archived?: boolean;
+  estimated_hours?: number;
   
   // Joins
   vehicles?: Vehicle;
   parts?: JobPart[];
-  profiles?: { full_name: string }; // Join for assigned technician
+  profiles?: { full_name: string };
 }
 
 export interface JobPart {
     id: string;
     job_id: string;
-    part_id: string;
+    part_id: string | null;
     quantity: number;
     price_at_time_lkr: number;
+    is_custom?: boolean;
+    custom_name?: string;
     parts?: Part; // Join
 }
 

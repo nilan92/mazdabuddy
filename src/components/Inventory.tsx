@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Search, Plus, AlertTriangle, Package, RefreshCcw, Edit, Trash2 } from 'lucide-react';
 import type { Part } from '../types';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const Inventory = () => {
-    const [parts, setParts] = useState<Part[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     
     // Modal State
@@ -22,38 +22,19 @@ export const Inventory = () => {
         cost_lkr: 0
     });
 
-    const fetchParts = async (signal?: AbortSignal) => {
-        setLoading(true);
-        try {
+    const { data: parts = [], isLoading: loading } = useQuery({
+        queryKey: ['parts'],
+        queryFn: async () => {
             const { data, error } = await supabase
                 .from('parts')
                 .select('*')
-                .order('name')
-                .abortSignal(signal!);
-            
-            if (signal?.aborted) return;
-            
-            if (error) console.error('Error fetching parts:', error);
-            else setParts(data as Part[]);
-        } catch (error: any) {
-            if (error.name !== 'AbortError') {
-                console.error('Error fetching parts:', error);
-            }
-        } finally {
-            if (!signal?.aborted) {
-                setLoading(false);
-            }
+                .order('name');
+            if (error) throw error;
+            return data as Part[];
         }
-    };
+    });
 
-    useEffect(() => {
-        const controller = new AbortController();
-        fetchParts(controller.signal);
-        
-        return () => {
-            controller.abort();
-        };
-    }, []);
+    const refreshParts = () => queryClient.invalidateQueries({ queryKey: ['parts'] });
 
     const openAddModal = () => {
         setEditingPart(null);
@@ -88,7 +69,7 @@ export const Inventory = () => {
         
         const { error } = await supabase.from('parts').delete().eq('id', id);
         if (error) alert(error.message);
-        else fetchParts();
+        else refreshParts();
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -96,7 +77,6 @@ export const Inventory = () => {
         
         const payload = {
             ...formData,
-            // Ensure numbers are numbers
             stock_quantity: Number(formData.stock_quantity),
             min_stock_level: Number(formData.min_stock_level),
             price_lkr: Number(formData.price_lkr),
@@ -114,7 +94,7 @@ export const Inventory = () => {
             alert("Error: " + result.error.message);
         } else {
             setIsModalOpen(false);
-            fetchParts();
+            refreshParts();
         }
     };
 
@@ -132,7 +112,7 @@ export const Inventory = () => {
                 </div>
                 <div className="flex gap-2">
                     <button 
-                        onClick={() => fetchParts()}
+                        onClick={refreshParts}
                         className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
                         title="Refresh"
                     >

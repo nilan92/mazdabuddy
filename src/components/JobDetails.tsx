@@ -26,7 +26,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const [assignedTech, setAssignedTech] = useState<string>('');
     const [estimatedHours, setEstimatedHours] = useState<string>('');
 
-    const [partForm, setPartForm] = useState({ part_id: '', quantity: 1 });
+    const [partForm, setPartForm] = useState({ 
+        part_id: '', 
+        quantity: 1, 
+        is_custom: false, 
+        custom_name: '', 
+        custom_price_lkr: '',
+        custom_cost_lkr: '' 
+    });
     const [laborForm, setLaborForm] = useState({ description: '', hours: '', hourly_rate_lkr: '5000' }); // Default 5000
 
     // AI State
@@ -151,6 +158,43 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
     const handleAddPart = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        if (partForm.is_custom) {
+            const cost = parseFloat(partForm.custom_cost_lkr) || 0;
+            const price = parseFloat(partForm.custom_price_lkr) || 0;
+            
+            const { error } = await supabase.from('job_parts').insert({
+                job_id: jobId,
+                part_id: null,
+                quantity: partForm.quantity,
+                price_at_time_lkr: price,
+                is_custom: true,
+                custom_name: partForm.custom_name
+            });
+            
+            if (!error) {
+                // Also log as expense if cost > 0
+                if (cost > 0) {
+                    const { data: userData } = await supabase.auth.getUser();
+                    if(userData.user) {
+                        await supabase.from('user_expenses').insert({
+                            user_id: userData.user.id,
+                            job_id: jobId,
+                            amount_lkr: cost * partForm.quantity,
+                            description: `Parts Purchase: ${partForm.custom_name} for Job #${jobId.slice(0,8)}`,
+                            category: 'parts'
+                        });
+                    }
+                }
+                
+                fetchJobDetails();
+                setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
+            } else {
+                alert(error.message);
+            }
+            return;
+        }
+
         const selectedPart = allParts.find(p => p.id === partForm.part_id);
         if (!selectedPart) return;
 
@@ -167,7 +211,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
              const newStock = selectedPart.stock_quantity - partForm.quantity;
              await supabase.from('parts').update({ stock_quantity: newStock }).eq('id', selectedPart.id);
              fetchJobDetails();
-             setPartForm({ part_id: '', quantity: 1 });
+             setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
         } else {
             alert(error.message);
         }
@@ -365,16 +409,53 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                 {activeTab === 'parts' && (
                                     <div className="space-y-6">
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                            <h4 className="font-bold text-white mb-3 text-sm flex items-center gap-2"><Plus size={16} className="text-cyan-400"/> Add Part</h4>
-                                            <form onSubmit={handleAddPart} className="flex gap-2 items-center">
-                                                <div className="flex-1 min-w-0">
-                                                    <select required value={partForm.part_id} onChange={e => setPartForm({...partForm, part_id: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm truncate">
-                                                        <option value="">Select Part...</option>
-                                                        {allParts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock_quantity} in stock)</option>)}
-                                                    </select>
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h4 className="font-bold text-white text-sm flex items-center gap-2"><Plus size={16} className="text-cyan-400"/> Add Part</h4>
+                                                <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700">
+                                                    <button 
+                                                        onClick={() => setPartForm({...partForm, is_custom: false})}
+                                                        className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${!partForm.is_custom ? 'bg-cyan-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    >Inventory</button>
+                                                    <button 
+                                                        onClick={() => setPartForm({...partForm, is_custom: true})}
+                                                        className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${partForm.is_custom ? 'bg-cyan-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                                    >Custom</button>
                                                 </div>
-                                                <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-14 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm flex-shrink-0" />
-                                                <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded font-bold text-sm flex-shrink-0">Add</button>
+                                            </div>
+
+                                            <form onSubmit={handleAddPart} className="space-y-3">
+                                                {!partForm.is_custom ? (
+                                                    <div className="flex gap-2 items-center">
+                                                        <div className="flex-1 min-w-0">
+                                                            <select required value={partForm.part_id} onChange={e => setPartForm({...partForm, part_id: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm truncate">
+                                                                <option value="">Select Part...</option>
+                                                                {allParts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock_quantity} in stock)</option>)}
+                                                            </select>
+                                                        </div>
+                                                        <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-14 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm flex-shrink-0" />
+                                                        <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded font-bold text-sm flex-shrink-0">Add</button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <div className="flex gap-2">
+                                                            <input required placeholder="Custom Part Name (e.g. Engine Oil 4L)" value={partForm.custom_name} onChange={e => setPartForm({...partForm, custom_name: e.target.value})} className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm" />
+                                                        </div>
+                                                        <div className="flex gap-2 items-center">
+                                                            <div className="flex-1 grid grid-cols-2 gap-2">
+                                                                <div className="relative">
+                                                                    <span className="absolute left-2 top-2 text-[10px] text-slate-500">Sell Price</span>
+                                                                    <input required type="number" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
+                                                                </div>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-2 top-2 text-[10px] text-slate-500">Buy Cost</span>
+                                                                    <input required type="number" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
+                                                                </div>
+                                                            </div>
+                                                            <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-600 rounded p-2 text-white text-xs" />
+                                                            <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded font-bold text-sm whitespace-nowrap">Add</button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </form>
                                         </div>
                                         {/* Parts List */}
@@ -382,9 +463,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             {jobParts.map(part => (
                                                 <div key={part.id} className="flex justify-between items-center bg-slate-800/50 p-3 rounded-lg border border-slate-800">
                                                     <div className="flex items-center gap-3">
-                                                        <Package size={16} className="text-purple-400" />
+                                                        <Package size={16} className={part.is_custom ? "text-amber-400" : "text-purple-400"} />
                                                         <div>
-                                                            <div className="font-medium text-white text-sm">{part.parts?.name}</div>
+                                                            <div className="font-medium text-white text-sm">
+                                                                {part.is_custom ? part.custom_name : part.parts?.name}
+                                                                {part.is_custom && <span className="ml-2 text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1 rounded uppercase">Custom</span>}
+                                                            </div>
                                                             <div className="text-xs text-slate-500">{part.quantity} x LKR {part.price_at_time_lkr.toLocaleString()}</div>
                                                         </div>
                                                     </div>

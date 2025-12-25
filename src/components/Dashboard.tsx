@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Briefcase, DollarSign, Users, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Briefcase, DollarSign, Users, Activity, RefreshCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
   <div className="bg-slate-900/50 backdrop-blur border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
@@ -18,64 +20,31 @@ const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
   </div>
 );
 
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-
 export const Dashboard = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const [stats, setStats] = useState({
-    revenue: 0,
-    activeJobs: 0,
-    customers: 0,
-    efficiency: '94%' // Mocked for now
-  });
-  const [recentJobs, setRecentJobs] = useState<any[]>([]);
-  const [lowStock, setLowStock] = useState<any[]>([]);
 
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    
-    const fetchDashboardData = async () => {
-      setLoading(true);
-      try {
-          // 1. Fetch Stats & Efficiency
-          const { data: jobs } = await supabase.from('job_cards').select('id, estimated_hours, status, estimated_cost_lkr').abortSignal(controller.signal);
-          if (controller.signal.aborted) return;
-          
-          const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).abortSignal(controller.signal);
-          if (controller.signal.aborted) return;
+  const { data: dashboardData, isLoading: loading, isFetching } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: async () => {
+      // 1. Fetch Stats & Efficiency
+      const { data: jobs } = await supabase.from('job_cards').select('id, estimated_hours, status, estimated_cost_lkr');
+      const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
       
-      // Calculate Revenue & Active
       const totalRevenue = jobs?.filter(j => j.status === 'completed').reduce((acc, curr) => acc + (curr.estimated_cost_lkr || 0), 0) || 0;
       const activeJobCount = jobs?.filter(j => j.status !== 'completed').length || 0;
 
-      // Calculate Efficiency (Global)
-      // Note: In real app, might want to limit to last 30 days
-      const { data: allLabor } = await supabase.from('job_labor').select('hours').abortSignal(controller.signal);
+      const { data: allLabor } = await supabase.from('job_labor').select('hours');
       const totalActualHours = allLabor?.reduce((sum, l) => sum + l.hours, 0) || 0;
-      
-      // Approximate Total Estimated (simplistic: sum of ALL jobs est hours)
-      // Ideally we only compare closed jobs or sum labour purely for jobs that have labor
-      // For now, let's take sum of estimates for jobs that have started
       const totalEstHours = jobs?.reduce((sum, j) => sum + (j.estimated_hours || 0), 0) || 0;
 
       let efficiencyPct = 100;
       if (totalEstHours > 0 && totalActualHours > 0) {
           efficiencyPct = Math.round((totalEstHours / totalActualHours) * 100);
       } else if (totalEstHours === 0 && totalActualHours > 0) {
-          efficiencyPct = 0; // Worked but no estimate?
+          efficiencyPct = 0;
       }
-
-      setStats(prev => ({ 
-          ...prev, 
-          revenue: totalRevenue, 
-          activeJobs: activeJobCount, 
-          customers: customerCount || 0,
-          efficiency: `${efficiencyPct}%` 
-      }));
 
       // 2. Fetch Recent Jobs
       const { data: recent } = await supabase
@@ -83,42 +52,34 @@ export const Dashboard = () => {
         // @ts-ignore
         .select('*, vehicles(license_plate, make, model)')
         .order('created_at', { ascending: false })
-        .limit(5)
-        .abortSignal(controller.signal);
-      
-      if (controller.signal.aborted) return;
-      
-      if (recent) setRecentJobs(recent);
+        .limit(5);
 
-          // 3. Fetch Low Stock
-          const { data: lowStockParts } = await supabase
-            .from('parts')
-            .select('*')
-            .lte('stock_quantity', 5)
-            .limit(5)
-            .abortSignal(controller.signal);
-    
-          if (controller.signal.aborted) return;
-    
-          if (lowStockParts) setLowStock(lowStockParts);
-          
-      } catch (error: any) {
-          if (error.name !== 'AbortError') {
-             console.error('Error loading dashboard:', error);
-          }
-      } finally {
-          if (!controller.signal.aborted) {
-              setLoading(false);
-          }
-      }
-    };
+      // 3. Fetch Low Stock
+      const { data: lowStockParts } = await supabase
+        .from('parts')
+        .select('*')
+        .lte('stock_quantity', 5)
+        .limit(5);
 
-    fetchDashboardData();
-    
-    return () => {
-        controller.abort();
-    };
-  }, []);
+      return {
+          stats: {
+            revenue: totalRevenue,
+            activeJobs: activeJobCount,
+            customers: customerCount || 0,
+            efficiency: `${efficiencyPct}%`
+          },
+          recentJobs: recent || [],
+          lowStock: lowStockParts || []
+      };
+    }
+  });
+
+  const refreshDashboard = () => queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
+  const stats = dashboardData?.stats || { revenue: 0, activeJobs: 0, customers: 0, efficiency: '0%' };
+  const recentJobs = dashboardData?.recentJobs || [];
+  const lowStock = dashboardData?.lowStock || [];
+
 
   const SkeletonCard = () => (
       <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl animate-pulse h-32">
@@ -130,20 +91,27 @@ export const Dashboard = () => {
 
   return (
     <div className="p-2 space-y-6">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
           <p className="text-slate-400">Welcome back, {profile?.full_name?.split(' ')[0] || 'Technician'}. Here's what's happening today.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
+             <button 
+                onClick={refreshDashboard}
+                className="p-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all active:scale-95"
+                title="Refresh Dashboard"
+            >
+                <RefreshCcw size={20} className={(loading || isFetching) ? 'animate-spin' : ''} />
+            </button>
              <button 
                 onClick={() => navigate('/scan')}
-                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition-colors shadow-lg shadow-cyan-500/20">
+                className="px-4 py-2.5 btn-brand rounded-xl font-bold shadow-lg active:scale-95">
             Scanning Tool
           </button>
           <button 
                 onClick={() => navigate('/jobs')}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium transition-colors">
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all active:scale-95">
             + New Job
           </button>
         </div>
@@ -168,7 +136,7 @@ export const Dashboard = () => {
                   value={stats.activeJobs} 
                   subtext="Jobs in progress or waiting" 
                   icon={Briefcase} 
-                  color="text-cyan-400"
+                  color="text-brand bg-brand-soft"
                 />
                 <StatCard 
                   title="Total Customers" 
@@ -208,7 +176,7 @@ export const Dashboard = () => {
                                 <p className="text-xs text-slate-400 line-clamp-1">{job.description}</p>
                             </div>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-cyan-500/10 text-cyan-400'}`}>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-brand-soft text-brand'}`}>
                             {job.status.replace('_', ' ')}
                         </span>
                     </div>

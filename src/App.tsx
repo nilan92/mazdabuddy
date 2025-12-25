@@ -12,11 +12,33 @@ import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { useAuth } from './context/AuthContext';
 import { Expenses } from './components/Expenses.tsx';
+import { Finances } from './components/Finances';
+import { ForgotPassword } from './components/ForgotPassword';
+import { ResetPassword } from './components/ResetPassword';
 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     const { session, loading } = useAuth();
     
-    if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-cyan-500">Loading Access...</div>;
+    if (loading) return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
+            <h1 className="text-4xl font-black text-white tracking-tighter animate-pulse">
+                <span className="text-cyan-400">AUTO</span>PULSE
+            </h1>
+            <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden">
+                <div className="w-1/2 h-full bg-cyan-500 rounded-full animate-[loading_1.5s_infinite_linear]" style={{
+                    animationName: 'loading',
+                    animationIterationCount: 'infinite',
+                    animationTimingFunction: 'linear'
+                }} />
+            </div>
+            <style>{`
+                @keyframes loading {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(200%); }
+                }
+            `}</style>
+        </div>
+    );
     
     if (!session) return <Navigate to="/login" replace />;
 
@@ -29,6 +51,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           
           <Route path="/*" element={
               <AuthGuard>
@@ -42,6 +66,7 @@ function App() {
                     <Route path="/customers" element={<Customers />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/expenses" element={<Expenses />} />
+                    <Route path="/finances" element={<Finances />} />
                     </Routes>
                 </Layout>
               </AuthGuard>

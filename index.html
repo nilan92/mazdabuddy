@@ -4,7 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MazdaBuddy</title>
+    <title>AutoPulse OS | Your Shop's Heartbeat</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AutoPulse" />
+    <link rel="apple-touch-icon" href="/icon.png" />
     <script>
       // Aggressive error suppression for Chrome extensions that break the app
       window.addEventListener('error', function(e) {
@@ -14,7 +19,6 @@
             msg.includes('message channel closed')) {
           e.stopImmediatePropagation();
           e.preventDefault();
-          console.warn('[Extension Error Suppressed]:', msg);
           return true;
         }
       }, true);
@@ -27,7 +31,6 @@
             reason.includes('Extension context invalidated')) {
           e.preventDefault();
           e.stopImmediatePropagation();
-          console.warn('[Extension Promise Rejection Suppressed]:', reason);
           return true;
         }
       }, true);
@@ -35,7 +38,7 @@
     <style>
       /* Static loader for before React mounts */
       #root:empty::before {
-        content: "Loading Application...";
+        content: "AUTOPULSE";
         display: flex;
         height: 100vh;
         width: 100vw;
@@ -43,7 +46,15 @@
         justify-content: center;
         background-color: #020617; /* slate-950 */
         color: #06b6d4; /* cyan-500 */
-        font-family: monospace;
+        font-family: sans-serif;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        font-size: 2.5rem;
+        animation: pulse 2s infinite ease-in-out;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.5; transform: scale(0.95); }
+        50% { opacity: 1; transform: scale(1); }
       }
     </style>
   </head>

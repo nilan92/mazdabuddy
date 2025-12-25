@@ -4,88 +4,149 @@ import { supabase } from '../lib/supabase';
 import { JobDetails } from './JobDetails'; // New Component
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { JobCard, Vehicle } from '../types';
 
 export const Jobs = () => {
     const { profile } = useAuth();
-    const [jobs, setJobs] = useState<JobCard[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
+    const queryClient = useQueryClient();
     
     // Filters
+    const [searchTerm, setSearchTerm] = useState('');
     const [showArchived, setShowArchived] = useState(false);
-    const [showAllJobs, setShowAllJobs] = useState(true); // Default to all, Tech can toggle
+    const [showAllJobs, setShowAllJobs] = useState(true);
 
     // Modals
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
+    const [intakeMode, setIntakeMode] = useState<'SELECT' | 'EXPRESS'>('SELECT');
     
     // New Job Form
-    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-    const [newJobForm, setNewJobForm] = useState({ vehicle_id: '', description: '' });
+    const [newJobForm, setNewJobForm] = useState({ 
+        vehicle_id: '', 
+        description: '',
+        // Express Fields
+        customerName: '',
+        customerPhone: '',
+        vehicleMake: '',
+        vehicleModel: '',
+        licensePlate: ''
+    });
+    const [vehicleSearchTerm, setVehicleSearchTerm] = useState('');
+    const [showVehicleResults, setShowVehicleResults] = useState(false);
 
-    const fetchJobs = async (signal?: AbortSignal) => {
-        setLoading(true);
-        try {
+    const { data: jobs = [], isLoading: jobsLoading } = useQuery({
+        queryKey: ['jobs'],
+        queryFn: async () => {
             const { data } = await supabase
                 .from('job_cards')
                 // @ts-ignore
                 .select('*, vehicles(id, make, model, license_plate), profiles(full_name)')
-                .order('created_at', { ascending: false })
-                .abortSignal(signal!);
-            
-            if (signal?.aborted) return;
-            if (data) setJobs(data as JobCard[]);
-            
-            // Fetch vehicles for dropdown
-            const { data: vData } = await supabase
-                .from('vehicles')
-                .select('*')
-                .abortSignal(signal!);
-            
-            if (signal?.aborted) return;
-            if (vData) setVehicles(vData);
-        } catch (error: any) {
-            if (error.name !== 'AbortError') {
-                console.error('Error fetching jobs:', error);
-            }
-        } finally {
-            if (!signal?.aborted) {
-                setLoading(false);
-            }
+                .order('created_at', { ascending: false });
+            return data as JobCard[] || [];
         }
+    });
+
+    const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
+        queryKey: ['vehicles'],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('vehicles')
+                .select('*, customers(name)');
+            return data as Vehicle[] || [];
+        }
+    });
+
+    const loading = jobsLoading || vehiclesLoading;
+
+    const fetchJobs = () => {
+        queryClient.invalidateQueries({ queryKey: ['jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['vehicles'] });
     };
 
-    useEffect(() => {
-        const controller = new AbortController();
-        fetchJobs(controller.signal);
-        
-        return () => {
-            controller.abort();
-        };
-    }, []);
 
-    // Initial role check
+    const location = useLocation();
+
+    // Initial role check & SmartScan redirect
     useEffect(() => {
         if (profile?.role === 'technician') {
-             setShowAllJobs(false); // Techs default to "My Jobs"
+             setShowAllJobs(false);
         }
-    }, [profile]);
+
+        const state = location.state as any;
+        if (state?.vehicleId) {
+            setNewJobForm(prev => ({ ...prev, vehicle_id: state.vehicleId }));
+            setVehicleSearchTerm(state.initialPlate || '');
+            setIsNewJobModalOpen(true);
+        }
+    }, [profile, location]);
 
     const handleCreateJob = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { error } = await supabase.from('job_cards').insert([{
-            vehicle_id: newJobForm.vehicle_id,
-            description: newJobForm.description,
-            status: 'pending',
-            assigned_technician_id: profile?.id // Auto-assign creator if they are a tech? Optional.
-        }]);
+        
+        try {
+            let finalVehicleId = newJobForm.vehicle_id;
 
-        if (error) alert(error.message);
-        else {
+            // Handle Express Intake (Customer -> Vehicle -> Job)
+            if (intakeMode === 'EXPRESS') {
+                // 1. Create Customer
+                const { data: customerData, error: custError } = await supabase
+                    .from('customers')
+                    .insert([{ 
+                        name: newJobForm.customerName, 
+                        phone: newJobForm.customerPhone,
+                        tenant_id: profile?.tenant_id
+                    }])
+                    .select()
+                    .single();
+                
+                if (custError) throw custError;
+
+                // 2. Create Vehicle
+                const { data: vehicleData, error: vehError } = await supabase
+                    .from('vehicles')
+                    .insert([{
+                        customer_id: customerData.id,
+                        make: newJobForm.vehicleMake,
+                        model: newJobForm.vehicleModel,
+                        license_plate: newJobForm.licensePlate.toUpperCase(),
+                        tenant_id: profile?.tenant_id
+                    }])
+                    .select()
+                    .single();
+                
+                if (vehError) throw vehError;
+                finalVehicleId = vehicleData.id;
+            }
+
+            if (!finalVehicleId) throw new Error("Please select or add a vehicle.");
+
+            // 3. Create Job Card
+            const { error: jobError } = await supabase.from('job_cards').insert([{
+                vehicle_id: finalVehicleId,
+                description: newJobForm.description,
+                status: 'pending',
+                assigned_technician_id: profile?.id,
+                tenant_id: profile?.tenant_id
+            }]);
+
+            if (jobError) throw jobError;
+
             setIsNewJobModalOpen(false);
-            setNewJobForm({ vehicle_id: '', description: '' });
+            setNewJobForm({ 
+                vehicle_id: '', 
+                description: '',
+                customerName: '',
+                customerPhone: '',
+                vehicleMake: '',
+                vehicleModel: '',
+                licensePlate: ''
+            });
+            setVehicleSearchTerm('');
             fetchJobs();
+        } catch (error: any) {
+            alert(error.message);
         }
     };
 
@@ -95,11 +156,8 @@ export const Jobs = () => {
 
     const handleDrop = async (e: React.DragEvent, status: string) => {
         const id = e.dataTransfer.getData('jobId');
-        // Optimistic update
-        setJobs(jobs.map(j => j.id === id ? { ...j, status: status as any } : j));
-        
         await supabase.from('job_cards').update({ status }).eq('id', id);
-        fetchJobs(); // Sync full data
+        fetchJobs(); // Sync full data via React Query invalidate
     };
 
     const handleDragOver = (e: React.DragEvent) => e.preventDefault();
@@ -140,7 +198,7 @@ export const Jobs = () => {
                      {profile?.role === 'technician' && (
                          <button 
                             onClick={() => setShowAllJobs(!showAllJobs)}
-                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${showAllJobs ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-cyan-900/30 text-cyan-400 border-cyan-500/50'}`}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors border ${showAllJobs ? 'bg-slate-800 text-slate-400 border-slate-700' : 'active-link'}`}
                          >
                             <UserCheck size={16} /> {showAllJobs ? 'All Jobs' : 'My Jobs'}
                          </button>
@@ -157,7 +215,7 @@ export const Jobs = () => {
                      <button onClick={() => fetchJobs()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setIsNewJobModalOpen(true)} className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-cyan-500/20">
+                    <button onClick={() => setIsNewJobModalOpen(true)} className="flex items-center gap-2 btn-brand px-4 py-2 rounded-lg font-bold shadow-lg">
                         <Plus size={20} /> New Job
                     </button>
                 </div>
@@ -169,7 +227,7 @@ export const Jobs = () => {
                  <input 
                     type="text" 
                     placeholder="Search by vehicle or plate..." 
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 text-white focus:outline-none focus:border-brand"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                  />
@@ -201,7 +259,7 @@ export const Jobs = () => {
                                         className="bg-slate-900 hover:bg-slate-800 p-4 rounded-lg border border-slate-800 cursor-pointer shadow-sm hover:border-cyan-500/50 transition-all group"
                                     >
                                         <div className="flex justify-between items-start mb-2">
-                                            <span className="text-xs font-mono text-cyan-500 bg-cyan-950/30 px-1.5 py-0.5 rounded border border-cyan-900/50">
+                                            <span className="text-xs font-mono text-brand bg-brand-soft px-1.5 py-0.5 rounded border border-brand/20">
                                                 {job.vehicles?.license_plate}
                                             </span>
                                             {job.assigned_technician_id && (
@@ -226,33 +284,161 @@ export const Jobs = () => {
 
             {/* New Job Modal */}
             <Modal isOpen={isNewJobModalOpen} onClose={() => setIsNewJobModalOpen(false)} title="Create New Job">
+                <div className="flex bg-slate-950 p-1 rounded-xl mb-6 border border-slate-800">
+                    <button 
+                        onClick={() => setIntakeMode('SELECT')}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${intakeMode === 'SELECT' ? 'bg-brand text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        SMART SEARCH
+                    </button>
+                    <button 
+                        onClick={() => setIntakeMode('EXPRESS')}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${intakeMode === 'EXPRESS' ? 'bg-brand text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        WALK-IN INTAKE
+                    </button>
+                </div>
+
                 <form onSubmit={handleCreateJob} className="space-y-4">
+                    {intakeMode === 'SELECT' ? (
+                        <div className="relative">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Select Existing Vehicle</label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3 text-slate-500" size={18} />
+                                <input 
+                                    type="text"
+                                    placeholder="Search: Customer, Plate, or Model..."
+                                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 pl-10 text-white focus:border-brand focus:outline-none"
+                                    value={vehicleSearchTerm}
+                                    onChange={(e) => {
+                                        setVehicleSearchTerm(e.target.value);
+                                        setShowVehicleResults(true);
+                                    }}
+                                    onFocus={() => setShowVehicleResults(true)}
+                                />
+                            </div>
+                            
+                            {showVehicleResults && vehicleSearchTerm && (
+                                <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                                    {vehicles
+                                        .filter(v => 
+                                            v.license_plate.toLowerCase().includes(vehicleSearchTerm.toLowerCase()) ||
+                                            v.make.toLowerCase().includes(vehicleSearchTerm.toLowerCase()) ||
+                                            v.model.toLowerCase().includes(vehicleSearchTerm.toLowerCase()) ||
+                                            v.customers?.name.toLowerCase().includes(vehicleSearchTerm.toLowerCase())
+                                        )
+                                        .map(v => (
+                                            <div 
+                                                key={v.id}
+                                                onClick={() => {
+                                                    setNewJobForm({...newJobForm, vehicle_id: v.id});
+                                                    setVehicleSearchTerm(`${v.license_plate} - ${v.make} ${v.model} (${v.customers?.name})`);
+                                                    setShowVehicleResults(false);
+                                                }}
+                                                className="p-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0"
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div className="font-bold text-white text-sm">{v.license_plate}</div>
+                                                    <div className="text-[10px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase">{v.customers?.name}</div>
+                                                </div>
+                                                <div className="text-xs text-slate-400">{v.make} {v.model}</div>
+                                            </div>
+                                        ))}
+                                    {vehicles.filter(v => 
+                                        v.license_plate.toLowerCase().includes(vehicleSearchTerm.toLowerCase()) ||
+                                        v.make.toLowerCase().includes(vehicleSearchTerm.toLowerCase()) ||
+                                        v.model.toLowerCase().includes(vehicleSearchTerm.toLowerCase()) ||
+                                        v.customers?.name.toLowerCase().includes(vehicleSearchTerm.toLowerCase())
+                                    ).length === 0 && (
+                                        <div className="p-4 text-center text-slate-500 text-sm italic">No matching vehicles found</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="space-y-4 animate-fade-in">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Customer Name</label>
+                                    <input 
+                                        required
+                                        type="text"
+                                        placeholder="Full Name"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none"
+                                        value={newJobForm.customerName}
+                                        onChange={(e) => setNewJobForm({...newJobForm, customerName: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                                    <input 
+                                        required
+                                        type="text"
+                                        placeholder="0112..."
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none font-mono"
+                                        value={newJobForm.customerPhone}
+                                        onChange={(e) => setNewJobForm({...newJobForm, customerPhone: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Make</label>
+                                    <input 
+                                        required
+                                        type="text"
+                                        placeholder="Toyota"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none"
+                                        value={newJobForm.vehicleMake}
+                                        onChange={(e) => setNewJobForm({...newJobForm, vehicleMake: e.target.value})}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Model</label>
+                                    <input 
+                                        required
+                                        type="text"
+                                        placeholder="Vitz"
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none"
+                                        value={newJobForm.vehicleModel}
+                                        onChange={(e) => setNewJobForm({...newJobForm, vehicleModel: e.target.value})}
+                                    />
+                                </div>
+                                <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">License Plate</label>
+                                    <input 
+                                        required
+                                        type="text"
+                                        placeholder="WP-XXX..."
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none font-mono uppercase"
+                                        value={newJobForm.licensePlate}
+                                        onChange={(e) => setNewJobForm({...newJobForm, licensePlate: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div>
-                        <label className="block text-sm text-slate-400 mb-1">Select Vehicle</label>
-                        <select 
-                            required 
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
-                            value={newJobForm.vehicle_id}
-                            onChange={(e) => setNewJobForm({...newJobForm, vehicle_id: e.target.value})}
-                        >
-                            <option value="">-- Choose Vehicle --</option>
-                            {vehicles.map(v => (
-                                <option key={v.id} value={v.id}>{v.license_plate} - {v.make} {v.model}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm text-slate-400 mb-1">Issue Description</label>
+                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Service Required / Fault Description</label>
                         <textarea 
                             required
                             rows={3}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white"
+                            placeholder="Describe the issues reported by the customer..."
+                            className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-white text-sm focus:border-brand focus:outline-none"
                             value={newJobForm.description}
                             onChange={(e) => setNewJobForm({...newJobForm, description: e.target.value})}
                         />
                     </div>
-                    <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-lg font-bold">Create Job Card</button>
-                    <p className="text-xs text-center text-slate-500">Need to add a vehicle? Go to 'Customers' tab first.</p>
+                    
+                    <button type="submit" className="w-full btn-brand py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all">
+                        {intakeMode === 'EXPRESS' ? 'Register & Start Job' : 'Create Job Card'}
+                    </button>
+                    {intakeMode === 'SELECT' && (
+                        <p className="text-[10px] text-center text-slate-500 uppercase font-bold tracking-widest mt-2">
+                            New Customer? Switch to <span className="text-brand cursor-pointer font-black" onClick={() => setIntakeMode('EXPRESS')}>Walk-In Intake</span>
+                        </p>
+                    )}
                 </form>
             </Modal>
 

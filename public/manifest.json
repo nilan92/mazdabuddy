@@ -1,0 +1,17 @@
+{
+  "name": "AutoPulse OS",
+  "short_name": "AutoPulse",
+  "description": "Smart Workshop Management System",
+  "start_url": "/#/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#06b6d4",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

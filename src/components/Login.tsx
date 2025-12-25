@@ -42,18 +42,28 @@ export const Login = () => {
         setLoading(false);
     };
 
+    const handleGoogleLogin = async () => {
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/#/`
+            }
+        });
+        if (error) setError(error.message);
+    };
+
     return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-black text-white mb-2 whitespace-nowrap tracking-tight">
-                        <span className="text-cyan-400">MAZDA</span>BUDDY
+                        <span className="text-cyan-400">AUTO</span>PULSE
                     </h1>
-                    <p className="text-slate-400">Staff Portal Access</p>
+                    <p className="text-slate-400 font-medium tracking-wide">Your shop's heartbeat.</p>
                 </div>
 
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl shadow-black/50">
-                    <form onSubmit={handleLogin} className="space-y-6">
+                    <form onSubmit={handleLogin} className="space-y-5">
                         {error && (
                             <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-3 rounded-lg flex items-center gap-2 text-sm">
                                 <AlertCircle size={16} />
@@ -62,15 +72,15 @@ export const Login = () => {
                         )}
                         
                         <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Email or Username</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest">Email or Username</label>
                             <div className="relative">
-                                <div className="absolute left-3 top-3 text-slate-500">
+                                <div className="absolute left-3 top-3.5 text-slate-500">
                                     <User size={18} />
                                 </div>
                                 <input 
                                     type="text" 
                                     required
-                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none"
+                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-cyan-500 focus:outline-none transition-all"
                                     placeholder="username or email@example.com"
                                     value={loginInput}
                                     onChange={e => setLoginInput(e.target.value)}
@@ -79,15 +89,18 @@ export const Login = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Password</label>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Password</label>
+                                <Link to="/forgot-password" title="Forgot Password" className="text-xs text-cyan-500 hover:text-cyan-400 font-bold">FORGOT?</Link>
+                            </div>
                             <div className="relative">
-                                <div className="absolute left-3 top-3 text-slate-500">
+                                <div className="absolute left-3 top-3.5 text-slate-500">
                                     <Lock size={18} />
                                 </div>
                                 <input 
                                     type="password" 
                                     required
-                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none"
+                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-cyan-500 focus:outline-none transition-all"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
@@ -98,14 +111,28 @@ export const Login = () => {
                         <button 
                             type="submit" 
                             disabled={loading}
-                            className="w-full bg-gradient-to-r from-cyan-600 to-cyan-500 hover:from-cyan-500 hover:to-cyan-400 text-white font-bold py-3 rounded-lg shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="group relative w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-cyan-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-2"
                         >
-                            {loading ? 'Authenticating...' : 'Sign In'}
+                            {loading ? 'AUTHENTICATING...' : 'SIGN IN'}
                         </button>
 
-                        <div className="text-center pt-4 border-t border-slate-800">
-                            <p className="text-slate-500 text-sm">Don't have an account?</p>
-                            <Link to="/register" className="text-cyan-400 hover:text-cyan-300 font-bold text-sm">Create Technician Account</Link>
+                        <div className="relative py-2">
+                             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+                             <div className="relative flex justify-center text-[10px] font-bold uppercase tracking-[0.2em]"><span className="bg-slate-900 px-3 text-slate-500">OR CONTINUE WITH</span></div>
+                        </div>
+
+                        <button 
+                            type="button"
+                            onClick={handleGoogleLogin}
+                            className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3.5 rounded-xl transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95"
+                        >
+                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" className="w-5 h-5" />
+                            GOOGLE LOGIN
+                        </button>
+
+                        <div className="text-center pt-6 border-t border-slate-800">
+                            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-2">New to AutoPulse?</p>
+                            <Link to="/register" className="inline-block text-cyan-400 hover:text-cyan-300 font-black text-sm tracking-tight">INITIALIZE WORKSHOP PORTAL</Link>
                         </div>
                     </form>
                 </div>
