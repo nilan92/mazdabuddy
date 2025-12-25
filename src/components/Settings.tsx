@@ -6,7 +6,9 @@ import { useAuth } from '../context/AuthContext';
 export const Settings = () => {
     const { profile } = useAuth();
     const isAdmin = profile?.role === 'admin';
-    const [activeTab, setActiveTab] = useState<'general' | 'users'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'users' | 'ai'>('general');
+    const [aiApiKey, setAiApiKey] = useState('');
+    const [aiLoading, setAiLoading] = useState(false);
 
     // Tenant Settings State
     const [tenantName, setTenantName] = useState('');
@@ -15,6 +17,7 @@ export const Settings = () => {
     const [phone, setPhone] = useState('');
     const [terms, setTerms] = useState('');
     const [brandColor, setBrandColor] = useState('#06b6d4');
+    const [defaultLaborRate, setDefaultLaborRate] = useState('2500');
     const [uploading, setUploading] = useState(false);
     const [loading, setLoading] = useState(true);
 
@@ -41,6 +44,8 @@ export const Settings = () => {
                 setPhone(data.phone || '');
                 setTerms(data.terms_and_conditions || '');
                 setBrandColor(data.brand_color || '#06b6d4');
+                setAiApiKey(data.ai_api_key || '');
+                setDefaultLaborRate(data.default_labor_rate?.toString() || '2500');
             }
         } catch (error) {
             console.error('Error fetching tenant:', error);
@@ -56,7 +61,7 @@ export const Settings = () => {
             const { data } = await supabase
                 .from('profiles')
                 .select('*')
-                .order('created_at', { ascending: true });
+                .order('updated_at', { ascending: false });
             if (data) setUsers(data);
         } catch (error) {
             console.error('Error fetching users:', error);
@@ -142,7 +147,8 @@ export const Settings = () => {
                 address: address,
                 phone: phone,
                 terms_and_conditions: terms,
-                brand_color: brandColor
+                brand_color: brandColor,
+                default_labor_rate: parseFloat(defaultLaborRate)
             })
             .eq('id', profile?.tenant_id);
 
@@ -176,6 +182,23 @@ export const Settings = () => {
             alert("Failed to delete user: " + error.message);
         } else {
             setUsers(prev => prev.filter(u => u.id !== id));
+        }
+    };
+
+    const handleSaveAiKey = async () => {
+        setAiLoading(true);
+        try {
+            const { error } = await supabase
+                .from('tenants')
+                .update({ ai_api_key: aiApiKey })
+                .eq('id', profile?.tenant_id);
+            
+            if (error) throw error;
+            alert("Workshop AI configuration updated!");
+        } catch (error: any) {
+            alert("Error saving AI key: " + error.message);
+        } finally {
+            setAiLoading(false);
         }
     };
 
@@ -218,6 +241,18 @@ export const Settings = () => {
                         }}
                     >
                         Staff & Access
+                    </button>
+                )}
+                {isAdmin && (
+                    <button 
+                        onClick={() => setActiveTab('ai')}
+                        className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}
+                        style={{ 
+                            borderBottomColor: activeTab === 'ai' ? brandColor : 'transparent',
+                            color: activeTab === 'ai' ? brandColor : undefined 
+                        }}
+                    >
+                        AI & Intelligence
                     </button>
                 )}
             </div>
@@ -334,19 +369,32 @@ export const Settings = () => {
                             </div>
                         </div>
 
-                        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 opacity-60 pointer-events-none">
-                             <div className="flex items-center gap-2 text-amber-500 mb-2">
+                        <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+                             <div className="flex items-center gap-2 text-brand mb-4">
                                 <Shield size={16} />
-                                <span className="text-xs font-bold uppercase tracking-wider">Advanced Config (Locked)</span>
+                                <span className="text-xs font-bold uppercase tracking-wider">Operational Config</span>
                              </div>
-                             <div className="grid grid-cols-2 gap-4">
-                                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Labor Rate</div>
-                                    <div className="text-white font-mono">1,500 LKR / hr</div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                    <label className="text-[10px] text-slate-500 uppercase font-bold mb-2 block">Default Labor Rate (LKR / hr)</label>
+                                    <div className="flex items-center gap-3">
+                                        <input 
+                                            type="number"
+                                            className="bg-transparent text-white font-mono text-xl focus:outline-none w-full"
+                                            value={defaultLaborRate}
+                                            onChange={e => setDefaultLaborRate(e.target.value)}
+                                        />
+                                        <button 
+                                            onClick={handleSaveTenant}
+                                            className="text-[10px] bg-brand/10 text-brand px-3 py-1 rounded-lg hover:bg-brand/20 transition-all font-bold"
+                                        >
+                                            UPDATE
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                                    <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tax (VAT)</div>
-                                    <div className="text-white font-mono">0 %</div>
+                                <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 opacity-50">
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tax Configuration</div>
+                                    <div className="text-white font-mono">0.00 % (Flat Rate)</div>
                                 </div>
                              </div>
                         </div>
@@ -429,6 +477,58 @@ export const Settings = () => {
                                     )}
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                )}
+                 {activeTab === 'ai' && isAdmin && (
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 max-w-2xl">
+                        <div className="flex items-center gap-4 mb-8">
+                             <div className="w-16 h-16 rounded-2xl bg-brand-soft border border-brand/20 flex items-center justify-center">
+                                 <Shield size={32} className="text-brand" />
+                             </div>
+                             <div>
+                                 <h3 className="text-xl font-bold text-white leading-none mb-2">Neural Intelligence Engine</h3>
+                                 <p className="text-sm text-slate-400">Power vehicle scanning and automated diagnostics.</p>
+                             </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="p-6 bg-slate-950/50 rounded-2xl border border-slate-800">
+                                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">OpenRouter API Key</label>
+                                <div className="flex gap-3">
+                                    <input 
+                                        type="password"
+                                        placeholder="sk-or-v1-..."
+                                        className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white font-mono focus:outline-none focus:border-brand"
+                                        value={aiApiKey}
+                                        onChange={(e) => setAiApiKey(e.target.value)}
+                                    />
+                                    <button 
+                                        onClick={handleSaveAiKey}
+                                        disabled={aiLoading}
+                                        className="btn-brand px-6 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                                    >
+                                        <Save size={18} /> {aiLoading ? 'Saving...' : 'Apply Key'}
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-4 leading-relaxed italic">
+                                    We use <strong>OpenRouter</strong> to provide high-performance vision models like Gemini 2.0. 
+                                    Get your key at <a href="https://openrouter.ai" target="_blank" className="text-brand underline">openrouter.ai</a>.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                                    <div className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 italic">Active Model</div>
+                                    <div className="text-white font-bold text-sm">Gemini 2.0 Flash</div>
+                                    <div className="text-[9px] text-slate-500 mt-1 uppercase">Optimized for Speed</div>
+                                </div>
+                                <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
+                                    <div className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 italic">Backup Model</div>
+                                    <div className="text-white font-bold text-sm">Gemini 2.0 Pro</div>
+                                    <div className="text-[9px] text-slate-500 mt-1 uppercase">High Detail Vision</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

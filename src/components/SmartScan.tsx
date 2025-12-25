@@ -4,6 +4,7 @@ import { Camera, RefreshCw, Check, Loader2, RotateCcw, Plus, AlertTriangle } fro
 import { supabase } from '../lib/supabase';
 import { analyzeVehicleImage } from '../lib/ai';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const SmartScan = () => {
     const navigate = useNavigate();
@@ -11,17 +12,23 @@ export const SmartScan = () => {
     const [imgSrc, setImgSrc] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [result, setResult] = useState<any>(null);
+    const { profile } = useAuth();
     const [facingMode, setFacingMode] = useState<"user" | "environment">("environment");
     const [apiKey, setApiKey] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchApiKey = async () => {
-            const { data } = await supabase.from('shop_settings').select('value').eq('key', 'ai_api_key').single();
-            if (data) setApiKey(data.value);
+            if (!profile?.tenant_id) return;
+            const { data } = await supabase
+                .from('tenants')
+                .select('ai_api_key')
+                .eq('id', profile.tenant_id)
+                .single();
+            if (data) setApiKey(data.ai_api_key);
         };
         fetchApiKey();
-    }, []);
+    }, [profile?.tenant_id]);
 
     const toggleCamera = () => {
         setFacingMode(prev => prev === "user" ? "environment" : "user");

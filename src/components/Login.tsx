@@ -57,7 +57,7 @@ export const Login = () => {
             <div className="w-full max-w-md">
                 <div className="text-center mb-8">
                     <h1 className="text-4xl font-black text-white mb-2 whitespace-nowrap tracking-tight">
-                        <span className="text-cyan-400">AUTO</span>PULSE
+                        <span className="text-brand">AUTO</span>PULSE
                     </h1>
                     <p className="text-slate-400 font-medium tracking-wide">Your shop's heartbeat.</p>
                 </div>
@@ -80,7 +80,7 @@ export const Login = () => {
                                 <input 
                                     type="text" 
                                     required
-                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-cyan-500 focus:outline-none transition-all"
+                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-brand focus:outline-none transition-all"
                                     placeholder="username or email@example.com"
                                     value={loginInput}
                                     onChange={e => setLoginInput(e.target.value)}
@@ -91,7 +91,7 @@ export const Login = () => {
                         <div>
                             <div className="flex justify-between items-center mb-1">
                                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Password</label>
-                                <Link to="/forgot-password" title="Forgot Password" className="text-xs text-cyan-500 hover:text-cyan-400 font-bold">FORGOT?</Link>
+                                <Link to="/forgot-password" title="Forgot Password" className="text-xs text-brand hover:filter hover:brightness-110 font-bold">FORGOT?</Link>
                             </div>
                             <div className="relative">
                                 <div className="absolute left-3 top-3.5 text-slate-500">
@@ -100,7 +100,7 @@ export const Login = () => {
                                 <input 
                                     type="password" 
                                     required
-                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-cyan-500 focus:outline-none transition-all"
+                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-brand focus:outline-none transition-all"
                                     placeholder="••••••••"
                                     value={password}
                                     onChange={e => setPassword(e.target.value)}
@@ -111,7 +111,7 @@ export const Login = () => {
                         <button 
                             type="submit" 
                             disabled={loading}
-                            className="group relative w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-cyan-900/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-2"
+                            className="group relative w-full btn-brand font-bold py-3.5 rounded-xl shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-2"
                         >
                             {loading ? 'AUTHENTICATING...' : 'SIGN IN'}
                         </button>
@@ -132,7 +132,7 @@ export const Login = () => {
 
                         <div className="text-center pt-6 border-t border-slate-800">
                             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-2">New to AutoPulse?</p>
-                            <Link to="/register" className="inline-block text-cyan-400 hover:text-cyan-300 font-black text-sm tracking-tight">INITIALIZE WORKSHOP PORTAL</Link>
+                            <Link to="/register" className="inline-block text-brand hover:filter hover:brightness-110 font-black text-sm tracking-tight">INITIALIZE WORKSHOP PORTAL</Link>
                         </div>
                     </form>
                 </div>

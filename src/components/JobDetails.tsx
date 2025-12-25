@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../context/AuthContext';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 
@@ -12,6 +13,7 @@ interface JobDetailsProps {
 }
 
 export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
+    const { profile } = useAuth();
     const [job, setJob] = useState<JobCard | null>(null);
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
     const [jobLabor, setJobLabor] = useState<JobLabor[]>([]);
@@ -101,17 +103,18 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             if (signal?.aborted) return;
             if(profileData) setProfiles(profileData);
             
-            // Settings (Default labor & AI Key)
-            const { data: settingsData } = await supabase
-                .from('shop_settings')
-                .select('*')
-                .abortSignal(signal!);
-            
-            if (signal?.aborted) return;
-            if (settingsData) {
-                const settings = settingsData.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {} as Record<string, string>);
-                if (settings['default_labor_rate']) setLaborForm(prev => ({ ...prev, hourly_rate_lkr: settings['default_labor_rate'] }));
-                if (settings['ai_api_key']) setAiKey(settings['ai_api_key']);
+            // 5. Tenant Settings (Branding, AI & Labor Defaults)
+            if (profile?.tenant_id) {
+                const { data: tenantData } = await supabase
+                    .from('tenants')
+                    .select('ai_api_key, brand_color, default_labor_rate')
+                    .eq('id', profile.tenant_id)
+                    .single();
+                
+                if (tenantData?.ai_api_key) setAiKey(tenantData.ai_api_key);
+                if (tenantData?.default_labor_rate) {
+                    setLaborForm(prev => ({ ...prev, hourly_rate_lkr: tenantData.default_labor_rate.toString() }));
+                }
             }
         } catch (error: any) {
             if (error.name !== 'AbortError') {
@@ -310,9 +313,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
                             {/* Tabs */}
                             <div className="flex border-b border-slate-800 bg-slate-900 z-10">
-                                <button onClick={() => setActiveTab('details')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'details' ? 'border-cyan-500 text-cyan-500' : 'border-transparent text-slate-500 hover:text-white'}`}>Details</button>
-                                <button onClick={() => setActiveTab('parts')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'parts' ? 'border-cyan-500 text-cyan-500' : 'border-transparent text-slate-500 hover:text-white'}`}>Parts</button>
-                                <button onClick={() => setActiveTab('labor')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'labor' ? 'border-cyan-500 text-cyan-500' : 'border-transparent text-slate-500 hover:text-white'}`}>Labor</button>
+                                <button onClick={() => setActiveTab('details')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'details' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-white'}`}>Details</button>
+                                <button onClick={() => setActiveTab('parts')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'parts' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-white'}`}>Parts</button>
+                                <button onClick={() => setActiveTab('labor')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'labor' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-white'}`}>Labor</button>
                             </div>
 
                             {/* Content */}
@@ -401,7 +404,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                     </button>
                                                 )}
                                             </div>
-                                            <textarea rows={4} value={techNotes} onChange={e => setTechNotes(e.target.value)} className="w-full bg-slate-800 text-white p-3 text-sm rounded border border-slate-700 focus:border-cyan-500 focus:outline-none" placeholder="Add diagnosis and repair notes..." />
+                                            <textarea rows={4} value={techNotes} onChange={e => setTechNotes(e.target.value)} className="w-full bg-slate-800 text-white p-3 text-sm rounded border border-slate-700 focus:border-brand focus:outline-none" placeholder="Add diagnosis and repair notes..." />
                                         </div>
                                     </div>
                                 )}
@@ -410,7 +413,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                     <div className="space-y-6">
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
                                             <div className="flex justify-between items-center mb-4">
-                                                <h4 className="font-bold text-white text-sm flex items-center gap-2"><Plus size={16} className="text-cyan-400"/> Add Part</h4>
+                                                <h4 className="font-bold text-white text-sm flex items-center gap-2"><Plus size={16} className="text-brand"/> Add Part</h4>
                                                 <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700">
                                                     <button 
                                                         onClick={() => setPartForm({...partForm, is_custom: false})}
@@ -433,7 +436,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                             </select>
                                                         </div>
                                                         <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-14 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm flex-shrink-0" />
-                                                        <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded font-bold text-sm flex-shrink-0">Add</button>
+                                                        <button type="submit" className="btn-brand px-3 py-2 rounded font-bold text-sm flex-shrink-0">Add</button>
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-2">
@@ -452,7 +455,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                                 </div>
                                                             </div>
                                                             <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-600 rounded p-2 text-white text-xs" />
-                                                            <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded font-bold text-sm whitespace-nowrap">Add</button>
+                                                            <button type="submit" className="btn-brand px-3 py-2 rounded font-bold text-sm whitespace-nowrap">Add</button>
                                                         </div>
                                                     </div>
                                                 )}
@@ -486,7 +489,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                 {activeTab === 'labor' && (
                                      <div className="space-y-6">
                                         <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                            <h4 className="font-bold text-white mb-3 text-sm flex items-center gap-2"><Plus size={16} className="text-cyan-400"/> Add Labor</h4>
+                                            <h4 className="font-bold text-white mb-3 text-sm flex items-center gap-2"><Plus size={16} className="text-brand"/> Add Labor</h4>
                                             <form onSubmit={handleAddLabor} className="space-y-3">
                                                 <div className="flex gap-2">
                                                     <input required placeholder="Description" value={laborForm.description} onChange={e => setLaborForm({...laborForm, description: e.target.value})} className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm" />
@@ -497,7 +500,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                         <span className="absolute left-2 top-2 text-[10px] text-slate-500">LKR</span>
                                                         <input required type="number" value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-8 text-white text-sm font-mono" />
                                                      </div>
-                                                     <button type="submit" className="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded font-bold text-sm">Add</button>
+                                                     <button type="submit" className="btn-brand px-4 py-2 rounded font-bold text-sm">Add</button>
                                                 </div>
                                             </form>
                                         </div>
@@ -525,11 +528,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                             <div className="p-4 bg-slate-950 border-t border-slate-800 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
                                 <div className="flex justify-between items-center mb-2">
                                     <div className="text-slate-400 text-xs font-bold uppercase">Estimated Total</div>
-                                    <div className="text-xl font-black text-cyan-400 font-mono">
+                                    <div className="text-xl font-black text-brand font-mono">
                                         LKR {(totalParts + totalLabor).toLocaleString()}
                                     </div>
                                 </div>
-                                <button onClick={handleUpdateJob} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95 text-sm">
+                                <button onClick={handleUpdateJob} className="w-full btn-brand py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-sm">
                                     <Save size={18} /> Update Job
                                 </button>
                             </div>
