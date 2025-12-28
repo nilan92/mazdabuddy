@@ -39,13 +39,15 @@ export const Jobs = () => {
     const { data: jobs = [], isLoading: jobsLoading } = useQuery({
         queryKey: ['jobs'],
         queryFn: async () => {
-            const { data } = await supabase
-                .from('job_cards')
-                // @ts-ignore
-                .select('*, vehicles(id, make, model, license_plate), profiles(full_name)')
-                .order('created_at', { ascending: false });
-            return data as JobCard[] || [];
-        }
+    const { data } = await supabase
+        .from('job_cards')
+        // @ts-ignore
+        .select('*, vehicles(id, make, model, license_plate), profiles(full_name)')
+        .order('created_at', { ascending: false })
+        .limit(50); // <--- Added Limit to prevent crashing
+    
+    return data as JobCard[] || [];
+}
     });
 
     const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
