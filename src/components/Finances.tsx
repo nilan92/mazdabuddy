@@ -76,6 +76,10 @@ export const Finances = () => {
 
             if (laborErr) console.warn('[Finances] Labor cost fetch error:', laborErr);
 
+            // Fetch tenant settings to get accurate labor cost
+            const { data: settings } = await supabase.from('tenants').select('default_labor_rate').single();
+
+            const laborCostBasis = settings?.default_labor_rate ? Number(settings.default_labor_rate) : 1500;
             // Process integrated expenses
             const integratedJobExp = [
                 ...(jobParts || []).map(jp => ({
@@ -93,7 +97,8 @@ export const Finances = () => {
                     date: jl.created_at,
                     description: `Labor: ${jl.description || 'Service'}`,
                     category: 'labor',
-                    amount_lkr: (Number(jl.hours) || 0) * 1000, // Assuming a base cost per hour for the shop (e.g. 1000)
+                    // FIX: Use defined cost basis, not hardcoded 1000
+                    amount_lkr: (Number(jl.hours) || 0) * laborCostBasis, 
                     profiles: { full_name: jl.mechanic_name || 'Technician' },
                     job_cards: jl.job_cards,
                     is_automatic: true
@@ -346,7 +351,7 @@ export const Finances = () => {
             yPos += 5;
             doc.setFont('helvetica', 'normal');
             
-            reportData.filteredExpenses.slice(0, 30).forEach((exp) => { // Limit to 30 for PDF
+            reportData.filteredExpenses.forEach((exp) => { // Limit to 30 for PDF
                 if (yPos > 280) {
                     doc.addPage();
                     yPos = 20;

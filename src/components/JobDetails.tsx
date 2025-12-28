@@ -133,7 +133,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     }, [jobId]);
 
     const handleUpdateJob = async () => {
-        const updates = {
+        if (!job) return;
+
+        const updates: any = {
             mileage: mileage ? parseInt(mileage) : null,
             technician_notes: techNotes,
             status,
@@ -141,11 +143,64 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             estimated_hours: estimatedHours ? parseFloat(estimatedHours) : 0
         };
 
+        // --- NEW LOGIC START: Generate Invoice on Completion ---
+        if (status === 'completed' && job?.status !== 'completed') {
+            updates.completed_at = new Date().toISOString();
+
+            // 1. Calculate Parts Total
+            // (Note: jobParts comes from your existing state in this file)
+            const partsTotal = jobParts.reduce((sum: number, p: any) => 
+                sum + (p.quantity * (p.price_at_time_lkr || 0)), 0
+            );
+
+            // 2. Calculate Labor Total
+            // (Note: Defaulting to 1500 LKR/hr if no rate set - you can adjust this)
+            const laborTotal = jobLabor.reduce((sum: number, l: any) => 
+                sum + (Number(l.hours) * (l.hourly_rate_lkr || 1500)), 0
+            );
+
+            const grandTotal = partsTotal + laborTotal;
+
+            // 3. Check if invoice already exists to prevent duplicates
+            const { data: existingInv } = await supabase
+                .from('invoices')
+                .select('id')
+                .eq('job_id', jobId)
+                .single();
+
+            if (!existingInv) {
+                // 4. Create the Real Invoice Record
+                const { error: invError } = await supabase.from('invoices').insert({
+                    job_id: jobId,
+                    tenant_id: job.tenant_id,
+                    subtotal_lkr: grandTotal,
+                    tax_lkr: 0, // You can add tax logic here later
+                    discount_lkr: 0,
+                    total_amount_lkr: grandTotal,
+                    created_at: new Date().toISOString()
+                });
+
+                if (invError) {
+                    alert("Warning: Job marked completed, but Invoice creation failed. " + invError.message);
+                    return; // Stop if invoice fails
+                }
+            }
+        } 
+        // Logic to clear timestamp if moved back to in_progress
+        else if (status !== 'completed' && job?.status === 'completed') {
+            updates.completed_at = null;
+            // Optional: You could delete the invoice here if you wanted strict sync
+        }
+        // --- NEW LOGIC END ---
+
         const { error } = await supabase.from('job_cards').update(updates).eq('id', jobId);
-        if (error) alert(error.message);
-        else {
+        
+        if (error) {
+            alert(error.message);
+        } else {
             onUpdate();
-            alert("Job Updated!");
+            setJob(prev => prev ? { ...prev, ...updates } : null);
+            alert("Job Updated & Invoice Generated!");
         }
     };
 
@@ -162,6 +217,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const handleAddPart = async (e: React.FormEvent) => {
         e.preventDefault();
         
+        // 1. Handle Custom Parts (No stock tracking)
         if (partForm.is_custom) {
             const cost = parseFloat(partForm.custom_cost_lkr) || 0;
             const price = parseFloat(partForm.custom_price_lkr) || 0;
@@ -171,52 +227,37 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                 part_id: null,
                 quantity: partForm.quantity,
                 price_at_time_lkr: price,
+                cost_at_time_lkr: cost,
                 is_custom: true,
                 custom_name: partForm.custom_name
             });
             
-            if (!error) {
-                // Also log as expense if cost > 0
-                if (cost > 0) {
-                    const { data: userData } = await supabase.auth.getUser();
-                    if(userData.user) {
-                        await supabase.from('user_expenses').insert({
-                            user_id: userData.user.id,
-                            job_id: jobId,
-                            amount_lkr: cost * partForm.quantity,
-                            description: `Parts Purchase: ${partForm.custom_name} for Job #${jobId.slice(0,8)}`,
-                            category: 'parts'
-                        });
-                    }
-                }
-                
+            if (error) {
+                alert(error.message);
+            } else {
                 fetchJobDetails();
                 setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
-            } else {
-                alert(error.message);
             }
             return;
         }
 
-        const selectedPart = allParts.find(p => p.id === partForm.part_id);
-        if (!selectedPart) return;
-
-        // Add to job_parts
-        const { error } = await supabase.from('job_parts').insert({
-            job_id: jobId,
-            part_id: partForm.part_id,
-            quantity: partForm.quantity,
-            price_at_time_lkr: selectedPart.price_lkr // Lock in price
+        // 2. Handle Inventory Parts (Secure Transaction)
+        // This calls the SQL function we created in Phase 1
+        const { data, error } = await supabase.rpc('add_job_part_transaction', {
+            p_job_id: jobId,
+            p_part_id: partForm.part_id,
+            p_quantity: partForm.quantity,
+            p_user_id: profile?.id
         });
 
-        // Deduct Inventory
-        if(!error) {
-             const newStock = selectedPart.stock_quantity - partForm.quantity;
-             await supabase.from('parts').update({ stock_quantity: newStock }).eq('id', selectedPart.id);
-             fetchJobDetails();
-             setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
+        if (error) {
+            console.error(error);
+            alert("Transaction failed: " + error.message);
+        } else if (data && !data.success) {
+            alert("Error: " + data.message); // Will show "Insufficient stock available"
         } else {
-            alert(error.message);
+            fetchJobDetails(); // Refresh UI
+            setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
         }
     };
 
@@ -237,9 +278,15 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     };
 
     const handleRemovePart = async (id: string) => {
-        // ideally return stock too, simplistic logic for now
-        await supabase.from('job_parts').delete().eq('id', id);
-        fetchJobDetails();
+        if(!confirm("Remove this part? Stock will be returned to inventory.")) return;
+
+        // Calls the secure SQL function that restores stock automatically
+        const { error } = await supabase.rpc('remove_job_part_transaction', {
+            p_job_part_id: id
+        });
+
+        if (error) alert("Error removing part: " + error.message);
+        else fetchJobDetails();
     };
     
     const handleRemoveLabor = async (id: string) => {
@@ -447,11 +494,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                             <div className="flex-1 grid grid-cols-2 gap-2">
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">Sell Price</span>
-                                                                    <input required type="number" placeholder="0.00" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
+                                                                    <input required type="number" placeholder="Sell Price" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">Buy Cost</span>
-                                                                    <input required type="number" placeholder="0.00" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
+                                                                    <input required type="number" placeholder="Buy Cost" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
                                                                 </div>
                                                             </div>
                                                             <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-600 rounded p-2 text-white text-xs" />
