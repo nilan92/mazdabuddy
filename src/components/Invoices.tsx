@@ -26,7 +26,7 @@ export const Invoices = () => {
                 id: job.id,
                 customer: job.vehicles?.customers?.name || 'Unknown',
                 vehicle: `${job.vehicles?.make} ${job.vehicles?.model} (${job.vehicles?.license_plate})`,
-                total: job.estimated_cost_lkr || 0,
+                total: Number(job.estimated_cost_lkr) || 0,
                 status: 'Completed',
                 date: new Date(job.created_at).toLocaleDateString()
             })) || [];

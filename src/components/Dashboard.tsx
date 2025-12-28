@@ -28,16 +28,25 @@ export const Dashboard = () => {
   const { data: dashboardData, isLoading: loading, isFetching } = useQuery({
     queryKey: ['dashboard'],
     queryFn: async () => {
-      // 1. Fetch Stats & Efficiency
-      const { data: jobs } = await supabase.from('job_cards').select('id, estimated_hours, status, estimated_cost_lkr');
-      const { count: customerCount } = await supabase.from('customers').select('*', { count: 'exact', head: true });
-      
-      const totalRevenue = jobs?.filter(j => j.status === 'completed').reduce((acc, curr) => acc + (curr.estimated_cost_lkr || 0), 0) || 0;
-      const activeJobCount = jobs?.filter(j => j.status !== 'completed').length || 0;
+      // 1. Fetch Stats & Efficiency in parallel
+      const [jobsRes, customersRes, laborRes, lowStockRes] = await Promise.all([
+        supabase.from('job_cards').select('id, estimated_hours, status, estimated_cost_lkr'),
+        supabase.from('customers').select('*', { count: 'exact', head: true }),
+        supabase.from('job_labor').select('hours'),
+        supabase.from('parts').select('*').lte('stock_quantity', 5).limit(5)
+      ]);
 
-      const { data: allLabor } = await supabase.from('job_labor').select('hours');
-      const totalActualHours = allLabor?.reduce((sum, l) => sum + l.hours, 0) || 0;
-      const totalEstHours = jobs?.reduce((sum, j) => sum + (j.estimated_hours || 0), 0) || 0;
+      if (jobsRes.error) console.error('[Dashboard] Jobs fetch error:', jobsRes.error);
+      if (customersRes.error) console.error('[Dashboard] Customers fetch error:', customersRes.error);
+
+      const jobs = jobsRes.data || [];
+      const customerCount = customersRes.count || 0;
+      
+      const totalRevenue = jobs.filter(j => j.status === 'completed').reduce((acc, curr) => acc + (Number(curr.estimated_cost_lkr) || 0), 0);
+      const activeJobCount = jobs.filter(j => j.status !== 'completed').length;
+
+      const totalActualHours = laborRes.data?.reduce((sum, l) => sum + l.hours, 0) || 0;
+      const totalEstHours = jobs.reduce((sum, j) => sum + (j.estimated_hours || 0), 0);
 
       let efficiencyPct = 100;
       if (totalEstHours > 0 && totalActualHours > 0) {
@@ -47,19 +56,14 @@ export const Dashboard = () => {
       }
 
       // 2. Fetch Recent Jobs
-      const { data: recent } = await supabase
+      const { data: recent, error: recentError } = await supabase
         .from('job_cards')
         // @ts-ignore
         .select('*, vehicles(license_plate, make, model)')
         .order('created_at', { ascending: false })
         .limit(5);
-
-      // 3. Fetch Low Stock
-      const { data: lowStockParts } = await supabase
-        .from('parts')
-        .select('*')
-        .lte('stock_quantity', 5)
-        .limit(5);
+      
+      if (recentError) console.error('[Dashboard] Recent jobs error:', recentError);
 
       return {
           stats: {
@@ -69,7 +73,7 @@ export const Dashboard = () => {
             efficiency: `${efficiencyPct}%`
           },
           recentJobs: recent || [],
-          lowStock: lowStockParts || []
+          lowStock: lowStockRes.data || []
       };
     }
   });
@@ -94,7 +98,7 @@ export const Dashboard = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-slate-400">Welcome back, {profile?.full_name?.split(' ')[0] || 'Technician'}. Here's what's happening today.</p>
+          <p className="text-slate-400">Welcome back, {profile?.full_name?.split(' ')[0] || 'Member'} ({profile?.role || 'Guest'}). Here's what's happening today.</p>
         </div>
         <div className="flex items-center gap-3">
              <button 

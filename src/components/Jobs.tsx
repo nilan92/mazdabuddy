@@ -234,8 +234,8 @@ export const Jobs = () => {
             </div>
 
             {/* Kanban Board */}
-            <div className="flex-1 overflow-x-auto">
-                <div className="flex gap-6 min-w-[1000px] h-full pb-4">
+            <div className="flex-1 md:overflow-x-auto overflow-y-auto">
+                <div className="flex flex-col md:flex-row gap-6 md:min-w-[1000px] h-auto md:h-full pb-4">
                     {columns.map(col => (
                         <div 
                             key={col.id} 

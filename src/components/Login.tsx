@@ -15,31 +15,65 @@ export const Login = () => {
         setLoading(true);
         setError(null);
 
-        let emailToUse = loginInput.trim();
+        let isTimedOut = false;
+        const timeoutId = setTimeout(() => {
+            isTimedOut = true;
+            setError("Authentication is taking longer than usual (15s+). This usually means a connection issue with the database. Please refresh or try again.");
+            setLoading(false);
+        }, 15000);
 
-        // 1. Detect if input is username (no @ symbol)
-        if (!emailToUse.includes('@')) {
-            const { data, error: funcError } = await supabase.rpc('get_email_by_username', { input_username: emailToUse });
-            
-            if (funcError || !data) {
-                setError("Username not found.");
-                setLoading(false);
-                return;
+        try {
+            let emailToUse = loginInput.trim();
+
+            // 1. Detect if input is username (no @ symbol)
+            if (!emailToUse.includes('@')) {
+                console.log('[Login] Resolving username:', emailToUse);
+                const { data, error: funcError } = await supabase.rpc('get_email_by_username', { input_username: emailToUse });
+                
+                if (isTimedOut) return;
+
+                if (funcError) {
+                    console.error('[RPC Error]', funcError);
+                    setError(`Database Error: ${funcError.message}`);
+                    setLoading(false);
+                    clearTimeout(timeoutId);
+                    return;
+                }
+                
+                if (!data) {
+                    setError("Username not found. Please check your spelling.");
+                    setLoading(false);
+                    clearTimeout(timeoutId);
+                    return;
+                }
+                emailToUse = data;
+                console.log('[Login] Resolved to email:', emailToUse);
             }
-            emailToUse = data; // Resolved to email
-        }
 
-        const { error } = await supabase.auth.signInWithPassword({
-            email: emailToUse,
-            password,
-        });
+            if (isTimedOut) return;
 
-        if (error) {
-            setError(error.message);
-        } else {
-            navigate('/');
+            const { error: loginError } = await supabase.auth.signInWithPassword({
+                email: emailToUse,
+                password,
+            });
+
+            if (isTimedOut) return;
+
+            if (loginError) {
+                setError(loginError.message);
+            } else {
+                console.log('[Login] Success! Redirecting...');
+                navigate('/');
+            }
+        } catch (err: any) {
+            if (!isTimedOut) {
+                console.error('[Login Catch]', err);
+                setError("A network error prevented login. Please check your internet.");
+            }
+        } finally {
+            clearTimeout(timeoutId);
+            if (!isTimedOut) setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleGoogleLogin = async () => {

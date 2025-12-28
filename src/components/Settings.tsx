@@ -413,23 +413,29 @@ export const Settings = () => {
                                         onClick={() => {
                                             if (profile?.tenant_id) {
                                                 navigator.clipboard.writeText(profile.tenant_id);
-                                                alert("Workshop ID copied to clipboard!");
+                                                alert("Workshop ID copied! Staff can use this to register.");
                                             }
                                         }}
                                         className="p-1 hover:bg-slate-800 rounded transition-colors text-slate-500"
                                         title="Copy Workshop ID"
                                     >
-                                        <span className="text-[9px] font-bold">COPY</span>
+                                        <span className="text-[9px] font-bold underline">COPY ID</span>
                                     </button>
                                 </div>
                             </div>
-                            <button 
-                                onClick={() => alert(`HOW TO ADD STAFF:\n\n1. Copy your Workshop ID above.\n2. Ask your staff to visit the Register page.\n3. They should enter '0000' (or any dummy) if they see manual fields, but generally admins add from here (Internal invite coming soon).`)} 
-                                className="text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95"
-                                style={{ backgroundColor: brandColor }}
-                            >
-                                <Plus size={14} /> HOW TO ADD STAFF
-                            </button>
+                            <div className="flex flex-col gap-2 w-full md:w-auto">
+                                <button 
+                                    onClick={() => {
+                                        const registerUrl = `${window.location.origin}${window.location.pathname}#/register?workshop_id=${profile?.tenant_id}`;
+                                        navigator.clipboard.writeText(registerUrl);
+                                        alert("Registration link copied! Send this to your staff member to invite them.");
+                                    }} 
+                                    className="text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-500"
+                                >
+                                    <Plus size={14} /> COPY INVITE LINK
+                                </button>
+                                <p className="text-[9px] text-slate-500 text-center italic">Best for onboarding new staff</p>
+                            </div>
                         </div>
                         
                         <div className="grid gap-3">

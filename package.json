@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "generate-version": "echo \"{\\\"version\\\": \\\"$(date +%s)\\\"}\" > public/version.json",
+    "dev": "npm run generate-version && vite",
+    "build": "npm run generate-version && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "predeploy": "npm run build",

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PenTool as Tool, Package, FileText, Settings, LogOut, Scan, Users, DollarSign, PieChart, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, PenTool as Tool, Package, FileText, Settings, LogOut, Scan, Users, PieChart, HelpCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
 
@@ -16,7 +16,8 @@ export const Layout = ({ children }: LayoutProps) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
 
-  const role = profile?.role || 'technician';
+  if (!profile) return null; // Handled by AuthGuard, but safety first
+  const role = profile.role;
 
   const allLinks = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'technician', 'accountant'] },
@@ -26,7 +27,6 @@ export const Layout = ({ children }: LayoutProps) => {
     { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
     { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/finances', icon: PieChart, label: 'Finances', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/expenses', icon: DollarSign, label: 'My Expenses', roles: ['admin', 'technician', 'manager', 'accountant'] },
     { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager'] },
   ];
 
@@ -57,34 +57,10 @@ export const Layout = ({ children }: LayoutProps) => {
 
   const brandBg = getSuperDark(brandPrimary);
 
-  // Apply Brand Color & Handle Auto-Refresh
+  // Apply Brand Color
   React.useEffect(() => {
-      // 1. Set global CSS variables
       document.documentElement.style.setProperty('--brand-primary', brandPrimary);
       document.documentElement.style.setProperty('--brand-bg', brandBg);
-      
-      // 2. Refresh logic for PWA/Long sessions
-      let lastActive = Date.now();
-      const handleVisibility = () => {
-          if (document.visibilityState === 'visible') {
-              const now = Date.now();
-              const diff = (now - lastActive) / 1000 / 60; // minutes
-              
-              if (diff > 30) {
-                  window.location.reload();
-              }
-          } else {
-              lastActive = Date.now();
-          }
-      };
-
-      window.addEventListener('visibilitychange', handleVisibility);
-      window.addEventListener('focus', handleVisibility);
-      
-      return () => {
-          window.removeEventListener('visibilitychange', handleVisibility);
-          window.removeEventListener('focus', handleVisibility);
-      };
   }, [brandPrimary, brandBg]);
 
   return (
@@ -188,6 +164,18 @@ export const Layout = ({ children }: LayoutProps) => {
             <span>System Guide</span>
           </button>
           
+          <button 
+            onClick={() => {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.reload();
+            }}
+            className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 transition-colors group"
+          >
+            <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500" />
+            <span>Force App Sync</span>
+          </button>
+
           <button 
             onClick={handleSignOut}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors group"

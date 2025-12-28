@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Mail, User, AlertCircle, ArrowLeft, Building2 } from 'lucide-react';
+import { Lock, Mail, User, AlertCircle, ArrowLeft, Building2, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 
 export const Register = () => {
@@ -9,10 +9,15 @@ export const Register = () => {
     const [formData, setFormData] = useState({
         email: '',
         password: '',
+        confirmPassword: '',
         fullName: '',
         username: '',
-        shopName: '',
+        shopName: new URLSearchParams(window.location.hash.split('?')[1]).get('workshop_name') || '',
+        workshopId: new URLSearchParams(window.location.hash.split('?')[1]).get('workshop_id') || '',
     });
+    const isInvite = !!formData.workshopId;
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const handleRegister = async (e: React.FormEvent) => {
@@ -22,6 +27,7 @@ export const Register = () => {
 
         try {
             if (!formData.shopName) throw new Error("Please enter your Shop Name.");
+            if (formData.password !== formData.confirmPassword) throw new Error("Passwords do not match.");
 
             // 1. Sign Up User
             const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -30,7 +36,8 @@ export const Register = () => {
                 options: {
                     data: {
                         full_name: formData.fullName,
-                    }
+                    },
+                    emailRedirectTo: window.location.origin + import.meta.env.BASE_URL
                 }
             });
 
@@ -39,22 +46,27 @@ export const Register = () => {
 
             const userId = authData.user.id;
 
-            // 2. Create New Tenant
-            const { data: tenantData, error: tenantError } = await supabase
-                .from('tenants')
-                .insert({ name: formData.shopName })
-                .select()
-                .single();
+            // 2. Determine Tenant ID
+            let finalTenantId = formData.workshopId;
+            
+            if (!finalTenantId) {
+                // Create New Tenant if not an invite
+                const { data: tenantData, error: tenantError } = await supabase
+                    .from('tenants')
+                    .insert({ name: formData.shopName })
+                    .select()
+                    .single();
 
-            if (tenantError) throw tenantError;
-            const finalTenantId = tenantData.id;
+                if (tenantError) throw tenantError;
+                finalTenantId = tenantData.id;
+            }
 
             // 3. Update Profile with Tenant and Role
             const { error: profileError } = await supabase
                 .from('profiles')
                 .update({ 
                     tenant_id: finalTenantId,
-                    role: 'admin',
+                    role: isInvite ? 'technician' : 'admin',
                     full_name: formData.fullName,
                     username: formData.username.toLowerCase()
                 })
@@ -65,7 +77,7 @@ export const Register = () => {
                 throw new Error("Account created but failed to link to shop. Please contact support.");
             }
 
-            alert("Workshop Registered! Welcome to AutoPulse. Please sign in.");
+            alert(isInvite ? "Joined Workshop! Please sign in." : "Workshop Registered! Welcome to AutoPulse. Please sign in.");
             navigate('/login');
         } catch (err: any) {
             setError(err.message);
@@ -78,7 +90,7 @@ export const Register = () => {
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: `${window.location.origin}/#/`
+                redirectTo: window.location.origin + import.meta.env.BASE_URL
             }
         });
         if (error) setError(error.message);
@@ -97,7 +109,9 @@ export const Register = () => {
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl shadow-black/50">
                     <div className="mb-6 flex justify-between items-center">
                         <Link to="/login" className="text-slate-500 hover:text-white flex items-center gap-2 text-sm"><ArrowLeft size={14}/> Back to Login</Link>
-                        <span className="text-[10px] bg-cyan-500/10 text-cyan-500 px-2 py-1 rounded font-bold uppercase tracking-widest">Administrator</span>
+                        <span className={`text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest ${isInvite ? 'bg-emerald-500/10 text-emerald-500' : 'bg-cyan-500/10 text-cyan-500'}`}>
+                            {isInvite ? 'Staff Invite' : 'Administrator'}
+                        </span>
                     </div>
 
                     <button 
@@ -123,11 +137,20 @@ export const Register = () => {
                         )}
 
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Workshop / Garage Name</label>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
+                                {isInvite ? 'Joining Workshop' : 'Workshop / Garage Name'}
+                            </label>
                             <div className="relative">
                                 <Building2 size={16} className="absolute left-3 top-3 text-slate-500" />
-                                <input required type="text" className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none" 
-                                    value={formData.shopName} onChange={e => setFormData({...formData, shopName: e.target.value})} placeholder="Elite Auto Care" />
+                                <input 
+                                    required 
+                                    type="text" 
+                                    disabled={isInvite}
+                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none disabled:opacity-50" 
+                                    value={formData.shopName} 
+                                    onChange={e => setFormData({...formData, shopName: e.target.value})} 
+                                    placeholder="Elite Auto Care" 
+                                />
                             </div>
                         </div>
                         
@@ -166,8 +189,23 @@ export const Register = () => {
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
                             <div className="relative">
                                 <Lock size={16} className="absolute left-3 top-3 text-slate-500" />
-                                <input required type="password" className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none" 
+                                <input required type={showPassword ? "text" : "password"} className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 pr-10 focus:border-cyan-500 focus:outline-none" 
                                     value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="••••••••" minLength={6} />
+                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-500 hover:text-white">
+                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Confirm Password</label>
+                            <div className="relative">
+                                <Lock size={16} className="absolute left-3 top-3 text-slate-500" />
+                                <input required type={showConfirmPassword ? "text" : "password"} className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 pr-10 focus:border-cyan-500 focus:outline-none" 
+                                    value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} placeholder="Re-enter password" minLength={6} />
+                                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-2.5 text-slate-500 hover:text-white">
+                                    {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
                             </div>
                         </div>
 

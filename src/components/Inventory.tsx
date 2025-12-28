@@ -3,9 +3,11 @@ import { Search, Plus, AlertTriangle, Package, RefreshCcw, Edit, Trash2 } from '
 import type { Part } from '../types';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
+import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const Inventory = () => {
+    const { profile } = useAuth();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -87,7 +89,10 @@ export const Inventory = () => {
         if (editingPart) {
             result = await supabase.from('parts').update(payload).eq('id', editingPart.id);
         } else {
-            result = await supabase.from('parts').insert([payload]);
+            result = await supabase.from('parts').insert([{
+                ...payload,
+                tenant_id: profile?.tenant_id
+            }]);
         }
 
         if (result.error) {

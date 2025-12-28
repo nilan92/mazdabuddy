@@ -43,7 +43,7 @@ export const analyzeVehicleImage = async (apiKey: string, base64Image: string) =
             headers: {
                 "Authorization": `Bearer ${apiKey}`,
                 "HTTP-Referer": "https://mazdabuddy.com",
-                "X-Title": "MazdaBuddy",
+                "X-Title": "AutoPulse",
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({

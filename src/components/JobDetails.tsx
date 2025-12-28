@@ -447,11 +447,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                             <div className="flex-1 grid grid-cols-2 gap-2">
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">Sell Price</span>
-                                                                    <input required type="number" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
+                                                                    <input required type="number" placeholder="0.00" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">Buy Cost</span>
-                                                                    <input required type="number" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
+                                                                    <input required type="number" placeholder="0.00" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
                                                                 </div>
                                                             </div>
                                                             <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-600 rounded p-2 text-white text-xs" />
