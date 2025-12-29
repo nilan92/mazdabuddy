@@ -9,12 +9,17 @@ import { AuthProvider } from './context/AuthContext';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false, // Prevents reloading when switching tabs
-      retry: 1, // Don't retry endlessly if connection fails
-      staleTime: 5 * 60 * 1000, // Keep data fresh for 5 minutes
+      // 1. Don't refetch immediately when window gains focus
+      refetchOnWindowFocus: false, 
+      
+      // 2. Keep data "fresh" for 2 minutes (prevents spinner if they go back and forth)
+      staleTime: 1000 * 60 * 2, 
+      
+      // 3. Retry only once on error (stops the infinite loading loops)
+      retry: 1, 
     },
   },
-})
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

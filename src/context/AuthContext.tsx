@@ -29,17 +29,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isInactiveSignout, setIsInactiveSignout] = useState(false);
-    const timeoutRef = useRef<any>(null);
     const lastActiveRef = useRef<number>(Date.now());
+    const timeoutRef = useRef<any>(null); // Restored ref
+
+    // ⚡️ SPEED HACK 1: LocalStorage Check
+    useEffect(() => {
+        const hasLocalToken = Object.keys(localStorage).some(key => key.startsWith('sb-'));
+        // If no token exists, we can stop loading immediately
+        if (!hasLocalToken) {
+            setLoading(false);
+        }
+    }, []);
 
     const initializeAuth = async () => {
         if (!isConfigured) {
             setLoading(false);
             return;
         }
-
-        setError(null);
-        setLoading(true);
 
         try {
             const { data: { session: initialSession }, error: initError } = await supabase.auth.getSession();
@@ -56,7 +62,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         } catch (err: any) {
             console.error('[Auth Init Error]', err);
-            // Don't show error for no session, just stop loading
             if (err.message === 'No session found') {
                 setLoading(false);
                 return;
@@ -66,12 +71,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
-    // Inactivity Detection (FIXED)
+    // 🔄 RESTORED: Loading Watchdog (Safety Timeout)
+    // If the app gets stuck loading for 30s, this forces it to stop so the user sees an error/login.
     useEffect(() => {
-        // 1. CRITICAL: Only run inactivity check if user is logged in
+        if (loading) {
+            const watchdog = setTimeout(() => {
+                if (loading && !error) {
+                    console.warn('[Auth] Loading state stuck for >30s. Releasing.');
+                    setLoading(false); 
+                }
+            }, 30000); 
+            return () => clearTimeout(watchdog);
+        }
+    }, [loading, error]);
+
+    // Inactivity Detection
+    useEffect(() => {
         if (!session) return;
 
-        const MAX_INACTIVE_TIME = 1000 * 60 * 60 * 12; // 12 Hours (Increased from 60min)
+        const MAX_INACTIVE_TIME = 1000 * 60 * 60 * 12; // 12 Hours
         
         const checkInactivity = setInterval(async () => {
             const now = Date.now();
@@ -79,21 +97,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             
             if (now - lastActive > MAX_INACTIVE_TIME) {
                 console.warn('[Auth] Inactivity limit reached. Signing out.');
-                
-                // 2. Clear storage first to prevent loop on reload
                 localStorage.removeItem('lastActivity');
-                
                 setIsInactiveSignout(true);
                 await signOut();
-                // 3. Optional: Reload to clear memory, but only after signout
-                window.location.reload();
             }
-        }, 1000 * 60); // Check every minute
+        }, 1000 * 60);
 
         const handleActivity = () => {
             const now = Date.now();
             lastActiveRef.current = now;
-            // Throttle local storage writes
             if (Math.random() > 0.9) {
                 localStorage.setItem('lastActivity', String(now));
             }
@@ -101,50 +113,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         window.addEventListener('mousemove', handleActivity);
         window.addEventListener('keydown', handleActivity);
-        window.addEventListener('mousedown', handleActivity);
-        window.addEventListener('scroll', handleActivity);
+        window.addEventListener('click', handleActivity);
 
         return () => {
             clearInterval(checkInactivity);
             window.removeEventListener('mousemove', handleActivity);
             window.removeEventListener('keydown', handleActivity);
-            window.removeEventListener('mousedown', handleActivity);
-            window.removeEventListener('scroll', handleActivity);
+            window.removeEventListener('click', handleActivity);
         };
     }, [session]);
-
-    // Loading Watchdog (FIXED: Increased time)
-    useEffect(() => {
-        if (loading) {
-            const watchdog = setTimeout(() => {
-                if (loading && !error) {
-                    console.warn('[Auth] Loading state stuck for >30s. Releasing.');
-                    // Don't show error, just let user try to interact
-                    setLoading(false); 
-                }
-            }, 30000); // 30 Seconds (Increased from 12s)
-            return () => clearTimeout(watchdog);
-        }
-    }, [loading, error]);
 
     useEffect(() => {
         initializeAuth();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log(`[Auth] State change: ${event}`);
-            
             if (event === 'SIGNED_OUT') {
                 setSession(null);
                 setUser(null);
                 setProfile(null);
                 setLoading(false);
-                setError(null);
                 localStorage.removeItem('lastActivity');
             } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
                 setSession(session);
                 setUser(session?.user ?? null);
                 if (session?.user) {
-                     // Reset inactivity timer on login
                      lastActiveRef.current = Date.now();
                      localStorage.setItem('lastActivity', String(Date.now()));
                      await fetchProfile(session.user.id);
@@ -154,15 +146,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         });
 
-        // Visibility Watchdog
+        // 🔄 RESTORED: Visibility Watchdog
+        // Refreshes the session if the user switches tabs and comes back after 30 mins
         let lastVisibleTime = Date.now();
         const handleVisibilityChange = async () => {
             if (document.visibilityState === 'visible') {
                 const now = Date.now();
                 const hiddenDuration = now - lastVisibleTime;
                 
-                // If backgrounded for > 30 mins, refresh session
-                if (hiddenDuration > 1000 * 60 * 30) {
+                if (hiddenDuration > 1000 * 60 * 30) { // 30 mins
                     console.log('[Auth] App backgrounded for too long. Re-syncing.');
                     initializeAuth();
                     return;
@@ -182,11 +174,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const fetchProfile = async (userId: string) => {
-        // Don't set loading true here if we already have session, to prevent UI flash
-        // setLoading(true); 
-        setError(null);
         try {
-            console.log('[Auth] Fetching profile for user:', userId);
             const { data, error: fetchError } = await supabase
                 .from('profiles')
                 // @ts-ignore
@@ -195,19 +183,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 .single();
             
             if (fetchError) {
-                console.error('[Auth] Profile fetch failed:', fetchError.message);
-                
-                if (fetchError.code === 'PGRST116') {
-                    // Profile doesn't exist yet (Registration flow) - not an error
-                    console.log('Profile missing, waiting for registration...');
-                } else {
-                   // Only show error for actual connection issues
+                if (fetchError.code !== 'PGRST116') {
                    console.error("Sync Error:", fetchError.message);
                 }
             } else if (data) {
-                console.log('[Auth] Profile verified:', data.full_name);
                 setProfile(data as UserProfile);
-                setError(null);
             }
         } catch (e: any) {
             console.error('[fetchProfile error]', e);
@@ -216,23 +196,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     };
 
+    // ⚡️ SPEED HACK 2: Optimistic Sign Out
     const signOut = async () => {
         try {
-            setLoading(true);
-            await supabase.auth.signOut();
-            // Clear all state
-            setProfile(null);
+            // 1. Instant UI Clear
             setSession(null);
             setUser(null);
-            setError(null);
-            localStorage.clear(); // Clear all local storage to be safe
+            setProfile(null);
+            setLoading(false);
+            
+            // 2. Instant Storage Clear
+            window.localStorage.clear(); 
+
+            // 3. Background Network Request
+            supabase.auth.signOut();
         } catch (err) {
             console.error('[SignOut Error]', err);
-        } finally {
-            setLoading(false);
         }
     };
 
+    // --- RENDER LOGIC ---
+
+    // 1. Session Expired Logic (Keep this)
     if (isInactiveSignout) {
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -256,6 +241,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         );
     }
 
+    // 2. Config Error Logic (Keep this)
     if (!isConfigured) {
         return (
              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -270,52 +256,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         )
     }
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
-                {/* Background Glow */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/10 blur-[120px] rounded-full"></div>
-                
-                <div className="relative flex flex-col items-center">
-                    {error ? (
-                        <div className="text-center animate-fade-in px-4">
-                            <div className="w-16 h-16 bg-red-500/10 border border-red-500/50 rounded-2xl flex items-center justify-center text-red-500 mb-6 mx-auto">
-                                <AlertCircle size={32} />
-                            </div>
-                            <h2 className="text-white font-bold text-xl mb-2">Connection Issue</h2>
-                            <p className="text-slate-400 text-sm mb-6 max-w-xs">{error}</p>
-                            <button 
-                                onClick={() => {
-                                    setError(null);
-                                    setLoading(true);
-                                    initializeAuth();
-                                }}
-                                className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold transition-all border border-slate-700 active:scale-95"
-                            >
-                                Retry Connection
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="w-16 h-16 relative mb-8">
-                                <div className="absolute inset-0 border-4 border-cyan-500/20 rounded-full"></div>
-                                <div className="absolute inset-0 border-4 border-t-cyan-500 rounded-full animate-spin"></div>
-                            </div>
-                            
-                            <div className="text-center">
-                                <h2 className="text-white font-black text-2xl tracking-tighter mb-2 italic">AUTO<span className="text-cyan-500">PULSE</span><span className="text-cyan-500 underline decoration-cyan-500/30 ml-1">OS</span></h2>
-                                <div className="flex items-center justify-center gap-2">
-                                    <RefreshCw size={14} className="text-cyan-400 animate-[spin_3s_linear_infinite]" />
-                                    <p className="text-cyan-500 font-mono text-xs uppercase tracking-[0.3em] font-bold">Synchronizing...</p>
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
+    // ❌ REMOVED: "if (loading) return <Spinner />"
+    // We intentionally return the children even if loading is true.
+    // This allows App.tsx to handle the loading UI non-blockingly.
     return (
         <AuthContext.Provider value={{ session, user, profile, loading, error, signOut }}>
             {children}

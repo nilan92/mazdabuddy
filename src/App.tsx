@@ -1,50 +1,66 @@
-import { useEffect } from 'react';
+import { useEffect, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Layout } from './components/Layout';
-import { Dashboard } from './components/Dashboard';
-import { Jobs } from './components/Jobs';
-import { Inventory } from './components/Inventory';
-import { Invoices } from './components/Invoices';
-import { SmartScan } from './components/SmartScan';
-import { Customers } from './components/Customers';
-import { Settings } from './components/Settings';
-import { Login } from './components/Login';
-import { Register } from './components/Register';
 import { useAuth } from './context/AuthContext';
 
-import { Finances } from './components/Finances';
-import { ForgotPassword } from './components/ForgotPassword';
-import { ResetPassword } from './components/ResetPassword';
+// 1. LAZY IMPORTS
+const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
+const Jobs = lazy(() => import('./components/Jobs').then(module => ({ default: module.Jobs })));
+const Inventory = lazy(() => import('./components/Inventory').then(module => ({ default: module.Inventory })));
+const Invoices = lazy(() => import('./components/Invoices').then(module => ({ default: module.Invoices })));
+const SmartScan = lazy(() => import('./components/SmartScan').then(module => ({ default: module.SmartScan })));
+const Customers = lazy(() => import('./components/Customers').then(module => ({ default: module.Customers })));
+const Settings = lazy(() => import('./components/Settings').then(module => ({ default: module.Settings })));
+const Finances = lazy(() => import('./components/Finances').then(module => ({ default: module.Finances })));
+const Login = lazy(() => import('./components/Login').then(module => ({ default: module.Login })));
+const Register = lazy(() => import('./components/Register').then(module => ({ default: module.Register })));
+const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(module => ({ default: module.ForgotPassword })));
+const ResetPassword = lazy(() => import('./components/ResetPassword').then(module => ({ default: module.ResetPassword })));
+
+// Reusable Loading Screen
+const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) => (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
+        <h1 className="text-4xl font-black tracking-tighter animate-pulse italic">
+            <span className="text-white">AUTO</span><span className="text-cyan-400">PULSE</span>
+        </h1>
+        <p className="text-cyan-500 font-mono text-[10px] tracking-[0.4em] uppercase">{message}</p>
+        <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden mt-4">
+            <div className="w-full h-full bg-cyan-500 rounded-full animate-[loading_1.5s_infinite_linear]" style={{
+                animationName: 'loading',
+                animationIterationCount: 'infinite',
+                animationTimingFunction: 'linear'
+            }} />
+        </div>
+        <style>{`
+            @keyframes loading {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(200%); }
+            }
+        `}</style>
+    </div>
+);
 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     const { session, profile, loading, error, signOut } = useAuth();
     
-    if (loading) return (
-        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4">
-            <h1 className="text-4xl font-black tracking-tighter animate-pulse italic">
-                <span className="text-white">AUTO</span><span className="text-cyan-400">PULSE</span>
-            </h1>
-            <p className="text-cyan-500 font-mono text-[10px] tracking-[0.4em] uppercase">Security Checkpoint</p>
-            <div className="w-48 h-1 bg-slate-900 rounded-full overflow-hidden mt-4">
-                <div className="w-full h-full bg-cyan-500 rounded-full animate-[loading_1.5s_infinite_linear]" style={{
-                    animationName: 'loading',
-                    animationIterationCount: 'infinite',
-                    animationTimingFunction: 'linear'
-                }} />
-            </div>
-            <style>{`
-                @keyframes loading {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(200%); }
-                }
-            `}</style>
-        </div>
-    );
+    // ⚡️ SPEED HACK: Check Local Storage immediately (0ms latency)
+    // If no token exists locally, we KNOW they are not logged in.
+    // Redirect to login INSTANTLY. Do not wait for Supabase to check the server.
+    const hasLocalToken = Object.keys(localStorage).some(key => key.startsWith('sb-'));
+
+    // 1. If no local token, kick to login immediately (don't wait for 'loading' to be false)
+    if (!hasLocalToken && !session) {
+        return <Navigate to="/login" replace />;
+    }
+
+    // 2. If we DO have a token, but Supabase is still verifying it, show the loading screen
+    if (loading) return <LoadingScreen message="Security Checkpoint" />;
     
+    // 3. If loading is done but no session was found (token expired), kick to login
     if (!session) return <Navigate to="/login" replace />;
 
-    // STRICT CHECK: If session exists but profile fetch failed/timed out OR an error occurred
+    // 4. If session exists but profile failed to load (Network error or Bug)
     if (!loading && (!profile || error)) {
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
@@ -74,7 +90,11 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
                             <RefreshCw size={18} /> RETRY CONNECTION
                         </button>
                         <button 
-                            onClick={() => signOut()}
+                            onClick={() => {
+                                // Optimistic Sign Out Logic can go here
+                                localStorage.clear(); // Force clear local storage
+                                signOut();
+                            }}
                             className="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all border border-slate-700 active:scale-95"
                         >
                             SIGN OUT & SWITCH ACCOUNT
@@ -100,7 +120,6 @@ const App = () => {
         const localVersion = localStorage.getItem('app_version');
 
         if (localVersion && localVersion !== serverVersion) {
-            // New version found
             console.log(`New version found: ${serverVersion} (Current: ${localVersion})`);
             if (confirm("A new update is available. Refresh now to get the latest features?")) {
                 localStorage.setItem('app_version', serverVersion);
@@ -114,7 +133,6 @@ const App = () => {
       }
     };
     
-    // Check on mount and on visibility change
     checkVersion();
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') checkVersion();
@@ -123,29 +141,31 @@ const App = () => {
 
   return (
     <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          
-          <Route path="/*" element={
-              <AuthGuard>
-                <Layout>
-                    <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/jobs" element={<Jobs />} />
-                    <Route path="/inventory" element={<Inventory />} />
-                    <Route path="/invoices" element={<Invoices />} />
-                    <Route path="/scan" element={<SmartScan />} />
-                    <Route path="/customers" element={<Customers />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/finances" element={<Finances />} />
-                    </Routes>
-                </Layout>
-              </AuthGuard>
-          } />
-        </Routes>
+        <Suspense fallback={<LoadingScreen message="Loading Interface..." />}>
+            <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                
+                <Route path="/*" element={
+                    <AuthGuard>
+                        <Layout>
+                            <Routes>
+                                <Route path="/" element={<Dashboard />} />
+                                <Route path="/jobs" element={<Jobs />} />
+                                <Route path="/inventory" element={<Inventory />} />
+                                <Route path="/invoices" element={<Invoices />} />
+                                <Route path="/scan" element={<SmartScan />} />
+                                <Route path="/customers" element={<Customers />} />
+                                <Route path="/settings" element={<Settings />} />
+                                <Route path="/finances" element={<Finances />} />
+                            </Routes>
+                        </Layout>
+                    </AuthGuard>
+                } />
+            </Routes>
+        </Suspense>
     </Router>
   );
 }
