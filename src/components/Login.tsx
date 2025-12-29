@@ -16,11 +16,12 @@ export const Login = () => {
         setError(null);
 
         let isTimedOut = false;
+        // CHANGED: Increased timeout to 30s to prevent errors during database wake-up
         const timeoutId = setTimeout(() => {
             isTimedOut = true;
-            setError("Authentication is taking longer than usual (15s+). This usually means a connection issue with the database. Please refresh or try again.");
+            setError("Authentication is taking longer than usual. Please check your connection.");
             setLoading(false);
-        }, 15000);
+        }, 30000); 
 
         try {
             let emailToUse = loginInput.trim();
@@ -106,12 +107,20 @@ export const Login = () => {
                         )}
                         
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest">Email or Username</label>
+                            <label 
+                                htmlFor="login-input" 
+                                className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-widest"
+                            >
+                                Email or Username
+                            </label>
                             <div className="relative">
                                 <div className="absolute left-3 top-3.5 text-slate-500">
                                     <User size={18} />
                                 </div>
                                 <input 
+                                    id="login-input"           // Added ID
+                                    name="username"            // Added Name
+                                    autoComplete="username"    // Added Autocomplete
                                     type="text" 
                                     required
                                     className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-brand focus:outline-none transition-all"
@@ -124,7 +133,12 @@ export const Login = () => {
 
                         <div>
                             <div className="flex justify-between items-center mb-1">
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Password</label>
+                                <label 
+                                    htmlFor="password-input" 
+                                    className="block text-xs font-bold text-slate-500 uppercase tracking-widest"
+                                >
+                                    Password
+                                </label>
                                 <Link to="/forgot-password" title="Forgot Password" className="text-xs text-brand hover:filter hover:brightness-110 font-bold">FORGOT?</Link>
                             </div>
                             <div className="relative">
@@ -132,6 +146,9 @@ export const Login = () => {
                                     <Lock size={18} />
                                 </div>
                                 <input 
+                                    id="password-input"             // Added ID
+                                    name="password"                 // Added Name
+                                    autoComplete="current-password" // Added Autocomplete
                                     type="password" 
                                     required
                                     className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 pl-10 focus:border-brand focus:outline-none transition-all"

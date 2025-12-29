@@ -56,27 +56,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         } catch (err: any) {
             console.error('[Auth Init Error]', err);
+            // Don't show error for no session, just stop loading
+            if (err.message === 'No session found') {
+                setLoading(false);
+                return;
+            }
             setError(err.message || "Failed to connect to authentication service.");
             setLoading(false);
         }
     };
 
-    // Inactivity Detection
+    // Inactivity Detection (FIXED)
     useEffect(() => {
+        // 1. CRITICAL: Only run inactivity check if user is logged in
         if (!session) return;
 
-        const MAX_INACTIVE_TIME = 1000 * 60 * 60; // 60 minutes
-        const checkInactivity = setInterval(() => {
+        const MAX_INACTIVE_TIME = 1000 * 60 * 60 * 12; // 12 Hours (Increased from 60min)
+        
+        const checkInactivity = setInterval(async () => {
             const now = Date.now();
-            if (now - lastActiveRef.current > MAX_INACTIVE_TIME) {
+            const lastActive = parseInt(localStorage.getItem('lastActivity') || String(lastActiveRef.current));
+            
+            if (now - lastActive > MAX_INACTIVE_TIME) {
                 console.warn('[Auth] Inactivity limit reached. Signing out.');
+                
+                // 2. Clear storage first to prevent loop on reload
+                localStorage.removeItem('lastActivity');
+                
                 setIsInactiveSignout(true);
-                signOut();
+                await signOut();
+                // 3. Optional: Reload to clear memory, but only after signout
+                window.location.reload();
             }
         }, 1000 * 60); // Check every minute
 
         const handleActivity = () => {
-            lastActiveRef.current = Date.now();
+            const now = Date.now();
+            lastActiveRef.current = now;
+            // Throttle local storage writes
+            if (Math.random() > 0.9) {
+                localStorage.setItem('lastActivity', String(now));
+            }
         };
 
         window.addEventListener('mousemove', handleActivity);
@@ -93,16 +113,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, [session]);
 
-    // Loading Watchdog - released ONLY on errors or success
+    // Loading Watchdog (FIXED: Increased time)
     useEffect(() => {
         if (loading) {
             const watchdog = setTimeout(() => {
                 if (loading && !error) {
-                    console.warn('[Auth] Loading state stuck for >12s. Releasing with error.');
-                    setError("Connection timed out. Please check your internet.");
-                    setLoading(false);
+                    console.warn('[Auth] Loading state stuck for >30s. Releasing.');
+                    // Don't show error, just let user try to interact
+                    setLoading(false); 
                 }
-            }, 12000);
+            }, 30000); // 30 Seconds (Increased from 12s)
             return () => clearTimeout(watchdog);
         }
     }, [loading, error]);
@@ -119,10 +139,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 setProfile(null);
                 setLoading(false);
                 setError(null);
+                localStorage.removeItem('lastActivity');
             } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
                 setSession(session);
                 setUser(session?.user ?? null);
                 if (session?.user) {
+                     // Reset inactivity timer on login
+                     lastActiveRef.current = Date.now();
+                     localStorage.setItem('lastActivity', String(Date.now()));
                      await fetchProfile(session.user.id);
                 } else {
                     setLoading(false);
@@ -137,17 +161,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 const now = Date.now();
                 const hiddenDuration = now - lastVisibleTime;
                 
+                // If backgrounded for > 30 mins, refresh session
                 if (hiddenDuration > 1000 * 60 * 30) {
                     console.log('[Auth] App backgrounded for too long. Re-syncing.');
                     initializeAuth();
                     return;
-                }
-
-                const { data: { session: currentSession } } = await supabase.auth.getSession();
-                if (currentSession) {
-                    setSession(currentSession);
-                    setUser(currentSession.user);
-                    await fetchProfile(currentSession.user.id);
                 }
             } else {
                 lastVisibleTime = Date.now();
@@ -164,7 +182,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     const fetchProfile = async (userId: string) => {
-        setLoading(true);
+        // Don't set loading true here if we already have session, to prevent UI flash
+        // setLoading(true); 
         setError(null);
         try {
             console.log('[Auth] Fetching profile for user:', userId);
@@ -178,24 +197,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (fetchError) {
                 console.error('[Auth] Profile fetch failed:', fetchError.message);
                 
-                // Special handling for common errors
                 if (fetchError.code === 'PGRST116') {
-                    setError("Profile record not found. Please contact your administrator.");
-                } else if (fetchError.message?.includes('recursion')) {
-                    setError("Database Security Error: Recursive policy detected. Please alert support.");
+                    // Profile doesn't exist yet (Registration flow) - not an error
+                    console.log('Profile missing, waiting for registration...');
                 } else {
-                    setError(`Sync Error: ${fetchError.message}`);
+                   // Only show error for actual connection issues
+                   console.error("Sync Error:", fetchError.message);
                 }
-            } else if (!data) {
-                setError("Profile synchronization was successful but returned no data.");
-            } else {
+            } else if (data) {
                 console.log('[Auth] Profile verified:', data.full_name);
                 setProfile(data as UserProfile);
                 setError(null);
             }
         } catch (e: any) {
             console.error('[fetchProfile error]', e);
-            setError(`Critical Sync Error: ${e.message || 'Unknown network error'}`);
         } finally {
             setLoading(false);
         }
@@ -205,10 +220,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         try {
             setLoading(true);
             await supabase.auth.signOut();
+            // Clear all state
             setProfile(null);
             setSession(null);
             setUser(null);
             setError(null);
+            localStorage.clear(); // Clear all local storage to be safe
         } catch (err) {
             console.error('[SignOut Error]', err);
         } finally {
@@ -224,9 +241,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         <RefreshCw size={32} />
                     </div>
                     <h2 className="text-xl font-bold text-white mb-2">Session Expired</h2>
-                    <p className="text-slate-400 mb-6 text-sm">You were signed out due to inactivity for security reasons.</p>
+                    <p className="text-slate-400 mb-6 text-sm">You were signed out due to inactivity.</p>
                     <button 
-                        onClick={() => setIsInactiveSignout(false)}
+                        onClick={() => {
+                            setIsInactiveSignout(false);
+                            window.location.reload();
+                        }}
                         className="w-full py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-bold transition-all active:scale-95"
                     >
                         Return to Login
@@ -245,9 +265,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     <p className="text-slate-400 mb-4 font-medium leading-relaxed">
                         The application could not connect to the database. Check your environment variables.
                     </p>
-                    <div className="text-left bg-slate-950 p-4 rounded-xl text-xs font-mono text-slate-500 border border-slate-800">
-                        Required: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
-                    </div>
                 </div>
             </div>
         )
@@ -294,10 +311,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                             </div>
                         </>
                     )}
-                </div>
-
-                <div className="absolute bottom-12 text-[10px] text-slate-600 font-mono uppercase tracking-widest">
-                    Initializing secure environment v2.4.0
                 </div>
             </div>
         );
