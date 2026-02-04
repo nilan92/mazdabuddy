@@ -44,20 +44,11 @@ const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     const { session, profile, loading, error, signOut } = useAuth();
     
-    // ⚡️ SPEED HACK: Check Local Storage immediately (0ms latency)
-    // If no token exists locally, we KNOW they are not logged in.
-    // Redirect to login INSTANTLY. Do not wait for Supabase to check the server.
-    const hasLocalToken = Object.keys(localStorage).some(key => key.startsWith('sb-'));
-
-    // 1. If no local token, kick to login immediately (don't wait for 'loading' to be false)
-    if (!hasLocalToken && !session) {
-        return <Navigate to="/login" replace />;
-    }
-
-    // 2. If we DO have a token, but Supabase is still verifying it, show the loading screen
+    // 1. If we are busy checking authentication, show the loading screen.
+    // We do NOT use localStorage checks anymore to avoid race conditions.
     if (loading) return <LoadingScreen message="Security Checkpoint" />;
     
-    // 3. If loading is done but no session was found (token expired), kick to login
+    // 2. If loading is done and no session is found, redirect to login.
     if (!session) return <Navigate to="/login" replace />;
 
     // 4. If session exists but profile failed to load (Network error or Bug)

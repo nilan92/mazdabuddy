@@ -200,7 +200,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         } else {
             onUpdate();
             setJob(prev => prev ? { ...prev, ...updates } : null);
-            alert("Job Updated & Invoice Generated!");
+            if (status === 'completed' && job?.status !== 'completed') {
+                alert("Job Completed & Invoice Generated!");
+            } else {
+                alert("Job Updated Successfully!");
+            }
         }
     };
 
@@ -224,6 +228,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             
             const { error } = await supabase.from('job_parts').insert({
                 job_id: jobId,
+                tenant_id: job?.tenant_id, // Added tenant_id
                 part_id: null,
                 quantity: partForm.quantity,
                 price_at_time_lkr: price,
@@ -265,6 +270,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         e.preventDefault();
         const { error } = await supabase.from('job_labor').insert({
             job_id: jobId,
+            tenant_id: job?.tenant_id, // Added tenant_id
             hours: parseFloat(laborForm.hours),
             description: laborForm.description,
             hourly_rate_lkr: parseFloat(laborForm.hourly_rate_lkr)
@@ -359,7 +365,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                             </div>
 
                             {/* Tabs */}
-                            <div className="flex border-b border-slate-800 bg-slate-900 z-10">
+                            <div className="flex border-b border-slate-800 bg-slate-900 z-10 sticky top-0">
                                 <button onClick={() => setActiveTab('details')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'details' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-white'}`}>Details</button>
                                 <button onClick={() => setActiveTab('parts')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'parts' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-white'}`}>Parts</button>
                                 <button onClick={() => setActiveTab('labor')} className={`flex-1 py-3 text-xs md:text-sm font-bold border-b-2 transition-colors ${activeTab === 'labor' ? 'border-brand text-brand' : 'border-transparent text-slate-500 hover:text-white'}`}>Labor</button>

@@ -466,7 +466,7 @@ export const Finances = () => {
             </div>
 
             {/* Expenses Table */}
-            <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+            <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl flex flex-col">
                 <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Clock size={20} className="text-cyan-400" /> Expense Log

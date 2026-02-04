@@ -1,0 +1,498 @@
+[
+  {
+    "table_name": "invoices",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "user_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "job_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "amount_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "date",
+    "data_type": "date"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "updated_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "job_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "part_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "quantity",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "price_at_time_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "is_custom",
+    "data_type": "boolean"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "cost_at_time_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "default_labor_rate",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "stock_quantity",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "min_stock_level",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "price_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "cost_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "kandapola_donations",
+    "column_name": "id",
+    "data_type": "bigint"
+  },
+  {
+    "table_name": "kandapola_donations",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "kandapola_donations",
+    "column_name": "amount",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "kandapola_donations",
+    "column_name": "gen",
+    "data_type": "smallint"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "job_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "subtotal_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "discount_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "tax_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "total_amount_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "customer_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "vehicle_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "estimated_cost_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "mileage",
+    "data_type": "integer"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "assigned_technician_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "archived",
+    "data_type": "boolean"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "estimated_hours",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "completed_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "job_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "hours",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "hourly_rate_lkr",
+    "data_type": "numeric"
+  },
+  {
+    "table_name": "shop_settings",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "shop_settings",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "shop_settings",
+    "column_name": "tenant_id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "id",
+    "data_type": "uuid"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "created_at",
+    "data_type": "timestamp with time zone"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "phone",
+    "data_type": "text"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "email",
+    "data_type": "text"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "address",
+    "data_type": "text"
+  },
+  {
+    "table_name": "shop_settings",
+    "column_name": "value",
+    "data_type": "text"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "location",
+    "data_type": "text"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "custom_name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "license_plate",
+    "data_type": "text"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "make",
+    "data_type": "text"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "model",
+    "data_type": "text"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "year",
+    "data_type": "text"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "color",
+    "data_type": "text"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "vin",
+    "data_type": "text"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "part_number",
+    "data_type": "text"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "payment_method",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "description",
+    "data_type": "text"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "status",
+    "data_type": "text"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "description",
+    "data_type": "text"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "technician_notes",
+    "data_type": "text"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "category",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "logo_url",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "address",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "phone",
+    "data_type": "text"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "full_name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "role",
+    "data_type": "text"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "username",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "terms_and_conditions",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "currency",
+    "data_type": "text"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "mechanic_name",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "brand_color",
+    "data_type": "text"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "description",
+    "data_type": "text"
+  },
+  {
+    "table_name": "tenants",
+    "column_name": "ai_api_key",
+    "data_type": "text"
+  }
+]
+

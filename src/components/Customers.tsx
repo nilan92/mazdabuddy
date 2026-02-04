@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Customer, Vehicle, JobCard } from '../types';
 
 export const Customers = () => {
-    useAuth(); // Removed unused 'profile'
+    const { profile } = useAuth();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -80,7 +80,9 @@ export const Customers = () => {
              const { error } = await supabase.from('customers').update(customerForm).eq('id', editingCustomer.id);
              if (error) alert(error.message);
         } else {
-             const { error } = await supabase.from('customers').insert([customerForm]);
+             // Added tenant_id to payload
+             const payload = { ...customerForm, tenant_id: profile?.tenant_id };
+             const { error } = await supabase.from('customers').insert([payload]);
              if (error) alert(error.message);
         }
         
@@ -94,10 +96,16 @@ export const Customers = () => {
         e.preventDefault();
         if (!selectedCustomer) return;
 
-        const payload = { ...vehicleForm, customer_id: selectedCustomer.id };
+        // Added tenant_id to payload
+        const payload = { 
+            ...vehicleForm, 
+            customer_id: selectedCustomer.id,
+            tenant_id: profile?.tenant_id 
+        };
         
         if (editingVehicle) {
-            const { error } = await supabase.from('vehicles').update(payload).eq('id', editingVehicle.id);
+            const { tenant_id, ...updatePayload } = payload; 
+            const { error } = await supabase.from('vehicles').update(updatePayload).eq('id', editingVehicle.id);
             if (error) alert(error.message);
         } else {
             const { error } = await supabase.from('vehicles').insert([payload]);

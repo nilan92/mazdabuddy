@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, isConfigured } from '../lib/supabase';
 import { AlertCircle, RefreshCw } from 'lucide-react';
@@ -29,63 +29,74 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isInactiveSignout, setIsInactiveSignout] = useState(false);
+    
+    // Refs for tracking activity and timeouts
     const lastActiveRef = useRef<number>(Date.now());
-    const timeoutRef = useRef<any>(null); // Restored ref
+    const timeoutRef = useRef<any>(null);
 
-    // ⚡️ SPEED HACK 1: LocalStorage Check
-    useEffect(() => {
-        const hasLocalToken = Object.keys(localStorage).some(key => key.startsWith('sb-'));
-        // If no token exists, we can stop loading immediately
-        if (!hasLocalToken) {
+    // ⚡️ SPEED HACK 1 REMOVED: No more relying on localStorage for initial loading state.
+    // We trust Supabase's async check completely to avoid "flash of unauthenticated content".
+
+    // ⚡️ SPEED HACK 2: Optimistic Sign Out (Kept as it is safe)
+    const signOut = useCallback(async () => {
+        try {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
             setLoading(false);
+            window.localStorage.clear(); 
+            await supabase.auth.signOut(); 
+        } catch (err) {
+            console.error('[SignOut Error]', err);
         }
     }, []);
 
-    const initializeAuth = async () => {
-        if (!isConfigured) {
+    // 🛡️ CRITICAL: Retry Logic for Profile Fetching
+    const fetchProfile = useCallback(async (userId: string) => {
+        if (!userId) return;
+        
+        // Return existing profile if already loaded for this user to save a call
+        if (profile?.id === userId) {
             setLoading(false);
             return;
         }
 
-        try {
-            const { data: { session: initialSession }, error: initError } = await supabase.auth.getSession();
-            
-            if (initError) throw initError;
-
-            setSession(initialSession);
-            setUser(initialSession?.user ?? null);
-
-            if (initialSession?.user) {
-                await fetchProfile(initialSession.user.id);
-            } else {
-                setLoading(false);
-            }
-        } catch (err: any) {
-            console.error('[Auth Init Error]', err);
-            if (err.message === 'No session found') {
-                setLoading(false);
-                return;
-            }
-            setError(err.message || "Failed to connect to authentication service.");
-            setLoading(false);
-        }
-    };
-
-    // 🔄 RESTORED: Loading Watchdog (Safety Timeout)
-    // If the app gets stuck loading for 30s, this forces it to stop so the user sees an error/login.
-    useEffect(() => {
-        if (loading) {
-            const watchdog = setTimeout(() => {
-                if (loading && !error) {
-                    console.warn('[Auth] Loading state stuck for >30s. Releasing.');
-                    setLoading(false); 
+        let retries = 3; 
+        
+        while (retries > 0) {
+            try {
+                const { data, error: fetchError } = await supabase
+                    .from('profiles')
+                    // @ts-ignore
+                    .select('*, tenants(*)')
+                    .eq('id', userId)
+                    .single();
+                
+                if (data) {
+                    setProfile(data as UserProfile);
+                    setLoading(false); // Success!
+                    return; 
                 }
-            }, 30000); 
-            return () => clearTimeout(watchdog);
-        }
-    }, [loading, error]);
 
-    // Inactivity Detection
+                if (fetchError && fetchError.code === 'PGRST116') {
+                    console.log(`Profile missing, retrying... (${retries} left)`);
+                    await new Promise(r => setTimeout(r, 1000)); 
+                    retries--;
+                } else {
+                    console.error("Sync Error:", fetchError?.message);
+                    break;
+                }
+            } catch (e) {
+                console.error("Fetch exception:", e);
+                break;
+            }
+        }
+        // If we exit the loop without returning, stop loading anyway to avoid infinite spinner
+        setLoading(false);
+    }, [profile]);
+
+    // 🔄 RESTORED: Full Inactivity Detection Logic
+    // This tracks mouse movements and clicks to keep the session alive
     useEffect(() => {
         if (!session) return;
 
@@ -101,32 +112,89 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 setIsInactiveSignout(true);
                 await signOut();
             }
-        }, 1000 * 60);
+        }, 1000 * 60); // Check every minute
 
         const handleActivity = () => {
             const now = Date.now();
             lastActiveRef.current = now;
+            // Throttle storage writes to avoid performance hit
             if (Math.random() > 0.9) {
                 localStorage.setItem('lastActivity', String(now));
             }
         };
 
+        // Restored all event listeners from original code
         window.addEventListener('mousemove', handleActivity);
         window.addEventListener('keydown', handleActivity);
-        window.addEventListener('click', handleActivity);
+        window.addEventListener('mousedown', handleActivity);
+        window.addEventListener('scroll', handleActivity);
 
         return () => {
             clearInterval(checkInactivity);
             window.removeEventListener('mousemove', handleActivity);
             window.removeEventListener('keydown', handleActivity);
-            window.removeEventListener('click', handleActivity);
+            window.removeEventListener('mousedown', handleActivity);
+            window.removeEventListener('scroll', handleActivity);
         };
-    }, [session]);
+    }, [session, signOut]);
 
+    // 🔄 RESTORED: Loading Watchdog
+    // Prevents the app from getting stuck on "Loading..." forever
     useEffect(() => {
-        initializeAuth();
+        if (loading) {
+            const watchdog = setTimeout(() => {
+                if (loading && !error) {
+                    console.warn('[Auth] Loading state stuck for >10s. Releasing.');
+                    setLoading(false); 
+                }
+            }, 10000); // 10 seconds timeout
+            return () => clearTimeout(watchdog);
+        }
+    }, [loading, error]);
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // 🔄 Unified Auth Initialization
+    useEffect(() => {
+        let mounted = true;
+
+        const init = async () => {
+            if (!isConfigured) {
+                if (mounted) setLoading(false);
+                return;
+            }
+
+            try {
+                // 1. Get initial session
+                const { data: { session: initialSession }, error: initError } = await supabase.auth.getSession();
+                
+                if (initError) throw initError;
+
+                if (mounted) {
+                    setSession(initialSession);
+                    setUser(initialSession?.user ?? null);
+                }
+
+                if (initialSession?.user) {
+                     await fetchProfile(initialSession.user.id);
+                } else {
+                    if (mounted) setLoading(false);
+                }
+            } catch (err: any) {
+                console.error('[Auth Init Error]', err);
+                if (mounted) {
+                    setError(err.message || "Failed to connect to authentication service.");
+                    setLoading(false);
+                }
+            }
+        };
+
+        init();
+
+        // 2. Listen for changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+            if (!mounted) return;
+            
+            console.log(`[Auth] Change Event: ${event}`);
+
             if (event === 'SIGNED_OUT') {
                 setSession(null);
                 setUser(null);
@@ -134,90 +202,49 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 setLoading(false);
                 localStorage.removeItem('lastActivity');
             } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                setSession(session);
-                setUser(session?.user ?? null);
-                if (session?.user) {
+                setSession(currentSession);
+                setUser(currentSession?.user ?? null);
+                if (currentSession?.user) {
                      lastActiveRef.current = Date.now();
                      localStorage.setItem('lastActivity', String(Date.now()));
-                     await fetchProfile(session.user.id);
+                     // Only fetch profile if not already loaded or if user changed
+                     if (profile?.id !== currentSession.user.id) {
+                        await fetchProfile(currentSession.user.id);
+                     }
                 } else {
                     setLoading(false);
                 }
+            } else if (event === 'INITIAL_SESSION') {
+                // Handled above by getSession, but good to have fallback
             }
         });
 
-        // 🔄 RESTORED: Visibility Watchdog
-        // Refreshes the session if the user switches tabs and comes back after 30 mins
-        let lastVisibleTime = Date.now();
+        // Visibility Watchdog
         const handleVisibilityChange = async () => {
             if (document.visibilityState === 'visible') {
                 const now = Date.now();
-                const hiddenDuration = now - lastVisibleTime;
+                const hiddenDuration = now - lastActiveRef.current; // Use ref instead of local var to be safe
                 
                 if (hiddenDuration > 1000 * 60 * 30) { // 30 mins
                     console.log('[Auth] App backgrounded for too long. Re-syncing.');
-                    initializeAuth();
-                    return;
+                    // Just verify session validity
+                    const { data, error } = await supabase.auth.getSession();
+                    if (error || !data.session) {
+                        signOut();
+                    }
                 }
-            } else {
-                lastVisibleTime = Date.now();
             }
         };
-
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
         return () => {
+            mounted = false;
             subscription.unsubscribe();
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, []);
+    }, [signOut, fetchProfile, profile]);
 
-    const fetchProfile = async (userId: string) => {
-        try {
-            const { data, error: fetchError } = await supabase
-                .from('profiles')
-                // @ts-ignore
-                .select('*, tenants(*)')
-                .eq('id', userId)
-                .single();
-            
-            if (fetchError) {
-                if (fetchError.code !== 'PGRST116') {
-                   console.error("Sync Error:", fetchError.message);
-                }
-            } else if (data) {
-                setProfile(data as UserProfile);
-            }
-        } catch (e: any) {
-            console.error('[fetchProfile error]', e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // ⚡️ SPEED HACK 2: Optimistic Sign Out
-    const signOut = async () => {
-        try {
-            // 1. Instant UI Clear
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-            setLoading(false);
-            
-            // 2. Instant Storage Clear
-            window.localStorage.clear(); 
-
-            // 3. Background Network Request
-            supabase.auth.signOut();
-        } catch (err) {
-            console.error('[SignOut Error]', err);
-        }
-    };
-
-    // --- RENDER LOGIC ---
-
-    // 1. Session Expired Logic (Keep this)
     if (isInactiveSignout) {
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -241,7 +268,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         );
     }
 
-    // 2. Config Error Logic (Keep this)
     if (!isConfigured) {
         return (
              <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -256,9 +282,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         )
     }
 
-    // ❌ REMOVED: "if (loading) return <Spinner />"
-    // We intentionally return the children even if loading is true.
-    // This allows App.tsx to handle the loading UI non-blockingly.
     return (
         <AuthContext.Provider value={{ session, user, profile, loading, error, signOut }}>
             {children}

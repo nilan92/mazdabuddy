@@ -61,9 +61,11 @@ export const Login = () => {
             if (isTimedOut) return;
 
             if (loginError) {
+                console.error('[Login] Supabase Auth Error:', loginError);
                 setError(loginError.message);
             } else {
-                console.log('[Login] Success! Redirecting...');
+                console.log('[Login] Success! Session established. Redirecting...');
+                // Optionally clear query cache
                 navigate('/');
             }
         } catch (err: any) {
@@ -78,14 +80,23 @@ export const Login = () => {
     };
 
     const handleGoogleLogin = async () => {
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: `${window.location.origin}/#/`
-            }
-        });
-        if (error) setError(error.message);
-    };
+    // 1. Get the current URL (e.g., https://myapp.com or http://localhost:5173)
+    // We use window.location.origin to support BOTH local and prod automatically.
+    const redirectTo = window.location.origin + import.meta.env.BASE_URL; 
+
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo, // <--- CRITICAL: Tell Supabase exactly where to go
+            queryParams: {
+                access_type: 'offline',
+                prompt: 'consent',
+            },
+        },
+    });
+
+    if (error) console.error("Google Login Error:", error.message);
+};
 
     return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">

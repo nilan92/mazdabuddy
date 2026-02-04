@@ -1,0 +1,104 @@
+[
+  {
+    "table_name": "vehicles",
+    "column_name": "customer_id",
+    "foreign_table_name": "customers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "vehicle_id",
+    "foreign_table_name": "vehicles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "job_id",
+    "foreign_table_name": "job_cards",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "job_parts",
+    "column_name": "part_id",
+    "foreign_table_name": "parts",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "job_id",
+    "foreign_table_name": "job_cards",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "job_labor",
+    "column_name": "job_id",
+    "foreign_table_name": "job_cards",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "job_id",
+    "foreign_table_name": "job_cards",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "assigned_technician_id",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "profiles",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "customers",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "vehicles",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "job_cards",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "parts",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "user_expenses",
+    "column_name": "user_id",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "invoices",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_name": "shop_settings",
+    "column_name": "tenant_id",
+    "foreign_table_name": "tenants",
+    "foreign_column_name": "id"
+  }
+]

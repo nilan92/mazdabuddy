@@ -58,17 +58,19 @@ export const Invoices = () => {
         }
     });
 
-    // 2. Fetch Shop Settings
-    const { data: shopSettings } = useQuery({
-        queryKey: ['shopSettings'],
+    // 2. Fetch Tenant Details (Replaces generic Shop Settings)
+    const { data: tenant } = useQuery({
+        queryKey: ['tenant'],
         queryFn: async () => {
-            const { data } = await supabase.from('shop_settings').select('key, value');
-            const settings: any = {};
-            data?.forEach((row: any) => {
-                settings[row.key] = row.value;
-            });
-            return settings;
-        }
+            if (!profile?.tenant_id) return null;
+            const { data } = await supabase
+                .from('tenants')
+                .select('name, address, phone, email, brand_color')
+                .eq('id', profile.tenant_id)
+                .single();
+            return data;
+        },
+        enabled: !!profile?.tenant_id
     });
 
     // 3. Filter Logic (Updated to include Date)
@@ -84,6 +86,12 @@ export const Invoices = () => {
     // 4. Status Update Logic
     const handleStatusUpdate = async (newStatus: string) => {
         if (!selectedInvoice) return;
+        
+        // Confirmation for payment status change
+        if (!window.confirm(`Are you sure you want to mark this invoice as ${newStatus}?`)) {
+            return;
+        }
+
         setUpdatingStatus(true);
         const { error } = await supabase
             .from('invoices')
@@ -127,7 +135,7 @@ export const Invoices = () => {
 
         // Shop Name (Left Side - with Wrapping)
         doc.setFontSize(22);
-        const shopName = shopSettings?.shop_name || 'Service Center';
+        const shopName = tenant?.name || 'Service Center';
         
         // Split text to fit within 110 units width
         const splitShopName = doc.splitTextToSize(shopName, 110);
@@ -136,12 +144,12 @@ export const Invoices = () => {
         // Calculate where the address should start based on how many lines the name took
         // 10 is roughly the line height for size 22
         const addressY = 20 + (splitShopName.length * 8) + 2; 
-
+        
         // Shop Details (Dynamic Y position)
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(shopSettings?.shop_address || '', 20, addressY);
-        doc.text(shopSettings?.shop_phone || '', 20, addressY + 5);
+        doc.text(tenant?.address || '', 20, addressY);
+        doc.text(tenant?.phone || '', 20, addressY + 5);
 
         // --- BILL TO SECTION ---
         doc.setTextColor(0, 0, 0);
@@ -282,8 +290,8 @@ export const Invoices = () => {
                                 }`}
                             >
                                 <div className="flex justify-between items-start mb-1">
-                                    <div className="font-bold text-white">{inv.customer}</div>
-                                    <div className="text-xs text-slate-500">{inv.date}</div>
+                                    <div className="font-bold text-white text-sm md:text-base">{inv.customer}</div>
+                                    <div className="text-[10px] md:text-xs text-slate-500 whitespace-nowrap">{inv.date}</div>
                                 </div>
                                 <div className="text-sm text-slate-400 mb-2">{inv.vehicle}</div>
                                 <div className="flex justify-between items-center">
@@ -302,87 +310,89 @@ export const Invoices = () => {
                 </div>
 
                 {/* PREVIEW */}
-                <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 flex flex-col ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
                     {selectedInvoice ? (
                         <div className="flex-1 flex flex-col h-full overflow-hidden">
-                            {/* Mobile Back */}
-                            <button onClick={() => setSelectedInvoice(null)} className="md:hidden mb-4 text-slate-400 flex items-center gap-2">
-                                ← Back to List
-                            </button>
-
-                            {/* Header & Status Update */}
-                            <div className="flex flex-col md:flex-row justify-between items-start mb-8 border-b border-slate-800 pb-6">
-                                <div>
-                                    <h2 className="text-2xl font-bold text-white">{selectedInvoice.customer}</h2>
-                                    <p className="text-slate-400">{selectedInvoice.vehicle}</p>
-                                    <p className="text-xs text-slate-500 font-mono mt-1">{selectedInvoice.invoiceNumber}</p>
-                                </div>
-                                <div className="mt-4 md:mt-0 flex flex-col items-end">
-                                    <label className="text-xs text-slate-500 font-bold uppercase mb-1">Payment Status</label>
-                                    <div className="flex items-center gap-2">
-                                        <div className="text-slate-400">
-                                            {getStatusIcon(selectedInvoice.status)}
+                            {/* Mobile Back & Header */}
+                            <div className="flex flex-col gap-4 mb-6 border-b border-slate-800 pb-4">
+                                <button onClick={() => setSelectedInvoice(null)} className="md:hidden text-slate-400 flex items-center gap-2 self-start hover:text-white transition-colors">
+                                    ← Back to List
+                                </button>
+                                
+                                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                    <div>
+                                        <h2 className="text-xl md:text-2xl font-bold text-white mb-1">{selectedInvoice.customer}</h2>
+                                        <p className="text-sm text-slate-400">{selectedInvoice.vehicle}</p>
+                                        <p className="text-xs text-slate-500 font-mono mt-1">{selectedInvoice.invoiceNumber}</p>
+                                    </div>
+                                    
+                                    <div className="flex flex-col items-end gap-1 w-full md:w-auto">
+                                        <label className="text-[10px] text-slate-500 font-bold uppercase">Payment Status</label>
+                                        <div className="flex items-center gap-2 w-full md:w-auto">
+                                            <div className="text-slate-400 hidden md:block">
+                                                {getStatusIcon(selectedInvoice.status)}
+                                            </div>
+                                            <select 
+                                                value={selectedInvoice.status}
+                                                onChange={(e) => handleStatusUpdate(e.target.value)}
+                                                disabled={updatingStatus}
+                                                className="w-full md:w-auto bg-slate-950 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-cyan-500"
+                                            >
+                                                <option value="Unpaid">Pending Payment</option>
+                                                <option value="Paid">Paid Fully</option>
+                                                <option value="Refunded">Refunded</option>
+                                                <option value="Cancelled">Cancelled</option>
+                                            </select>
                                         </div>
-                                        <select 
-                                            value={selectedInvoice.status}
-                                            onChange={(e) => handleStatusUpdate(e.target.value)}
-                                            disabled={updatingStatus}
-                                            className="bg-slate-950 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-cyan-500"
-                                        >
-                                            <option value="Unpaid">Pending Payment</option>
-                                            <option value="Paid">Paid Fully</option>
-                                            <option value="Refunded">Refunded</option>
-                                            <option value="Cancelled">Cancelled</option>
-                                        </select>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* PREVIEW BREAKDOWN TABLE */}
+                            {/* PREVIEW BREAKDOWN TABLE - Responsive */}
                             <div className="flex-1 overflow-y-auto mb-6 bg-slate-950 rounded-xl border border-slate-800">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold sticky top-0">
+                                    <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold sticky top-0 z-10">
                                         <tr>
-                                            <th className="px-6 py-4">Item / Description</th>
-                                            <th className="px-6 py-4 text-right">Cost</th>
+                                            <th className="px-3 py-3 md:px-6 md:py-4">Item / Description</th>
+                                            <th className="px-3 py-3 md:px-6 md:py-4 text-right">Cost</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-800 text-slate-300">
                                         {/* Parts */}
                                         {selectedInvoice.parts.map((p: any, i: number) => (
-                                            <tr key={`p-${i}`}>
-                                                <td className="px-6 py-4">
-                                                    <div className="font-medium text-white">{p.custom_name || p.parts?.name}</div>
-                                                    <div className="text-xs text-slate-500">Part (Qty: {p.quantity})</div>
+                                            <tr key={`p-${i}`} className="hover:bg-slate-900/50">
+                                                <td className="px-3 py-3 md:px-6 md:py-4">
+                                                    <div className="font-medium text-white text-sm">{p.custom_name || p.parts?.name}</div>
+                                                    <div className="text-[10px] md:text-xs text-slate-500">Part (Qty: {p.quantity})</div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right font-mono">
+                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
                                                     {(p.quantity * p.price_at_time_lkr).toLocaleString()}
                                                 </td>
                                             </tr>
                                         ))}
                                         {/* Labor */}
                                         {selectedInvoice.labor.map((l: any, i: number) => (
-                                            <tr key={`l-${i}`}>
-                                                <td className="px-6 py-4">
-                                                    <div className="font-medium text-white">{l.description}</div>
-                                                    <div className="text-xs text-slate-500">Labor ({l.hours} hrs)</div>
+                                            <tr key={`l-${i}`} className="hover:bg-slate-900/50">
+                                                <td className="px-3 py-3 md:px-6 md:py-4">
+                                                    <div className="font-medium text-white text-sm">{l.description}</div>
+                                                    <div className="text-[10px] md:text-xs text-slate-500">Labor ({l.hours} hrs)</div>
                                                 </td>
-                                                <td className="px-6 py-4 text-right font-mono">
+                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
                                                     {(l.hours * l.hourly_rate_lkr).toLocaleString()}
                                                 </td>
                                             </tr>
                                         ))}
                                         {selectedInvoice.parts.length === 0 && selectedInvoice.labor.length === 0 && (
                                             <tr>
-                                                <td className="px-6 py-4 text-slate-500 italic">No breakdown items available.</td>
-                                                <td className="px-6 py-4 text-right text-slate-500">-</td>
+                                                <td className="px-3 py-3 md:px-6 md:py-4 text-slate-500 italic">No breakdown items available.</td>
+                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right text-slate-500">-</td>
                                             </tr>
                                         )}
                                     </tbody>
-                                    <tfoot className="bg-slate-900 font-bold text-white border-t border-slate-800 sticky bottom-0">
+                                    <tfoot className="bg-slate-900 font-bold text-white border-t border-slate-800 sticky bottom-0 z-10">
                                         <tr>
-                                            <td className="px-6 py-4 text-right uppercase text-xs tracking-wider text-slate-400">Total Due</td>
-                                            <td className="px-6 py-4 text-right text-lg text-emerald-400 font-mono">
+                                            <td className="px-3 py-3 md:px-6 md:py-4 text-right uppercase text-[10px] md:text-xs tracking-wider text-slate-400">Total Due</td>
+                                            <td className="px-3 py-3 md:px-6 md:py-4 text-right text-base md:text-lg text-emerald-400 font-mono">
                                                 LKR {selectedInvoice.total.toLocaleString()}
                                             </td>
                                         </tr>
@@ -391,11 +401,11 @@ export const Invoices = () => {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex gap-4">
-                                <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all">
-                                    <Download size={20} /> Download PDF
+                            <div className="flex gap-4 mt-auto">
+                                <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
+                                    <Download size={20} /> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span>
                                 </button>
-                                <button onClick={() => window.print()} className="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold">
+                                <button onClick={() => window.print()} className="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold active:scale-95 transition-all">
                                     <Printer size={20} />
                                 </button>
                             </div>
