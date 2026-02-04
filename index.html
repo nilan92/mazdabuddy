@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoPulse OS | Your Shop's Heartbeat</title>
+    <link rel="manifest" href="manifest.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="AutoPulse" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <script>
+      // Aggressive error suppression for Chrome extensions that break the app
+      window.addEventListener('error', function(e) {
+        var msg = e.message || '';
+        if (msg.includes('injectTMButton') || 
+            msg.includes('chrome-extension') || 
+            msg.includes('message channel closed')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+
+      // Catch unhandled promise rejections from extensions
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = (e.reason && e.reason.message) || String(e.reason) || '';
+        if (reason.includes('message channel closed') || 
+            reason.includes('chrome-extension') ||
+            reason.includes('Extension context invalidated')) {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          return true;
+        }
+      }, true);
+    </script>
+    <style>
+      /* Static loader for before React mounts */
+      #root:empty::before {
+        content: "AUTOPULSE";
+        display: flex;
+        height: 100vh;
+        width: 100vw;
+        align-items: center;
+        justify-content: center;
+        background-color: #020617; /* slate-950 */
+        color: #06b6d4; /* cyan-500 */
+        font-family: sans-serif;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        font-size: 2.5rem;
+        animation: pulse 2s infinite ease-in-out;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 0.5; transform: scale(0.95); }
+        50% { opacity: 1; transform: scale(1); }
+      }
+    </style>
+    <script type="module" crossorigin src="/mazdabuddy/assets/index-wYOFnSv_.js"></script>
+    <link rel="stylesheet" crossorigin href="/mazdabuddy/assets/index-Dk_Swt92.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
