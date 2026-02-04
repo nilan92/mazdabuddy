@@ -99,7 +99,8 @@ export const Invoices = () => {
             .eq('id', selectedInvoice.id);
         
         if (error) {
-            alert("Failed to update status");
+            console.error("Error updating invoice:", error);
+            alert(`Failed to update status: ${error.message}`);
         } else {
             const updatedInv = { ...selectedInvoice, status: newStatus };
             setSelectedInvoice(updatedInv);

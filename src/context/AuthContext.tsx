@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, []);
 
-    // 🛡️ CRITICAL: Retry Logic for Profile Fetching
+    // 🛡️ CRITICAL: Simplified Profile Fetching
     const fetchProfile = useCallback(async (userId: string) => {
         if (!userId) return;
         
@@ -61,38 +61,44 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return;
         }
 
-        let retries = 3; 
-        
-        while (retries > 0) {
-            try {
-                const { data, error: fetchError } = await supabase
-                    .from('profiles')
-                    // @ts-ignore
-                    .select('*, tenants(*)')
-                    .eq('id', userId)
-                    .single();
+        try {
+            console.log(`[Auth] Fetching profile for ${userId}...`);
+            const { data, error: fetchError } = await supabase
+                .from('profiles')
+                .select(`
+                    *,
+                    tenants (
+                        id,
+                        name,
+                        brand_color,
+                        logo_url
+                    )
+                `)
+                .eq('id', userId)
+                .single();
+            
+            if (fetchError) {
+                console.error("[Auth] Profile Sync Error:", fetchError);
                 
-                if (data) {
-                    setProfile(data as UserProfile);
-                    setLoading(false); // Success!
-                    return; 
+                // Check for specific recursion error
+                if (fetchError.message?.includes('infinite recursion')) {
+                    setError("Database Policy Error: Infinite Recursion detected. Please contact support.");
+                } else if (fetchError.code !== 'PGRST116') {
+                    // PGRST116 is "Row not found", which is "okay" (user might be new), others are bad.
+                    setError(`Sync Failed: ${fetchError.message}`);
                 }
-
-                if (fetchError && fetchError.code === 'PGRST116') {
-                    console.log(`Profile missing, retrying... (${retries} left)`);
-                    await new Promise(r => setTimeout(r, 1000)); 
-                    retries--;
-                } else {
-                    console.error("Sync Error:", fetchError?.message);
-                    break;
-                }
-            } catch (e) {
-                console.error("Fetch exception:", e);
-                break;
             }
+
+            if (data) {
+                console.log('[Auth] Profile cached.');
+                setProfile(data as any);
+            }
+        } catch (e: any) {
+            console.error("[Auth] Fetch exception:", e);
+            setError(e.message);
+        } finally {
+            setLoading(false);
         }
-        // If we exit the loop without returning, stop loading anyway to avoid infinite spinner
-        setLoading(false);
     }, [profile]);
 
     // 🔄 RESTORED: Full Inactivity Detection Logic

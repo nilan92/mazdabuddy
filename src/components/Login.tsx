@@ -16,12 +16,12 @@ export const Login = () => {
         setError(null);
 
         let isTimedOut = false;
-        // CHANGED: Increased timeout to 30s to prevent errors during database wake-up
+        // CHANGED: Increased timeout to 60s for cold starts (Supabase Pausing)
         const timeoutId = setTimeout(() => {
             isTimedOut = true;
-            setError("Authentication is taking longer than usual. Please check your connection.");
+            setError("Authentication timed out. The database might be waking up (cold start). Please try again in 10-20 seconds.");
             setLoading(false);
-        }, 30000); 
+        }, 60000); 
 
         try {
             let emailToUse = loginInput.trim();
