@@ -208,20 +208,20 @@ export const Customers = () => {
                 ) : (
                     filteredCustomers.map(customer => (
                         <div key={customer.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors">
-                            <div className="flex justify-between items-start mb-6">
+                            <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-6 gap-4">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl">
+                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
                                         {customer.name[0]}
                                     </div>
-                                    <div>
-                                        <h3 className="text-xl font-bold text-white">{customer.name}</h3>
-                                        <div className="flex items-center gap-3 text-sm text-slate-400 mt-1">
+                                    <div className="min-w-0">
+                                        <h3 className="text-xl font-bold text-white truncate">{customer.name}</h3>
+                                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400 mt-1">
                                             <span className="flex items-center gap-1"><Phone size={14}/> {customer.phone}</span>
                                             {customer.email && <span className="flex items-center gap-1"><Mail size={14}/> {customer.email}</span>}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 w-full md:w-auto justify-end">
                                      <button 
                                         onClick={() => fetchHistory(customer.id)}
                                         className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-cyan-400 transition-colors"

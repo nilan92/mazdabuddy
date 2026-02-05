@@ -17,6 +17,7 @@ const Login = lazy(() => import('./components/Login').then(module => ({ default:
 const Register = lazy(() => import('./components/Register').then(module => ({ default: module.Register })));
 const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(module => ({ default: module.ForgotPassword })));
 const ResetPassword = lazy(() => import('./components/ResetPassword').then(module => ({ default: module.ResetPassword })));
+const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
 
 // Reusable Loading Screen
 const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) => (
@@ -51,8 +52,24 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     // 2. If loading is done and no session is found, redirect to login.
     if (!session) return <Navigate to="/login" replace />;
 
+    // 3. New User Check: If authenticated but no Tenant ID, force Onboarding
+    // This fixes the Google Login "Homeless User" bug.
+    if (!loading && profile && !profile.tenant_id) {
+        // Allow them to access the onboarding page, obviously
+        if (window.location.hash !== '#/onboarding') {
+            return <Navigate to="/onboarding" replace />;
+        }
+        return <>{children}</>;
+    }
+
     // 4. If session exists but profile failed to load (Network error or Bug)
     if (!loading && (!profile || error)) {
+        // If we are ON the onboarding page, we might just have a profile with no tenant yet, 
+        // so do not show the error screen if we are intentionally navigating there.
+        if (window.location.hash === '#/onboarding' && profile) {
+             return <>{children}</>;
+        }
+
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
                  <div className="max-w-md w-full bg-slate-900 border border-red-500/20 rounded-3xl p-8 text-center shadow-2xl">
@@ -138,6 +155,7 @@ const App = () => {
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/onboarding" element={<Onboarding />} />
                 
                 <Route path="/*" element={
                     <AuthGuard>

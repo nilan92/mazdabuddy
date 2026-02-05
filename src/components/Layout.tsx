@@ -187,7 +187,10 @@ export const Layout = ({ children }: LayoutProps) => {
       </aside>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 z-50 px-6 py-3 flex justify-between items-center safe-area-pb shadow-2xl">
+      <nav 
+        className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 z-50 px-6 py-3 flex justify-between items-center shadow-2xl"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
         {mobileLinks.map((link) => {
             const Icon = link.icon;
             const isActive = location.pathname === link.to;

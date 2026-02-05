@@ -242,13 +242,31 @@ export const Finances = () => {
         };
     };
 
-    const generatePDFReport = () => {
+    const generatePDFReport = async () => {
         setGeneratingReport(true);
         
         try {
+            // Fetch Tenant Logo manually just for report
+            let logoUrl = '';
+            if (profile?.tenant_id) {
+                const { data } = await supabase.from('tenants').select('logo_url').eq('id', profile.tenant_id).single();
+                logoUrl = data?.logo_url || '';
+            }
+
             const reportData = getFilteredReportData();
             const doc = new jsPDF();
             
+            // Logo
+            if (logoUrl) {
+                try {
+                     const imgProps = doc.getImageProperties(logoUrl);
+                     const ratio = imgProps.height / imgProps.width;
+                     const width = 25;
+                     const height = width * ratio;
+                     doc.addImage(logoUrl, 'PNG', 20, 15, width, height);
+                } catch (e) { console.warn("Logo error", e); }
+            }
+
             // Header
             doc.setFontSize(20);
             doc.setFont('helvetica', 'bold');
@@ -664,26 +682,83 @@ export const Finances = () => {
                     </div>
 
                     {/* Date Range Selection */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-1">Start Date</label>
-                            <input
-                                type="date"
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none"
-                                value={reportDateRange.startDate}
-                                onChange={(e) => setReportDateRange({ ...reportDateRange, startDate: e.target.value })}
-                            />
+                    {reportType === 'custom' ? (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none"
+                                    value={reportDateRange.startDate}
+                                    onChange={(e) => setReportDateRange({ ...reportDateRange, startDate: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm text-slate-400 mb-1">End Date</label>
+                                <input
+                                    type="date"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none"
+                                    value={reportDateRange.endDate}
+                                    onChange={(e) => setReportDateRange({ ...reportDateRange, endDate: e.target.value })}
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm text-slate-400 mb-1">End Date</label>
-                            <input
-                                type="date"
-                                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none"
-                                value={reportDateRange.endDate}
-                                onChange={(e) => setReportDateRange({ ...reportDateRange, endDate: e.target.value })}
-                            />
+                    ) : (
+                        <div className="space-y-4">
+                             <div className="grid grid-cols-2 gap-4">
+                                {reportType === 'monthly' && (
+                                     <div>
+                                        <label className="block text-sm text-slate-400 mb-1">Month</label>
+                                        <select 
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none appearance-none"
+                                            value={new Date(reportDateRange.startDate).getMonth()}
+                                            onChange={(e) => {
+                                                const year = new Date(reportDateRange.startDate).getFullYear();
+                                                const month = parseInt(e.target.value);
+                                                const start = new Date(year, month, 1);
+                                                const end = new Date(year, month + 1, 0);
+                                                setReportDateRange({
+                                                    startDate: start.toISOString().split('T')[0],
+                                                    endDate: end.toISOString().split('T')[0]
+                                                });
+                                            }}
+                                        >
+                                            {Array.from({ length: 12 }, (_, i) => (
+                                                <option key={i} value={i}>{new Date(0, i).toLocaleString('default', { month: 'long' })}</option>
+                                            ))}
+                                        </select>
+                                     </div>
+                                )}
+                                <div className={reportType === 'annual' ? 'col-span-2' : ''}>
+                                    <label className="block text-sm text-slate-400 mb-1">Year</label>
+                                    <select 
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none appearance-none"
+                                        value={new Date(reportDateRange.startDate).getFullYear()}
+                                        onChange={(e) => {
+                                            const year = parseInt(e.target.value);
+                                            let start, end;
+                                            if (reportType === 'monthly') {
+                                                const month = new Date(reportDateRange.startDate).getMonth();
+                                                start = new Date(year, month, 1);
+                                                end = new Date(year, month + 1, 0);
+                                            } else {
+                                                start = new Date(year, 0, 1);
+                                                end = new Date(year, 11, 31);
+                                            }
+                                            setReportDateRange({
+                                                startDate: start.toISOString().split('T')[0],
+                                                endDate: end.toISOString().split('T')[0]
+                                            });
+                                        }}
+                                    >
+                                        {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Report Preview */}
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">

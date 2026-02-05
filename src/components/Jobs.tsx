@@ -69,6 +69,7 @@ export const Jobs = () => {
 
 
     const location = useLocation();
+    const queryParams = new URLSearchParams(location.search);
 
     // Initial role check & SmartScan redirect
     useEffect(() => {
@@ -82,7 +83,14 @@ export const Jobs = () => {
             setVehicleSearchTerm(state.initialPlate || '');
             setIsNewJobModalOpen(true);
         }
-    }, [profile, location]);
+
+        // Handle Dashboard Shortcut
+        if (queryParams.get('action') === 'new') {
+            setIsNewJobModalOpen(true);
+            // Clear param to prevent reopening on refresh (optional but good UX)
+            window.history.replaceState({}, '', '/#/jobs'); 
+        }
+    }, [profile, location, location.search]);
 
     const handleCreateJob = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -188,7 +196,7 @@ export const Jobs = () => {
     ];
 
     return (
-        <div className="h-[calc(100vh-100px)] flex flex-col">
+        <div className="h-full flex flex-col">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                      <h1 className="text-3xl font-bold text-white mb-2">Job Board</h1>

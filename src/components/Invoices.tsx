@@ -65,7 +65,7 @@ export const Invoices = () => {
             if (!profile?.tenant_id) return null;
             const { data } = await supabase
                 .from('tenants')
-                .select('name, address, phone, email, brand_color')
+                .select('name, address, phone, email, brand_color, logo_url')
                 .eq('id', profile.tenant_id)
                 .single();
             return data;
@@ -152,6 +152,20 @@ export const Invoices = () => {
         doc.text(tenant?.address || '', 20, addressY);
         doc.text(tenant?.phone || '', 20, addressY + 5);
 
+        // --- LOGO (New) ---
+        if (tenant?.logo_url) {
+            try {
+                // Add logo at top left
+                const imgProps = doc.getImageProperties(tenant.logo_url);
+                const ratio = imgProps.height / imgProps.width;
+                const width = 30;
+                const height = width * ratio;
+                doc.addImage(tenant.logo_url, 'PNG', 15, 15, width, height); // Assuming PNG/JPG logic relies on jsPDF sniffing or try/catch
+            } catch (e) {
+                console.warn("Could not add logo to PDF", e);
+            }
+        }
+
         // --- BILL TO SECTION ---
         doc.setTextColor(0, 0, 0);
         let y = 70; // Start lower to be safe
@@ -181,6 +195,7 @@ export const Invoices = () => {
         y += 5;
         doc.text(inv.vehicleDetails?.license_plate || '', 130, y);
         y += 5;
+        // Fix Date Format for PDF text
         doc.text('Date: ' + inv.date, 130, y);
 
         // 1. Add Status to PDF (Right side, below Date)
@@ -246,7 +261,11 @@ export const Invoices = () => {
         doc.setFontSize(8);
         doc.text('Thank you for your business!', 105, 280, { align: 'center' });
 
-        doc.save(`${inv.invoiceNumber}.pdf`);
+        // NEW: Meaningful Filename
+        // Remove special chars from customer name and date
+        const safeCustomer = (inv.customer || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
+        const safeDate = new Date().toISOString().split('T')[0];
+        doc.save(`Invoice_${inv.invoiceNumber}_${safeCustomer}_${safeDate}.pdf`);
     };
 
     return (
@@ -316,16 +335,28 @@ export const Invoices = () => {
                         <div className="flex-1 flex flex-col h-full overflow-hidden">
                             {/* Mobile Back & Header */}
                             <div className="flex flex-col gap-4 mb-6 border-b border-slate-800 pb-4">
-                                <button onClick={() => setSelectedInvoice(null)} className="md:hidden text-slate-400 flex items-center gap-2 self-start hover:text-white transition-colors">
+                                <button onClick={() => setSelectedInvoice(null)} className="md:hidden text-slate-400 flex items-center gap-2 self-start hover:text-white transition-colors print:hidden">
                                     ← Back to List
                                 </button>
                                 
-                                <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                                {/* Company Header (Visible in Preview & Print) */}
+                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 mb-6">
                                     <div>
-                                        <h2 className="text-xl md:text-2xl font-bold text-white mb-1">{selectedInvoice.customer}</h2>
-                                        <p className="text-sm text-slate-400">{selectedInvoice.vehicle}</p>
-                                        <p className="text-xs text-slate-500 font-mono mt-1">{selectedInvoice.invoiceNumber}</p>
+                                         <h1 className="text-2xl font-black text-white uppercase tracking-tight" style={{ color: tenant?.brand_color || '#06b6d4' }}>
+                                            {tenant?.name || 'Service Center'}
+                                         </h1>
+                                         <div className="text-sm text-slate-400 mt-1 space-y-0.5">
+                                            <p>{tenant?.address}</p>
+                                            <p>{tenant?.phone}</p>
+                                            <p>{tenant?.email}</p>
+                                         </div>
                                     </div>
+                                    <div className="text-right">
+                                        <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Invoice</div>
+                                        <div className="text-xl font-mono text-white">{selectedInvoice.invoiceNumber}</div>
+                                        <div className="text-xs text-slate-500 mt-1">{selectedInvoice.date}</div>
+                                    </div>
+                                </div>
                                     
                                     <div className="flex flex-col items-end gap-1 w-full md:w-auto">
                                         <label className="text-[10px] text-slate-500 font-bold uppercase">Payment Status</label>
@@ -346,7 +377,7 @@ export const Invoices = () => {
                                             </select>
                                         </div>
                                     </div>
-                                </div>
+
                             </div>
 
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}

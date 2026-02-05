@@ -402,14 +402,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                              <div>
                                                 <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Mileage</label>
                                                 <div className="relative">
-                                                     <input type="number" value={mileage} onChange={e => setMileage(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700" placeholder="0" />
+                                                     <input type="number" onFocus={(e) => e.target.select()} value={mileage} onChange={e => setMileage(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700" placeholder="0" />
                                                      <Hash size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                                 </div>
                                              </div>
                                              <div>
                                                 <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Est. Hours</label>
                                                 <div className="relative">
-                                                     <input type="number" value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700" placeholder="0" />
+                                                     <input type="number" onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700" placeholder="0" />
                                                      <Clock size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                                 </div>
                                              </div>
@@ -488,7 +488,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                                 {allParts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.stock_quantity} in stock)</option>)}
                                                             </select>
                                                         </div>
-                                                        <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-14 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm flex-shrink-0" />
+                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-14 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm flex-shrink-0" />
                                                         <button type="submit" className="btn-brand px-3 py-2 rounded font-bold text-sm flex-shrink-0">Add</button>
                                                     </div>
                                                 ) : (
@@ -500,14 +500,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                             <div className="flex-1 grid grid-cols-2 gap-2">
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">Sell Price</span>
-                                                                    <input required type="number" placeholder="Sell Price" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
+                                                                    <input required type="number" onFocus={(e) => e.target.select()} placeholder="Sell Price" value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-14 text-white text-xs font-mono" />
                                                                 </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">Buy Cost</span>
-                                                                    <input required type="number" placeholder="Buy Cost" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
+                                                                    <input required type="number" onFocus={(e) => e.target.select()} placeholder="Buy Cost" value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-12 text-white text-xs font-mono" />
                                                                 </div>
                                                             </div>
-                                                            <input type="number" min="1" value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-600 rounded p-2 text-white text-xs" />
+                                                            <input type="number" min="1" onFocus={(e) => e.target.select()} value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-900 border border-slate-600 rounded p-2 text-white text-xs" />
                                                             <button type="submit" className="btn-brand px-3 py-2 rounded font-bold text-sm whitespace-nowrap">Add</button>
                                                         </div>
                                                     </div>
@@ -546,12 +546,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             <form onSubmit={handleAddLabor} className="space-y-3">
                                                 <div className="flex gap-2">
                                                     <input required placeholder="Description" value={laborForm.description} onChange={e => setLaborForm({...laborForm, description: e.target.value})} className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm" />
-                                                    <input required type="number" step="0.5" placeholder="Hrs" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-16 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm" />
+                                                    <input required type="number" step="0.5" onFocus={(e) => e.target.select()} placeholder="Hrs" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-16 bg-slate-900 border border-slate-600 rounded p-2 text-white text-sm" />
                                                 </div>
                                                 <div className="flex gap-2 items-center">
                                                      <div className="flex-1 relative">
                                                         <span className="absolute left-2 top-2 text-[10px] text-slate-500">LKR</span>
-                                                        <input required type="number" value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-8 text-white text-sm font-mono" />
+                                                        <input required type="number" onFocus={(e) => e.target.select()} value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-8 text-white text-sm font-mono" />
                                                      </div>
                                                      <button type="submit" className="btn-brand px-4 py-2 rounded font-bold text-sm">Add</button>
                                                 </div>

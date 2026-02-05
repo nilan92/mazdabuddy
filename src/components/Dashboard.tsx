@@ -103,7 +103,7 @@ export const Dashboard = () => {
             Scanning Tool
           </button>
           <button 
-                onClick={() => navigate('/jobs')}
+                onClick={() => navigate('/jobs?action=new')}
                 className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all active:scale-95">
             + New Job
           </button>
