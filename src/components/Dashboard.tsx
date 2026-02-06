@@ -1,12 +1,16 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, DollarSign, Users, Activity, RefreshCcw } from 'lucide-react';
+import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // --- UI Components ---
-const StatCard = ({ title, value, subtext, icon: Icon, color }: any) => (
-  <div className="bg-slate-900/50 backdrop-blur border border-slate-800 p-4 rounded-2xl relative overflow-hidden group">
+const StatCard = ({ title, value, subtext, icon: Icon, color, onClick }: any) => (
+  <div 
+    onClick={onClick}
+    className={`bg-slate-900/50 backdrop-blur border border-slate-800 p-4 rounded-2xl relative overflow-hidden group ${onClick ? 'cursor-pointer hover:bg-slate-800/80 transition-all active:scale-[0.98]' : ''}`}
+  >
     <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
       <Icon size={48} />
     </div>
@@ -34,6 +38,22 @@ export const Dashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
+  const [showQuote, setShowQuote] = useState(false);
+  const [currentQuote, setCurrentQuote] = useState('');
+
+  const quotes = [
+      "Process is the foundation of freedom. The tighter the system, the more creative you can be.",
+      "Don't manage people, manage the flow. Let the system do the heavy lifting.",
+      "Precision beats power. Timing beats speed.",
+      "Efficiency isn't about working harder. It's about removing friction.",
+      "A clean shop is a clean mind. Order creates opportunity."
+  ];
+
+  const handleEfficiencyClick = () => {
+      const random = quotes[Math.floor(Math.random() * quotes.length)];
+      setCurrentQuote(random);
+      setShowQuote(true);
+  };
 
   const { data: dashboardData, isLoading: loading, isFetching } = useQuery({
     queryKey: ['dashboard'],
@@ -62,13 +82,35 @@ export const Dashboard = () => {
         .lte('stock_quantity', 5)
         .limit(5);
 
+      // 4. Calculate Real Shop Efficiency (Last 20 Completed Jobs)
+      const { data: effJobs } = await supabase
+        .from('job_cards')
+        .select('estimated_hours, total_labor_time')
+        .eq('status', 'completed')
+        .not('total_labor_time', 'is', null) // Only where we have data
+        .not('estimated_hours', 'is', null)
+        .order('completed_at', { ascending: false })
+        .limit(20);
+
+      let shopEfficiency = 100; // Default
+      if (effJobs && effJobs.length > 0) {
+           const totalEff = effJobs.reduce((acc, job: any) => {
+               const est = job.estimated_hours || 0;
+               const actual = (job.total_labor_time || 0) / 60; // Minutes to Hours
+               if (actual === 0) return acc + 100; // Avoid divide by zero, assume perfect
+               // Cap at 200% to avoid outliers skewing data too much? No, raw is fine.
+               return acc + ((est / actual) * 100);
+           }, 0);
+           shopEfficiency = Math.round(totalEff / effJobs.length);
+      }
+
       return {
           stats: {
             revenue: stats.monthly_revenue || 0,
             activeJobs: stats.active_jobs || 0,
             totalCustomers: stats.total_customers || 0, // <--- Correctly mapped
             completedMonth: stats.completed_jobs_month || 0,
-            efficiency: '98%' 
+            efficiency: `${shopEfficiency}%` 
           },
           recentJobs: recent || [],
           lowStock: lowStock || []
@@ -124,6 +166,7 @@ export const Dashboard = () => {
                   subtext="Invoices this month" 
                   icon={DollarSign} 
                   color="text-emerald-400"
+                  onClick={() => navigate('/finances')}
                 />
                 <StatCard 
                   title="Active Jobs" 
@@ -131,6 +174,7 @@ export const Dashboard = () => {
                   subtext="Currently on floor" 
                   icon={Briefcase} 
                   color="text-brand bg-brand-soft"
+                  onClick={() => navigate('/jobs')}
                 />
                 <StatCard 
                   title="Total Customers" 
@@ -138,6 +182,7 @@ export const Dashboard = () => {
                   subtext="Registered clients" 
                   icon={Users} 
                   color="text-violet-400"
+                  onClick={() => navigate('/customers')}
                 />
                 <StatCard 
                   title="Efficiency" 
@@ -145,10 +190,28 @@ export const Dashboard = () => {
                   subtext="Shop performance" 
                   icon={Activity} 
                   color="text-amber-400"
+                  onClick={handleEfficiencyClick}
                 />
             </>
         )}
       </div>
+
+      {showQuote && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowQuote(false)}>
+              <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl max-w-md w-full relative shadow-2xl transform transition-all scale-100" onClick={e => e.stopPropagation()}>
+                  <button onClick={() => setShowQuote(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
+                      <X size={24} />
+                  </button>
+                  <div className="flex flex-col items-center text-center">
+                      <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-brand mb-6 border border-brand/20">
+                          <Quote size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-4 leading-relaxed">"{currentQuote}"</h3>
+                      <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">- Management Era</p>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* BOTTOM SECTIONS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -162,13 +225,17 @@ export const Dashboard = () => {
           ) : (
             <div className="space-y-4">
                 {recentJobs.map((job: any) => (
-                    <div key={job.id} className="bg-slate-800/50 p-4 rounded-xl flex items-center justify-between">
+                    <div 
+                        key={job.id} 
+                        onClick={() => navigate('/jobs', { state: { openJobId: job.id } })}
+                        className="bg-slate-800/50 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-slate-700 transition-colors group"
+                    >
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-slate-300">
+                            <div className="w-10 h-10 rounded-full bg-slate-700 group-hover:bg-slate-600 transition-colors flex items-center justify-center font-bold text-slate-300">
                                 {job.vehicles?.make?.substring(0,2).toUpperCase() || 'MZ'}
                             </div>
                             <div>
-                                <h4 className="text-white font-medium">{job.vehicles?.make} {job.vehicles?.model} ({job.vehicles?.license_plate})</h4>
+                                <h4 className="text-white font-medium group-hover:text-cyan-400 transition-colors">{job.vehicles?.make} {job.vehicles?.model} ({job.vehicles?.license_plate})</h4>
                                 <p className="text-xs text-slate-400 line-clamp-1">{job.description}</p>
                             </div>
                         </div>
@@ -192,9 +259,13 @@ export const Dashboard = () => {
             ) : (
             <div className="space-y-3">
                      {lowStock.map((part: any) => (
-                       <div key={part.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-slate-800/30">
+                       <div 
+                           key={part.id} 
+                           onClick={() => navigate('/inventory')}
+                           className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-slate-800/30 cursor-pointer hover:bg-slate-800 transition-colors group"
+                       >
                           <div>
-                              <div className="text-sm font-medium text-slate-200">{part.name}</div>
+                              <div className="text-sm font-medium text-slate-200 group-hover:text-cyan-400 transition-colors">{part.name}</div>
                               <div className="text-xs text-slate-500">Part #: {part.part_number}</div>
                           </div>
                           <div className="text-red-400 text-sm font-bold">{part.stock_quantity} Left</div>

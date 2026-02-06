@@ -68,6 +68,12 @@ export interface JobCard {
   archived?: boolean;
   estimated_hours?: number;
   
+  // Efficiency Tracking
+  started_at?: string;
+  completed_at?: string;
+  last_start_time?: string;
+  total_labor_time?: number; // In minutes
+
   // Joins
   vehicles?: Vehicle;
   parts?: JobPart[];

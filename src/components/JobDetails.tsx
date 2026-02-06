@@ -135,6 +135,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const handleUpdateJob = async () => {
         if (!job) return;
 
+        const now = new Date();
         const updates: any = {
             mileage: mileage ? parseInt(mileage) : null,
             technician_notes: techNotes,
@@ -143,10 +144,29 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             estimated_hours: estimatedHours ? parseFloat(estimatedHours) : 0
         };
 
+        // --- Efficiency Tracking Logic (Start/Stop Timer) ---
+        // 1. Moving INTO In Progress (Start Timer)
+        if (status === 'in_progress' && job.status !== 'in_progress') {
+            updates.last_start_time = now.toISOString();
+            if (!job.started_at) updates.started_at = now.toISOString(); // First start
+        } 
+        
+        // 2. Moving OUT of In Progress (Stop Timer)
+        if (job.status === 'in_progress' && status !== 'in_progress') {
+            if (job.last_start_time) {
+                const start = new Date(job.last_start_time);
+                const diffMinutes = Math.round((now.getTime() - start.getTime()) / 1000 / 60);
+                const currentTotal = job.total_labor_time || 0;
+                updates.total_labor_time = currentTotal + diffMinutes;
+                updates.last_start_time = null; // Reset timer
+            }
+        }
+
         // --- NEW LOGIC START: Generate Invoice on Completion ---
         if (status === 'completed' && job?.status !== 'completed') {
-            updates.completed_at = new Date().toISOString();
-
+            updates.completed_at = now.toISOString();
+            // Force stop timer if not already handled by "Moving OUT" logic (which it is, but safe to be sure)
+            
             // 1. Calculate Parts Total
             // (Note: jobParts comes from your existing state in this file)
             const partsTotal = jobParts.reduce((sum: number, p: any) => 
@@ -154,7 +174,6 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             );
 
             // 2. Calculate Labor Total
-            // (Note: Defaulting to 1500 LKR/hr if no rate set - you can adjust this)
             const laborTotal = jobLabor.reduce((sum: number, l: any) => 
                 sum + (Number(l.hours) * (l.hourly_rate_lkr || 1500)), 0
             );
@@ -174,22 +193,21 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                     job_id: jobId,
                     tenant_id: job.tenant_id,
                     subtotal_lkr: grandTotal,
-                    tax_lkr: 0, // You can add tax logic here later
+                    tax_lkr: 0,
                     discount_lkr: 0,
                     total_amount_lkr: grandTotal,
-                    created_at: new Date().toISOString()
+                    created_at: now.toISOString(),
+                    status: 'Unpaid' 
                 });
 
                 if (invError) {
                     alert("Warning: Job marked completed, but Invoice creation failed. " + invError.message);
-                    return; // Stop if invoice fails
+                    return; 
                 }
             }
         } 
-        // Logic to clear timestamp if moved back to in_progress
         else if (status !== 'completed' && job?.status === 'completed') {
             updates.completed_at = null;
-            // Optional: You could delete the invoice here if you wanted strict sync
         }
         // --- NEW LOGIC END ---
 
@@ -199,6 +217,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             alert(error.message);
         } else {
             onUpdate();
+            // Optimistic update for UI
             setJob(prev => prev ? { ...prev, ...updates } : null);
             if (status === 'completed' && job?.status !== 'completed') {
                 alert("Job Completed & Invoice Generated!");
@@ -322,11 +341,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     // Calculations
     const totalParts = jobParts.reduce((sum, p) => sum + (p.price_at_time_lkr * p.quantity), 0);
     const totalLabor = jobLabor.reduce((sum, l) => sum + (l.hourly_rate_lkr * l.hours), 0);
-    const totalHours = jobLabor.reduce((sum, l) => sum + l.hours, 0);
-    const estHours = parseFloat(estimatedHours) || 0;
+    // const totalHours = jobLabor.reduce((sum, l) => sum + l.hours, 0); // Removed unused
+    // const estHours = parseFloat(estimatedHours) || 0; // Removed unused
     
     // Efficiency
-    const efficiencyColor = totalHours > estHours ? 'text-red-400' : 'text-emerald-400';
+    // Efficiency - Logic moved to inline render
+
 
     if (!job) return null;
 
@@ -415,25 +435,36 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                              </div>
                                         </div>
 
-                                        {estimatedHours && (
+                                        {(estimatedHours || job.total_labor_time) && (
                                             <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-800">
-                                                <h4 className="text-[10px] font-bold text-slate-500 uppercase mb-2">Efficiency Tracking</h4>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase">Efficiency Tracking</h4>
+                                                    {job.status === 'in_progress' && (
+                                                        <span className="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded animate-pulse font-bold flex items-center gap-1">
+                                                            <Clock size={10} /> REC
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="flex justify-between items-end">
                                                     <div>
-                                                        <div className="text-xs text-slate-400">Actual Hours</div>
-                                                        <div className={`text-xl font-bold ${efficiencyColor}`}>{totalHours.toFixed(1)} <span className="text-xs text-slate-500">/ {parseFloat(estimatedHours).toFixed(1)}</span></div>
+                                                        <div className="text-xs text-slate-400">Actual vs Est.</div>
+                                                        <div className="text-xl font-bold text-white">
+                                                            {job.total_labor_time ? (job.total_labor_time / 60).toFixed(1) : '0.0'} 
+                                                            <span className="text-xs text-slate-500 font-normal"> / {parseFloat(estimatedHours || '0').toFixed(1)} hrs</span>
+                                                        </div>
                                                     </div>
                                                     <div className="text-right">
-                                                         {totalHours > parseFloat(estimatedHours) ? 
-                                                            <span className="text-red-400 text-[10px] flex items-center gap-1"><AlertCircle size={10}/> Over</span> : 
-                                                            <span className="text-emerald-400 text-[10px] flex items-center gap-1"><CheckCircle size={10}/> Good</span>
-                                                         }
+                                                         {(job.total_labor_time && estimatedHours) ? (
+                                                            (job.total_labor_time / 60) > parseFloat(estimatedHours) ? 
+                                                                <span className="text-red-400 text-[10px] flex items-center gap-1"><AlertCircle size={10}/> Over Budget</span> : 
+                                                                <span className="text-emerald-400 text-[10px] flex items-center gap-1"><CheckCircle size={10}/> Efficient</span>
+                                                         ) : <span className="text-slate-500 text-[10px]">-</span>}
                                                     </div>
                                                 </div>
                                                 <div className="w-full bg-slate-700 h-1.5 mt-3 rounded-full overflow-hidden">
                                                     <div 
-                                                        className={`h-full rounded-full ${totalHours > parseFloat(estimatedHours) ? 'bg-red-500' : 'bg-emerald-500'}`} 
-                                                        style={{width: `${Math.min(100, (totalHours / parseFloat(estimatedHours || '1')) * 100)}%`}} 
+                                                        className={`h-full rounded-full ${(job.total_labor_time && estimatedHours && (job.total_labor_time / 60) > parseFloat(estimatedHours)) ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                                                        style={{width: `${Math.min(100, (( (job.total_labor_time || 0) / 60 ) / (parseFloat(estimatedHours || '1'))) * 100)}%`}} 
                                                     />
                                                 </div>
                                             </div>

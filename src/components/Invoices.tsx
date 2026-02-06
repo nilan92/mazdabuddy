@@ -136,22 +136,29 @@ export const Invoices = () => {
         doc.setFontSize(10);
         doc.text(`#${inv.invoiceNumber}`, 140, 33);
 
+        // Shop Name Layout
+        const hasLogo = !!tenant?.logo_url;
+        const textStartX = hasLogo ? 50 : 20; 
+
         // Shop Name (Left Side - with Wrapping)
         doc.setFontSize(22);
         const shopName = tenant?.name || 'Service Center';
         
-        // Split text to fit within 110 units width
-        const splitShopName = doc.splitTextToSize(shopName, 110);
-        doc.text(splitShopName, 20, 20);
+        // Split text to fit within remaining width (210 - startX - 80 for Invoice Label)
+        const maxWidth = 210 - textStartX - 80;
+        const splitShopName = doc.splitTextToSize(shopName, maxWidth);
+        doc.text(splitShopName, textStartX, 20);
 
         // Calculate where the address should start based on how many lines the name took
         const addressY = 20 + (splitShopName.length * 8) + 2; 
         
         // Shop Details (Dynamic Y position)
         doc.setFontSize(10);
+        // Shop Details (Dynamic Y position)
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(tenant?.address || '', 20, addressY);
-        doc.text(tenant?.phone || '', 20, addressY + 5);
+        doc.text(tenant?.address || '', textStartX, addressY);
+        doc.text(tenant?.phone || '', textStartX, addressY + 5);
 
         // --- LOGO (New - Async) ---
         if (tenant?.logo_url) {
@@ -348,7 +355,7 @@ export const Invoices = () => {
                 {/* PREVIEW */}
                 <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 flex flex-col ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
                     {selectedInvoice ? (
-                        <div className="flex-1 flex flex-col h-full overflow-hidden">
+                        <div className="flex-1 flex flex-col h-full overflow-y-auto pb-20 md:pb-0"> 
                             {/* Mobile Back & Header */}
                             <div className="flex flex-col gap-4 mb-6 border-b border-slate-800 pb-4">
                                 <button onClick={() => setSelectedInvoice(null)} className="md:hidden text-slate-400 flex items-center gap-2 self-start hover:text-white transition-colors print:hidden">
@@ -397,7 +404,7 @@ export const Invoices = () => {
                             </div>
 
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}
-                            <div className="flex-1 overflow-y-auto mb-6 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="w-full mb-6 bg-slate-950 rounded-xl border border-slate-800">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold sticky top-0 z-10">
                                         <tr>
@@ -449,7 +456,7 @@ export const Invoices = () => {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex gap-4 mt-auto">
+                            <div className="flex gap-4 mt-auto sticky bottom-0 bg-slate-900 p-4 border-t border-slate-800 md:relative md:border-t-0 md:bg-transparent md:p-0">
                                 <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
                                     <Download size={20} /> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span>
                                 </button>

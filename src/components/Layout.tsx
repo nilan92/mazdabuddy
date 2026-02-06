@@ -21,11 +21,11 @@ export const Layout = ({ children }: LayoutProps) => {
 
   const allLinks = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'technician', 'accountant'] },
-    { to: '/scan', icon: Scan, label: 'Smart Scan', roles: ['admin', 'manager', 'technician'] },
     { to: '/jobs', icon: Tool, label: 'Jobs Board', roles: ['admin', 'manager', 'technician'] },
+    { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
     { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
-    { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
+    { to: '/scan', icon: Scan, label: 'Smart Scan', roles: ['admin', 'manager', 'technician'] },
     { to: '/finances', icon: PieChart, label: 'Finances', roles: ['admin', 'manager', 'accountant'] },
     { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager'] },
   ];

@@ -84,10 +84,15 @@ export const Jobs = () => {
             setIsNewJobModalOpen(true);
         }
 
-        // Handle Dashboard Shortcut
+        // Handle Dashboard shortcuts
+        if (state?.openJobId) {
+            setSelectedJobId(state.openJobId);
+            // Clear state to prevent reopening on reload
+            window.history.replaceState({}, '', '/#/jobs');
+        }
+
         if (queryParams.get('action') === 'new') {
             setIsNewJobModalOpen(true);
-            // Clear param to prevent reopening on refresh (optional but good UX)
             window.history.replaceState({}, '', '/#/jobs'); 
         }
     }, [profile, location, location.search]);

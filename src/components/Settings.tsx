@@ -255,18 +255,7 @@ export const Settings = () => {
                         AI & Intelligence
                     </button>
                 )}
-                {isAdmin && (
-                    <button 
-                        onClick={() => setActiveTab('troubleshoot')}
-                        className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}
-                        style={{ 
-                            borderBottomColor: activeTab === 'troubleshoot' ? brandColor : 'transparent',
-                            color: activeTab === 'troubleshoot' ? brandColor : undefined 
-                        }}
-                    >
-                        Troubleshoot
-                    </button>
-                )}
+
             </div>
 
             <div className="flex-1 overflow-y-auto pr-1">

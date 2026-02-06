@@ -187,7 +187,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             } catch (err: any) {
                 console.error('[Auth Init Error]', err);
                 if (mounted) {
-                    setError(err.message || "Failed to connect to authentication service.");
+                    const msg = err.message || 'Unknown error';
+                    if (msg.includes('infinite recursion') || msg.includes('sync')) {
+                         setError("Connection glitch. Retrying..."); // Less scary
+                    } else {
+                         setError(`Connection issue: ${msg}`);
+                    }
                     setLoading(false);
                 }
             }
