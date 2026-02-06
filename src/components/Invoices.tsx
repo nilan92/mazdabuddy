@@ -13,6 +13,7 @@ import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
+import { urlToBase64 } from '../utils/pdfHelpers';
 
 export const Invoices = () => {
     const queryClient = useQueryClient();
@@ -52,6 +53,7 @@ export const Invoices = () => {
                 status: inv.status || 'Unpaid',
                 date: new Date(inv.created_at).toLocaleDateString('en-GB', { 
                 day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                rawDate: new Date(inv.created_at),
                 parts: inv.job_cards?.job_parts || [],
                 labor: inv.job_cards?.job_labor || []
             })) || [];
@@ -65,7 +67,7 @@ export const Invoices = () => {
             if (!profile?.tenant_id) return null;
             const { data } = await supabase
                 .from('tenants')
-                .select('name, address, phone, email, brand_color, logo_url')
+                .select('name, address, phone, email, brand_color, logo_url, terms_and_conditions')
                 .eq('id', profile.tenant_id)
                 .single();
             return data;
@@ -117,8 +119,8 @@ export const Invoices = () => {
         }
     };
 
-    // 5. PDF Generation (Fixed Overlap Issue)
-    const generatePDF = (inv: any) => {
+    // 5. PDF Generation (Fixed Overlap Issue & Logo)
+    const generatePDF = async (inv: any) => {
         const doc = new jsPDF();
         const brandColor = profile?.tenants?.brand_color || '#06b6d4'; 
 
@@ -143,7 +145,6 @@ export const Invoices = () => {
         doc.text(splitShopName, 20, 20);
 
         // Calculate where the address should start based on how many lines the name took
-        // 10 is roughly the line height for size 22
         const addressY = 20 + (splitShopName.length * 8) + 2; 
         
         // Shop Details (Dynamic Y position)
@@ -152,17 +153,17 @@ export const Invoices = () => {
         doc.text(tenant?.address || '', 20, addressY);
         doc.text(tenant?.phone || '', 20, addressY + 5);
 
-        // --- LOGO (New) ---
+        // --- LOGO (New - Async) ---
         if (tenant?.logo_url) {
             try {
-                // Add logo at top left
-                const imgProps = doc.getImageProperties(tenant.logo_url);
+                const base64Img = await urlToBase64(tenant.logo_url);
+                const imgProps = doc.getImageProperties(base64Img);
                 const ratio = imgProps.height / imgProps.width;
                 const width = 30;
                 const height = width * ratio;
-                doc.addImage(tenant.logo_url, 'PNG', 15, 15, width, height); // Assuming PNG/JPG logic relies on jsPDF sniffing or try/catch
+                doc.addImage(base64Img, 'PNG', 15, 15, width, height); 
             } catch (e) {
-                console.warn("Could not add logo to PDF", e);
+                console.warn("Could not add logo to PDF (CORS or Load Error)", e);
             }
         }
 
@@ -260,13 +261,28 @@ export const Invoices = () => {
         doc.setTextColor(150);
         doc.setFontSize(8);
         doc.text('Thank you for your business!', 105, 280, { align: 'center' });
+        if (tenant?.terms_and_conditions) {
+            // Add Terms on a new page or bottom
+            const terms = doc.splitTextToSize(tenant.terms_and_conditions, 170);
+            if (y > 250) {
+                doc.addPage();
+                y = 20;
+            } else {
+                y += 20;
+            }
+            doc.text("Terms & Conditions:", 20, y);
+            doc.text(terms, 20, y + 5);
+        }
 
-        // NEW: Meaningful Filename
-        // Remove special chars from customer name and date
-        const safeCustomer = (inv.customer || 'Customer').replace(/[^a-zA-Z0-9]/g, '_');
-        const safeDate = new Date().toISOString().split('T')[0];
-        doc.save(`Invoice_${inv.invoiceNumber}_${safeCustomer}_${safeDate}.pdf`);
+        const firstName = inv.customerDetails?.name?.split(' ')[0]?.replace(/[^a-z0-9]/gi, '_') || 'Customer';
+        const dateObj = inv.rawDate || new Date(); // Fallback if missing
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const filename = `inv-${firstName}-${day}-${month}.pdf`;
+        doc.save(filename);
     };
+
+
 
     return (
         <div className="p-2 h-[calc(100vh-100px)] flex flex-col">

@@ -549,17 +549,7 @@ export const Settings = () => {
                             </div>
                         </div>
                     </div>
-                {activeTab === 'users' && isAdmin && (
-                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-                        {/* Users Content ... (keeping surrounding content logic safe) */}
-                    </div>
-                )}
-                 {activeTab === 'ai' && isAdmin && (
-                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 max-w-2xl">
-                         {/* AI Content */}
-                    </div>
                  )}
-            </div>
 
                 {activeTab === 'troubleshoot' && isAdmin && (
                     <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-8 max-w-2xl">
@@ -587,7 +577,8 @@ export const Settings = () => {
                                         setLoading(true);
                                         try {
                                             if (!profile?.tenant_id) throw new Error("You don't have a workshop ID yourself!");
-                                            
+                                            if (!profile?.id) throw new Error("User ID missing.");
+
                                             // 1. Fix Job Cards
                                             const { data: jobOrphans } = await supabase
                                                 .from('job_cards')
@@ -624,5 +615,6 @@ export const Settings = () => {
                     </div>
                 )}
             </div>
+        </div>
     );
 };

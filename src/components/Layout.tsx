@@ -115,7 +115,10 @@ export const Layout = ({ children }: LayoutProps) => {
                <h1 className="text-sm font-black tracking-tight text-white uppercase truncate leading-tight">
                  {profile?.tenants?.name || 'AutoPulse OS'}
                </h1>
-               <p className="text-[10px] text-slate-500 font-mono tracking-tighter truncate mt-0.5">WORKSHOP PORTAL</p>
+               <div className="flex items-center gap-2 mt-1">
+                 <div className={`w-2 h-2 rounded-full ${navigator.onLine ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+                 <span className="text-[10px] text-slate-500 font-mono tracking-tighter uppercase">{navigator.onLine ? 'SYSTEM ONLINE' : 'OFFLINE MODE'}</span>
+               </div>
             </div>
           </div>
 

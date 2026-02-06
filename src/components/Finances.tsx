@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
 import jsPDF from 'jspdf';
+import { urlToBase64 } from '../utils/pdfHelpers';
 
 export const Finances = () => {
     const { profile } = useAuth();
@@ -259,11 +260,12 @@ export const Finances = () => {
             // Logo
             if (logoUrl) {
                 try {
-                     const imgProps = doc.getImageProperties(logoUrl);
+                     const base64Img = await urlToBase64(logoUrl);
+                     const imgProps = doc.getImageProperties(base64Img);
                      const ratio = imgProps.height / imgProps.width;
                      const width = 25;
                      const height = width * ratio;
-                     doc.addImage(logoUrl, 'PNG', 20, 15, width, height);
+                     doc.addImage(base64Img, 'PNG', 20, 15, width, height);
                 } catch (e) { console.warn("Logo error", e); }
             }
 
