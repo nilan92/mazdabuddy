@@ -368,11 +368,11 @@ export const Invoices = () => {
                 </div>
 
                 {/* PREVIEW */}
-                <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl p-4 md:p-6 flex flex-col ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl md:p-6 flex flex-col overflow-hidden ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
                     {selectedInvoice ? (
-                        <div className="flex-1 flex flex-col h-full overflow-y-auto pb-20 md:pb-0"> 
+                        <div className="flex-1 flex flex-col h-full overflow-y-auto relative"> 
                             {/* Mobile Back & Header */}
-                            <div className="flex flex-col gap-4 mb-6 border-b border-slate-800 pb-4">
+                            <div className="flex flex-col gap-4 mb-6 border-b border-slate-800 pb-4 p-4 md:p-0">
                                 <button onClick={() => setSelectedInvoice(null)} className="md:hidden text-slate-400 flex items-center gap-2 self-start hover:text-white transition-colors print:hidden">
                                     ← Back to List
                                 </button>
@@ -419,9 +419,9 @@ export const Invoices = () => {
                             </div>
 
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}
-                            <div className="w-full mb-6 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="w-full bg-slate-950 rounded-xl border border-slate-800 mb-4 mx-4 md:mx-0 w-[calc(100%-2rem)] md:w-full">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold sticky top-0 z-10">
+                                    <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
                                         <tr>
                                             <th className="px-3 py-3 md:px-6 md:py-4">Item / Description</th>
                                             <th className="px-3 py-3 md:px-6 md:py-4 text-right">Cost</th>
@@ -459,7 +459,7 @@ export const Invoices = () => {
                                             </tr>
                                         )}
                                     </tbody>
-                                    <tfoot className="bg-slate-900 font-bold text-white border-t border-slate-800 sticky bottom-0 z-10">
+                                    <tfoot className="bg-slate-900 font-bold text-white border-t border-slate-800">
                                         <tr>
                                             <td className="px-3 py-3 md:px-6 md:py-4 text-right uppercase text-[10px] md:text-xs tracking-wider text-slate-400">Total Due</td>
                                             <td className="px-3 py-3 md:px-6 md:py-4 text-right text-base md:text-lg text-emerald-400 font-mono">
@@ -470,8 +470,8 @@ export const Invoices = () => {
                                 </table>
                             </div>
 
-                            {/* Actions */}
-                            <div className="flex gap-4 mt-auto sticky bottom-0 bg-slate-900 p-4 border-t border-slate-800 md:relative md:border-t-0 md:bg-transparent md:p-0">
+                            {/* Actions - Pinned Bottom */}
+                            <div className="flex gap-4 p-4 mt-auto border-t border-slate-800 bg-slate-900 sticky bottom-0 z-20">
                                 <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
                                     <Download size={20} /> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span>
                                 </button>
