@@ -148,9 +148,9 @@ export const Customers = () => {
     };
 
     const filteredCustomers = customers.filter(c => 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.phone.includes(searchTerm) ||
-        vehicles.some(v => v.customer_id === c.id && v.license_plate.toLowerCase().includes(searchTerm.toLowerCase()))
+        (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.phone || '').includes(searchTerm) ||
+        vehicles.some(v => v.customer_id === c.id && (v.license_plate || '').toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const handleDeleteVehicle = async (vehicleId: string) => {
@@ -211,7 +211,7 @@ export const Customers = () => {
                             <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-6 gap-4">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
-                                        {customer.name[0]}
+                                        {(customer.name?.[0] || '?').toUpperCase()}
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="text-xl font-bold text-white truncate">{customer.name}</h3>
@@ -371,7 +371,7 @@ export const Customers = () => {
                         <div className="bg-slate-800 p-3 rounded-lg text-center col-span-2">
                              <div className="text-xs text-slate-500 uppercase">Total Value</div>
                              <div className="text-xl font-bold text-cyan-400">
-                                LKR {customerHistory.reduce((sum, job) => sum + (job.estimated_cost_lkr || 0), 0).toLocaleString()}
+                                LKR {customerHistory.reduce((sum, job) => sum + ((job as any).total || job.estimated_cost_lkr || 0), 0).toLocaleString()}
                              </div>
                         </div>
                     </div>
@@ -380,23 +380,34 @@ export const Customers = () => {
                          <div className="text-center text-slate-500 py-8">No job history found.</div>
                     ) : (
                         customerHistory.map(job => (
-                            <div key={job.id} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                                <div className="flex justify-between items-start mb-2">
-                                    <span className={`text-xs px-2 py-1 rounded uppercase font-bold
-                                        ${job.status === 'completed' ? 'text-emerald-400 bg-emerald-900/30' : 'text-cyan-400 bg-cyan-900/30'}`}>
-                                        {job.status.replace('_', ' ')}
-                                    </span>
-                                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                                        <Calendar size={12} /> {new Date(job.created_at).toLocaleDateString()}
-                                    </span>
-                                </div>
-                                <h4 className="font-bold text-white">
-                                     {/* @ts-ignore */}
-                                    {job.vehicles?.make} {job.vehicles?.model} ({job.vehicles?.license_plate})
-                                </h4>
+                                <div 
+                                    key={job.id} 
+                                    className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 hover:border-cyan-500/50 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                        setIsHistoryModalOpen(false);
+                                        if (job.status === 'completed') {
+                                            window.location.hash = `#/invoices?job_id=${job.id}`;
+                                        } else {
+                                            window.location.hash = `#/jobs/${job.id}`;
+                                        }
+                                    }}
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className={`text-xs px-2 py-1 rounded uppercase font-bold
+                                            ${job.status === 'completed' ? 'text-emerald-400 bg-emerald-900/30' : 'text-cyan-400 bg-cyan-900/30'}`}>
+                                            {job.status.replace('_', ' ')}
+                                        </span>
+                                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                                            <Calendar size={12} /> {new Date(job.created_at).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                    <h4 className="font-bold text-white group-hover:text-cyan-400 transition-colors">
+                                         {/* @ts-ignore */}
+                                        {job.vehicles?.make} {job.vehicles?.model} ({job.vehicles?.license_plate})
+                                    </h4>
                                 <p className="text-sm text-slate-400 mt-1">{job.description}</p>
                                 <div className="mt-2 pt-2 border-t border-slate-700 flex justify-end">
-                                    <span className="text-cyan-400 font-mono font-bold">LKR {job.estimated_cost_lkr?.toLocaleString() || 0}</span>
+                                    <span className="text-cyan-400 font-mono font-bold">LKR {((job as any).total || job.estimated_cost_lkr || 0).toLocaleString()}</span>
                                 </div>
                             </div>
                         ))

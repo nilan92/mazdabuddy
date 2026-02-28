@@ -11,6 +11,7 @@ interface AuthContextType {
     loading: boolean;
     error: string | null;
     signOut: () => Promise<void>;
+    refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
     loading: true,
     error: null,
     signOut: async () => {},
+    refreshProfile: async () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -33,6 +35,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Refs for tracking activity and timeouts
     const lastActiveRef = useRef<number>(Date.now());
     const timeoutRef = useRef<any>(null);
+    const profileIdRef = useRef<string | null>(null);
 
     // ⚡️ SPEED HACK 1 REMOVED: No more relying on localStorage for initial loading state.
     // We trust Supabase's async check completely to avoid "flash of unauthenticated content".
@@ -52,17 +55,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, []);
 
     // 🛡️ CRITICAL: Simplified Profile Fetching
-    const fetchProfile = useCallback(async (userId: string) => {
+    const fetchProfile = useCallback(async (userId: string, retryCount = 0) => {
         if (!userId) return;
-        
-        // Return existing profile if already loaded for this user to save a call
-        if (profile?.id === userId) {
+
+        if (profileIdRef.current === userId) {
             setLoading(false);
             return;
         }
 
+        let isRetrying = false;
         try {
-            console.log(`[Auth] Fetching profile for ${userId}...`);
+            console.log(`[Auth] Fetching profile for ${userId}... (Attempt ${retryCount + 1})`);
             const { data, error: fetchError } = await supabase
                 .from('profiles')
                 .select(`
@@ -71,7 +74,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         id,
                         name,
                         brand_color,
-                        logo_url
+                        logo_url,
+                        address,
+                        phone,
+                        terms_and_conditions,
+                        default_labor_rate
                     )
                 `)
                 .eq('id', userId)
@@ -80,26 +87,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (fetchError) {
                 console.error("[Auth] Profile Sync Error:", fetchError);
                 
+                // Retry mechanism for race conditions during signup
+                if (retryCount < 3 && (fetchError.code === 'PGRST116' || fetchError.message?.includes('recursion'))) {
+                    console.log(`[Auth] Retrying profile fetch in 2s (Attempt ${retryCount + 1}/3)...`);
+                    isRetrying = true;
+                    setTimeout(() => fetchProfile(userId, retryCount + 1), 2000);
+                    return;
+                }
+
                 // Check for specific recursion error
-                if (fetchError.message?.includes('infinite recursion')) {
+                if (fetchError.message?.includes('recursion')) {
                     setError("Database Policy Error: Infinite Recursion detected. Please contact support.");
-                } else if (fetchError.code !== 'PGRST116') {
-                    // PGRST116 is "Row not found", which is "okay" (user might be new), others are bad.
+                } else if (fetchError.code === 'PGRST116') {
+                    // PGRST116 means the profile row doesn't exist. 
+                    // This is critical - we can't let the user in without a profile.
+                    setError("Profile Not Found: Your user account is missing its profile data.");
+                } else {
                     setError(`Sync Failed: ${fetchError.message}`);
                 }
             }
 
             if (data) {
                 console.log('[Auth] Profile cached.');
+                profileIdRef.current = userId;
                 setProfile(data as any);
+                setError(null);
             }
         } catch (e: any) {
             console.error("[Auth] Fetch exception:", e);
             setError(e.message);
         } finally {
-            setLoading(false);
+            if (!isRetrying) {
+                setLoading(false);
+            }
         }
-    }, [profile]);
+    }, []);
 
     // 🔄 RESTORED: Full Inactivity Detection Logic
     // This tracks mouse movements and clicks to keep the session alive
@@ -150,10 +172,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (loading) {
             const watchdog = setTimeout(() => {
                 if (loading && !error) {
-                    console.warn('[Auth] Loading state stuck for >10s. Releasing.');
+                    console.warn('[Auth] Loading state stuck for >30s. Releasing.');
                     setLoading(false); 
                 }
-            }, 10000); // 10 seconds timeout
+            }, 30000); // 30 seconds timeout to handle cold starts
             return () => clearTimeout(watchdog);
         }
     }, [loading, error]);
@@ -218,10 +240,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 if (currentSession?.user) {
                      lastActiveRef.current = Date.now();
                      localStorage.setItem('lastActivity', String(Date.now()));
-                     // Only fetch profile if not already loaded or if user changed
-                     if (profile?.id !== currentSession.user.id) {
-                        await fetchProfile(currentSession.user.id);
-                     }
+                     // Let fetchProfile handle the deduplication internally via ref to avoid React effect bouncing
+                     await fetchProfile(currentSession.user.id);
                 } else {
                     setLoading(false);
                 }
@@ -254,7 +274,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
         };
-    }, [signOut, fetchProfile, profile]);
+    }, [signOut, fetchProfile]);
 
     if (isInactiveSignout) {
         return (
@@ -293,8 +313,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         )
     }
 
+    const refreshProfile = useCallback(async () => {
+        if (user) {
+            console.log('[Auth] Refreshing profile...');
+             const { data, error } = await supabase
+                .from('profiles')
+                .select(`
+                    *,
+                    tenants (
+                        id,
+                        name,
+                        brand_color,
+                        logo_url,
+                        address,
+                        phone,
+                        terms_and_conditions,
+                        default_labor_rate
+                    )
+                `)
+                .eq('id', user.id)
+                .single();
+            
+            if (error) console.error('[Auth] Error refreshing profile:', error);
+            if (data) setProfile(data as any);
+        }
+    }, [user]);
+
     return (
-        <AuthContext.Provider value={{ session, user, profile, loading, error, signOut }}>
+        <AuthContext.Provider value={{ session, user, profile, loading, error, signOut, refreshProfile }}>
             {children}
         </AuthContext.Provider>
     );

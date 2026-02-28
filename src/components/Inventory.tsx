@@ -18,10 +18,10 @@ export const Inventory = () => {
         name: '',
         part_number: '',
         location: '',
-        stock_quantity: 0,
-        min_stock_level: 5,
-        price_lkr: 0,
-        cost_lkr: 0
+        stock_quantity: '' as string | number,
+        min_stock_level: 5 as string | number,
+        price_lkr: '' as string | number,
+        cost_lkr: '' as string | number
     });
 
     const { data: parts = [], isLoading: loading } = useQuery({
@@ -44,10 +44,10 @@ export const Inventory = () => {
             name: '',
             part_number: '',
             location: '',
-            stock_quantity: 0,
+            stock_quantity: '',
             min_stock_level: 5,
-            price_lkr: 0,
-            cost_lkr: 0
+            price_lkr: '',
+            cost_lkr: ''
         });
         setIsModalOpen(true);
     };
@@ -277,7 +277,7 @@ export const Inventory = () => {
                                 required
                                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-2.5 focus:border-cyan-500 focus:outline-none"
                                 value={formData.stock_quantity}
-                                onChange={e => setFormData({...formData, stock_quantity: Number(e.target.value)})}
+                                onChange={e => setFormData({...formData, stock_quantity: e.target.value})}
                             />
                         </div>
                         <div>
@@ -288,7 +288,7 @@ export const Inventory = () => {
                                 required
                                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-2.5 focus:border-cyan-500 focus:outline-none"
                                 value={formData.min_stock_level}
-                                onChange={e => setFormData({...formData, min_stock_level: Number(e.target.value)})}
+                                onChange={e => setFormData({...formData, min_stock_level: e.target.value})}
                             />
                         </div>
                     </div>
@@ -303,7 +303,7 @@ export const Inventory = () => {
                                 required
                                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-2.5 focus:border-cyan-500 focus:outline-none"
                                 value={formData.cost_lkr}
-                                onChange={e => setFormData({...formData, cost_lkr: Number(e.target.value)})}
+                                onChange={e => setFormData({...formData, cost_lkr: e.target.value})}
                             />
                         </div>
                         <div>
@@ -315,7 +315,7 @@ export const Inventory = () => {
                                 required
                                 className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-2.5 focus:border-cyan-500 focus:outline-none"
                                 value={formData.price_lkr}
-                                onChange={e => setFormData({...formData, price_lkr: Number(e.target.value)})}
+                                onChange={e => setFormData({...formData, price_lkr: e.target.value})}
                             />
                         </div>
                     </div>

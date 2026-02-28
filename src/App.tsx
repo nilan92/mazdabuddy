@@ -1,4 +1,4 @@
-import { useEffect, Suspense, lazy } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Layout } from './components/Layout';
@@ -43,7 +43,20 @@ const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) 
 );
 
 const AuthGuard = ({ children }: { children: React.ReactNode }) => {
-    const { session, profile, loading, error, signOut } = useAuth();
+    const { session, profile, loading, error, signOut, refreshProfile } = useAuth();
+    const [retryCount, setRetryCount] = useState(0);
+
+    // Auto-retry Identity Sync up to 3 times if it fails
+    useEffect(() => {
+        if (!loading && (!profile || error) && session && retryCount < 3) {
+            const timer = setTimeout(() => {
+                console.log(`[App] Auto-retrying profile sync (Attempt ${retryCount + 1})...`);
+                refreshProfile();
+                setRetryCount((prev: number) => prev + 1);
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [loading, profile, error, session, retryCount, refreshProfile]);
     
     // 1. If we are busy checking authentication, show the loading screen.
     // We do NOT use localStorage checks anymore to avoid race conditions.

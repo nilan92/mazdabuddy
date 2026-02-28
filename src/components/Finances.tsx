@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Clock, Search, Plus, Filter, Trash2, PieChart, Briefcase, FileText, Download, Calendar } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Clock, Search, Plus, Filter, Trash2, PieChart, FileText, Download, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
@@ -64,7 +64,7 @@ export const Finances = () => {
             // 3. Fetch Job Parts Costs (completed jobs only)
             const { data: jobParts, error: partsErr } = await supabase
                 .from('job_parts')
-                .select('*, parts(cost_lkr, name), job_cards!inner(status, vehicles(license_plate))')
+                .select('*, parts(cost_lkr, name), job_cards!inner(id, status, vehicles(license_plate, customers(name)))')
                 .eq('job_cards.status', 'completed');
             
             if (partsErr) console.warn('[Finances] Parts cost fetch error:', partsErr);
@@ -72,38 +72,68 @@ export const Finances = () => {
             // 4. Fetch Job Labor Costs
             const { data: jobLabor, error: laborErr } = await supabase
                 .from('job_labor')
-                .select('*, job_cards!inner(status, vehicles(license_plate))')
+                .select('*, job_cards!inner(id, status, vehicles(license_plate, customers(name)))')
                 .eq('job_cards.status', 'completed');
 
             if (laborErr) console.warn('[Finances] Labor cost fetch error:', laborErr);
 
-            // Fetch tenant settings to get accurate labor cost
-            const { data: settings } = await supabase.from('tenants').select('default_labor_rate').single();
 
-            const laborCostBasis = settings?.default_labor_rate ? Number(settings.default_labor_rate) : 1500;
             // Process integrated expenses
             const integratedJobExp = [
-                ...(jobParts || []).map(jp => ({
-                    id: `jp-${jp.id}`,
-                    date: jp.created_at,
-                    description: `Part: ${jp.parts?.name || jp.custom_name || 'Item'}`,
-                    category: 'parts',
-                    amount_lkr: (Number(jp.parts?.cost_lkr) || 0) * (jp.quantity || 1),
-                    profiles: { full_name: 'Job System' },
-                    job_cards: jp.job_cards,
-                    is_automatic: true
-                })),
-                ...(jobLabor || []).map(jl => ({
-                    id: `jl-${jl.id}`,
-                    date: jl.created_at,
-                    description: `Labor: ${jl.description || 'Service'}`,
-                    category: 'labor',
-                    // FIX: Use defined cost basis, not hardcoded 1000
-                    amount_lkr: (Number(jl.hours) || 0) * laborCostBasis, 
-                    profiles: { full_name: jl.mechanic_name || 'Technician' },
-                    job_cards: jl.job_cards,
-                    is_automatic: true
-                }))
+                ...(jobParts || []).flatMap(jp => {
+                    const cost = jp.is_custom 
+                        ? (Number(jp.cost_at_time_lkr) || 0) 
+                        : (Number(jp.parts?.cost_lkr) || 0);
+                    const sell = Number(jp.price_at_time_lkr) || 0;
+                    const profit = (sell - cost) * (jp.quantity || 1);
+                    const qty = jp.quantity || 1;
+                    const partName = jp.parts?.name || jp.custom_name || 'Item';
+                    const jobStr = jp.job_cards?.id ? jp.job_cards.id.slice(0,8).toUpperCase() : 'UNKNOWN';
+
+                    const rows: any[] = [
+                        {
+                            id: `jp-${jp.id}`,
+                            date: jp.created_at,
+                            description: `Part Cost: ${partName} (Job #${jobStr})`,
+                            category: 'parts',
+                            amount_lkr: cost * qty,
+                            profiles: { full_name: 'Job System' },
+                            job_cards: jp.job_cards,
+                            is_automatic: true
+                        }
+                    ];
+
+                    if (profit > 0) {
+                        rows.push({
+                            id: `jp-${jp.id}-profit`,
+                            date: jp.created_at,
+                            description: `Part Profit: ${partName} (Job #${jobStr})`,
+                            category: 'part_margin',
+                            amount_lkr: 0,
+                            display_amount: profit,
+                            profiles: { full_name: 'Job System' },
+                            job_cards: jp.job_cards,
+                            is_automatic: true
+                        });
+                    }
+                    return rows;
+                }),
+                ...(jobLabor || []).map(jl => {
+                    const revenue = (Number(jl.hours) || 0) * (Number(jl.hourly_rate_lkr) || 0);
+                    return {
+                        id: `jl-${jl.id}`,
+                        date: jl.created_at,
+                        description: `Labor: ${jl.description || 'Service'} (Job #${jl.job_cards?.id ? jl.job_cards.id.slice(0,8).toUpperCase() : 'UNKNOWN'})`,
+                        category: 'labor',
+                        // Labor is 100% Profit (0 Cost). We store 0 here to not affect Expense Total.
+                        // We will handle visual display in the table.
+                        amount_lkr: 0, 
+                        display_amount: revenue, // Pass this for UI to show "Profit"
+                        profiles: { full_name: jl.mechanic_name || 'Technician' },
+                        job_cards: jl.job_cards,
+                        is_automatic: true
+                    };
+                })
             ];
 
             const allExpenses = [
@@ -121,7 +151,7 @@ export const Finances = () => {
             setExpenses(allExpenses);
 
         } catch (error: any) {
-            if (error.name !== 'AbortError') {
+            if (error.name !== 'AbortError' && !error.message?.includes('AbortError')) {
                 console.error('[Finances Fetch Error]', error);
                 alert("Financial Sync Failed: " + error.message);
             }
@@ -225,9 +255,10 @@ export const Finances = () => {
         const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
         const profit = revenue - totalExpenses;
 
-        // Category breakdown
+        // Category breakdown (filter out profit rows so they don't show as 0 expense)
         const categoryBreakdown: Record<string, number> = {};
         filteredExpenses.forEach(exp => {
+            if (exp.category === 'labor' || exp.category === 'part_margin') return;
             const category = exp.category || 'other';
             categoryBreakdown[category] = (categoryBreakdown[category] || 0) + Number(exp.amount_lkr);
         });
@@ -380,8 +411,13 @@ export const Finances = () => {
                 doc.text(new Date(exp.date).toLocaleDateString(), 20, yPos);
                 const desc = exp.description.length > 35 ? exp.description.substring(0, 32) + '...' : exp.description;
                 doc.text(desc, 45, yPos);
-                doc.text(exp.category, 120, yPos);
-                doc.text(exp.amount_lkr.toLocaleString(), 160, yPos);
+                doc.text(exp.category || 'unknown', 120, yPos);
+                
+                const displayAmt = (exp.amount_lkr === 0 && exp.display_amount) 
+                    ? `+ ${exp.display_amount.toLocaleString()}` 
+                    : exp.amount_lkr.toLocaleString();
+                
+                doc.text(displayAmt, 160, yPos);
                 yPos += 6;
             });
             
@@ -516,38 +552,48 @@ export const Finances = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {expenses.map((exp) => (
-                                <tr key={exp.id} className="hover:bg-slate-800/30 transition-colors group">
-                                    <td className="px-6 py-4 text-slate-400">{new Date(exp.date).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4 font-medium text-white">
-                                        {exp.description}
-                                        {exp.job_id && (
-                                            <div className="flex items-center gap-1 mt-1">
-                                                <span className="text-[10px] bg-cyan-900/30 text-cyan-400 border border-cyan-900/50 px-1.5 py-0.5 rounded flex items-center w-fit">
-                                                    <Briefcase size={10} className="mr-1" />
-                                                    {/* @ts-ignore */}
-                                                    {exp.job_cards?.vehicles?.license_plate || 'Linked Job'}
-                                                </span>
+
+                                <tr key={exp.id} className="border-b border-slate-800 hover:bg-slate-800/20 group transition-colors">
+                                    <td className="px-6 py-4 text-slate-400 font-mono text-sm">{new Date(exp.date).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-white font-medium">{exp.description}</div>
+                                        {exp.job_cards && (
+                                            <div className="text-xs text-slate-500 mt-0.5">
+                                                Job #{exp.job_cards.id ? exp.job_cards.id.slice(0, 8).toUpperCase() : '???'} • {exp.job_cards.vehicles?.customers?.name || 'Unknown Customer'}
                                             </div>
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase ${
-                                            exp.category === 'parts' ? 'bg-purple-500/10 text-purple-400' :
-                                            exp.category === 'utility' ? 'bg-blue-500/10 text-blue-400' :
+                                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${
+                                            exp.category === 'parts' ? 'bg-blue-500/10 text-blue-400' :
+                                            exp.category === 'labor' ? 'bg-emerald-500/10 text-emerald-400' :
                                             'bg-slate-700 text-slate-300'
                                         }`}>
                                             {exp.category}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-500">{exp.profiles?.full_name || 'System'}</td>
-                                    <td className="px-6 py-4 text-right font-mono font-bold text-white">{exp.amount_lkr.toLocaleString()}</td>
+                                    <td className="px-6 py-4 text-slate-400 text-sm">
+                                        {exp.profiles?.full_name || 'System'}
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-mono font-bold text-white">
+                                        {(exp.category === 'labor' || exp.category === 'part_margin') ? (
+                                            <span className="text-emerald-400 flex flex-col items-end">
+                                                <span>+ {(exp.display_amount || 0).toLocaleString()}</span>
+                                                <span className="text-[10px] text-emerald-500/50">PROFIT</span>
+                                            </span>
+                                        ) : (
+                                            exp.amount_lkr.toLocaleString()
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4 text-center">
-                                        <button 
-                                            onClick={() => handleDeleteExpense(exp.id)}
-                                            className="text-slate-600 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+                                        {!exp.is_automatic && (
+                                            <button 
+                                                onClick={() => handleDeleteExpense(exp.id)}
+                                                className="text-slate-600 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

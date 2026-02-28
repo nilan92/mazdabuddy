@@ -15,13 +15,28 @@ export const Login = () => {
         setLoading(true);
         setError(null);
 
+        // 0. Pre-flight Check: Is Supabase reachable?
+        try {
+            const { error: healthError } = await supabase.from('tenants').select('count', { count: 'exact', head: true });
+            if (healthError && healthError.code !== 'PGRST116') {
+                 // PGRST116 is "Row not found" which is fine, we just want to know if we can hit the DB.
+                 // If we can't, it might be a connection issue.
+                 console.warn("[Login] Health check warning:", healthError);
+            }
+        } catch (netErr) {
+             console.error("[Login] Connection Check Failed:", netErr);
+             setError("Cannot connect to the server. Please check your internet connection.");
+             setLoading(false);
+             return;
+        }
+
         let isTimedOut = false;
         // CHANGED: Increased timeout to 60s for cold starts (Supabase Pausing)
         const timeoutId = setTimeout(() => {
             isTimedOut = true;
             setError("Authentication timed out. The database might be waking up (cold start). Please try again in 10-20 seconds.");
             setLoading(false);
-        }, 60000); 
+        }, 15000); 
 
         try {
             let emailToUse = loginInput.trim();
@@ -53,7 +68,7 @@ export const Login = () => {
 
             if (isTimedOut) return;
 
-            const { error: loginError } = await supabase.auth.signInWithPassword({
+            const { data: authData, error: loginError } = await supabase.auth.signInWithPassword({
                 email: emailToUse,
                 password,
             });
@@ -62,11 +77,16 @@ export const Login = () => {
 
             if (loginError) {
                 console.error('[Login] Supabase Auth Error:', loginError);
-                setError(loginError.message);
-            } else {
+                if (loginError.message === 'Invalid login credentials') {
+                    setError("Invalid password. Please try again.");
+                } else {
+                    setError(loginError.message);
+                }
+            } else if (authData.session) {
                 console.log('[Login] Success! Session established. Redirecting...');
-                // Optionally clear query cache
                 navigate('/');
+            } else {
+                setError("Login failed. No session created.");
             }
         } catch (err: any) {
             if (!isTimedOut) {

@@ -1,6 +1,17 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, PenTool as Tool, Package, FileText, Settings, LogOut, Scan, Users, PieChart, HelpCircle, RefreshCw } from 'lucide-react';
+import { 
+    LayoutDashboard, 
+    PenTool as Tool, 
+    FileText, 
+    Settings,
+    LogOut,
+    Package,
+    PieChart,
+    HelpCircle,
+    RefreshCw,
+    Users
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
 
@@ -25,7 +36,7 @@ export const Layout = ({ children }: LayoutProps) => {
     { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
     { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
-    { to: '/scan', icon: Scan, label: 'Smart Scan', roles: ['admin', 'manager', 'technician'] },
+
     { to: '/finances', icon: PieChart, label: 'Finances', roles: ['admin', 'manager', 'accountant'] },
     { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager'] },
   ];

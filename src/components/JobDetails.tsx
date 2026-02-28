@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle } from 'lucide-react';
+import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, FileText, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
+import jsPDF from 'jspdf';
+import { urlToBase64 } from '../utils/pdfHelpers';
 
 interface JobDetailsProps {
     jobId: string;
@@ -41,6 +43,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     // AI State
     const [aiKey, setAiKey] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
+    const [tenantDetails, setTenantDetails] = useState<any>(null);
 
     const fetchJobDetails = async (signal?: AbortSignal) => {
         try {
@@ -48,7 +51,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             const { data: jobData } = await supabase
                 .from('job_cards')
                 // @ts-ignore
-                .select('*, vehicles(*)')
+                .select('*, vehicles(*, customers(*))')
                 .eq('id', jobId)
                 .abortSignal(signal!)
                 .single();
@@ -107,13 +110,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             if (profile?.tenant_id) {
                 const { data: tenantData } = await supabase
                     .from('tenants')
-                    .select('ai_api_key, brand_color, default_labor_rate')
+                    .select('name, address, phone, logo_url, terms_and_conditions, ai_api_key, brand_color, default_labor_rate')
                     .eq('id', profile.tenant_id)
                     .single();
                 
-                if (tenantData?.ai_api_key) setAiKey(tenantData.ai_api_key);
-                if (tenantData?.default_labor_rate) {
-                    setLaborForm(prev => ({ ...prev, hourly_rate_lkr: tenantData.default_labor_rate.toString() }));
+                if (tenantData) {
+                    setTenantDetails(tenantData);
+                    if (tenantData.ai_api_key) setAiKey(tenantData.ai_api_key);
+                    if (tenantData.default_labor_rate) {
+                        setLaborForm(prev => ({ ...prev, hourly_rate_lkr: tenantData.default_labor_rate.toString() }));
+                    }
                 }
             }
         } catch (error: any) {
@@ -131,6 +137,185 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             controller.abort();
         };
     }, [jobId]);
+
+    const generateJobCardPDF = async () => {
+        if (!job || !tenantDetails) {
+            alert("Job or Shop details missing. Please wait for data to load.");
+            return;
+        }
+
+        try {
+            const doc = new jsPDF();
+            const pageWidth = doc.internal.pageSize.getWidth();
+            
+            // --- Header ---
+            // Logo
+            if (tenantDetails.logo_url) {
+                try {
+                    const base64Img = await urlToBase64(tenantDetails.logo_url);
+                    const imgProps = doc.getImageProperties(base64Img);
+                    const ratio = imgProps.height / imgProps.width;
+                    const width = 30; 
+                    const height = width * ratio;
+                    doc.addImage(base64Img, 'PNG', 15, 10, width, height);
+                } catch (e) { console.warn("Logo error", e); }
+            }
+
+            // Shop Details
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text(tenantDetails.name || 'Workshop', pageWidth - 15, 20, { align: 'right' });
+            
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100);
+            const address = tenantDetails.address || '';
+            const phone = tenantDetails.phone || '';
+            doc.text(address, pageWidth - 15, 26, { align: 'right' });
+            doc.text(phone, pageWidth - 15, 31, { align: 'right' });
+
+            // Title
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.5);
+            doc.line(15, 40, pageWidth - 15, 40);
+            
+            doc.setFontSize(16);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.text("JOB CARD", 15, 50);
+
+            // Job Meta
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Job ID: #${job.id.slice(0, 8).toUpperCase()}`, 15, 58);
+            doc.text(`Date: ${new Date(job.created_at).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 15, 63);
+
+            // Customer & Vehicle
+            // @ts-ignore
+            const customerName = job.vehicles?.customers?.name || "Walk-in Customer";
+            // @ts-ignore
+            const customerPhone = job.vehicles?.customers?.phone || "";
+            const vehicleInfo = job.vehicles ? `${job.vehicles.year} ${job.vehicles.make} ${job.vehicles.model}` : "Unknown Vehicle";
+            const plate = job.vehicles?.license_plate || "N/A";
+
+            doc.setFillColor(245, 245, 245);
+            doc.rect(15, 70, pageWidth - 30, 25, 'F');
+            
+            doc.setFont('helvetica', 'bold');
+            doc.text("Customer:", 20, 78);
+            doc.text("Vehicle:", 110, 78);
+            
+            doc.setFont('helvetica', 'normal');
+            doc.text(`${customerName} (${customerPhone})`, 20, 84);
+            doc.text(`${vehicleInfo} - ${plate}`, 110, 84);
+            doc.text(`Mileage: ${mileage || 'N/A'} km`, 110, 90);
+
+            // Reported Issue
+            doc.setFont('helvetica', 'bold');
+            doc.text("Reported Issue / Request:", 15, 105);
+            doc.setFont('helvetica', 'normal');
+            doc.text(job.description || "No description provided.", 15, 111);
+
+            let yPos = 125;
+
+            // Technician Notes
+            if (techNotes) {
+                doc.setFont('helvetica', 'bold');
+                doc.text("Technician Diagnosis / Diagnosis:", 15, yPos);
+                yPos += 6;
+                doc.setFont('helvetica', 'normal');
+                // Split text to fit width
+                const splitNotes = doc.splitTextToSize(techNotes, pageWidth - 30);
+                doc.text(splitNotes, 15, yPos);
+                yPos += (splitNotes.length * 5) + 10;
+            }
+
+            // Tables (Simplified)
+            // Parts
+            if (jobParts.length > 0) {
+                doc.setFont('helvetica', 'bold');
+                doc.text("Parts & Materials", 15, yPos);
+                yPos += 5;
+                jobParts.forEach(p => {
+                    const name = p.is_custom ? p.custom_name : p.parts?.name;
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`- ${name} (x${p.quantity})`, 20, yPos);
+                    // Minimal/Rugged: No prices on Job Card usually, unless requested? 
+                    // User said "summary... statement... accepted". 
+                    // Usually Job Card for workshop doesn't need prices, but "give to customer" might imply estimate.
+                    // I will leave prices out for "Job Card" (Work Order) style to be rugged/legal, 
+                    // but maybe add them if it's an "Invoice". 
+                    // User said "Job Card... summarizing what they will do".
+                    yPos += 5;
+                });
+                yPos += 5;
+            }
+
+             // Labor
+             if (jobLabor.length > 0) {
+                doc.setFont('helvetica', 'bold');
+                doc.text("Authorized Labor / Services", 15, yPos);
+                yPos += 5;
+                jobLabor.forEach(l => {
+                    doc.setFont('helvetica', 'normal');
+                    doc.text(`- ${l.description} (${l.hours} hrs)`, 20, yPos);
+                    yPos += 5;
+                });
+                yPos += 10;
+            }
+
+            // Terms
+            if (tenantDetails.terms_and_conditions) {
+                if (yPos > 240) { doc.addPage(); yPos = 20; }
+                
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text("Terms & Conditions:", 15, yPos);
+                yPos += 5;
+                const terms = doc.splitTextToSize(tenantDetails.terms_and_conditions, pageWidth - 30);
+                doc.text(terms, 15, yPos);
+                yPos += (terms.length * 3) + 15;
+            } else {
+                 yPos += 20;
+            }
+
+            // Signatures
+            if (yPos > 250) { doc.addPage(); yPos = 20; }
+            
+            doc.setTextColor(0);
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.1);
+            
+            doc.line(15, yPos + 20, 90, yPos + 20); // Customer Sig
+            doc.line(110, yPos + 20, pageWidth - 15, yPos + 20); // Advisor Sig
+            
+            doc.setFontSize(8);
+            doc.text("Customer Signature", 15, yPos + 25);
+            doc.text("Service Advisor / Technician", 110, yPos + 25);
+            
+            doc.text("I authorize the above work and agree to the terms.", 15, yPos + 30);
+
+            doc.save(`JobCard-${job.id.slice(0,6)}.pdf`);
+
+        } catch (e: any) {
+            console.error(e);
+            alert("Error generating PDF: " + e.message);
+        }
+    };
+
+    const handleWhatsApp = () => {
+         // @ts-ignore
+         const phone = job?.vehicles?.customers?.phone;
+         if (!phone) {
+             alert("No customer phone number found.");
+             return;
+         }
+         
+         const vehicle = `${job?.vehicles?.make} ${job?.vehicles?.model}`;
+         const message = `Hello! regarding your ${vehicle} at ${tenantDetails?.name || 'our workshop'}. Status: ${status?.replace('_', ' ')}. ${techNotes ? `Note: ${techNotes}` : ''}`;
+         const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+         window.open(url, '_blank');
+    };
 
     const handleUpdateJob = async () => {
         if (!job) return;
@@ -247,7 +432,6 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             
             const { error } = await supabase.from('job_parts').insert({
                 job_id: jobId,
-                tenant_id: job?.tenant_id, // Added tenant_id
                 part_id: null,
                 quantity: partForm.quantity,
                 price_at_time_lkr: price,
@@ -264,7 +448,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             }
             return;
         }
-
+        
         // 2. Handle Inventory Parts (Secure Transaction)
         // This calls the SQL function we created in Phase 1
         const { data, error } = await supabase.rpc('add_job_part_transaction', {
@@ -287,18 +471,22 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
     const handleAddLabor = async (e: React.FormEvent) => {
         e.preventDefault();
-        const { error } = await supabase.from('job_labor').insert({
-            job_id: jobId,
-            tenant_id: job?.tenant_id, // Added tenant_id
-            hours: parseFloat(laborForm.hours),
-            description: laborForm.description,
-            hourly_rate_lkr: parseFloat(laborForm.hourly_rate_lkr)
-        });
-        if(!error) {
-            fetchJobDetails();
-            setLaborForm(prev => ({...prev, description: '', hours: ''}));
-        } else {
-            alert(error.message);
+        try {
+            const { error } = await supabase.from('job_labor').insert({
+                job_id: jobId,
+                hours: parseFloat(laborForm.hours),
+                description: laborForm.description,
+                hourly_rate_lkr: parseFloat(laborForm.hourly_rate_lkr)
+            });
+            
+            if(!error) {
+                fetchJobDetails();
+                setLaborForm(prev => ({...prev, description: '', hours: ''}));
+            } else {
+                alert(error.message);
+            }
+        } catch (err) {
+            alert("Unexpected error adding labor");
         }
     };
 
@@ -372,12 +560,29 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         </span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 md:gap-3">
+                                     <button 
+                                        onClick={handleWhatsApp}
+                                        className="p-2 text-slate-400 hover:text-green-500 hover:bg-green-500/10 rounded-lg transition-colors"
+                                        title="Notify Customer via WhatsApp"
+                                     >
+                                        <MessageCircle size={20} />
+                                     </button>
+
+                                     <button 
+                                        onClick={generateJobCardPDF}
+                                        className="p-2 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded-lg transition-colors"
+                                        title="Print Job Card"
+                                     >
+                                        <FileText size={20} />
+                                     </button>
+
                                      {job.status === 'completed' && !job.archived && (
                                          <button onClick={handleArchive} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Archive Job">
                                              <Archive size={18} />
                                          </button>
                                      )}
+                                     <div className="h-6 w-px bg-slate-800 hidden md:block"></div>
                                      <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
                                         <X size={20} />
                                     </button>
