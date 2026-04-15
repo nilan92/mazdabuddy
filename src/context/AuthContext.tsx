@@ -128,7 +128,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         if (!session) return;
 
-        const MAX_INACTIVE_TIME = 1000 * 60 * 60 * 12; // 12 Hours
+        const MAX_INACTIVE_TIME = 1000 * 60 * 60 * 18; // 18 Hours
         
         const checkInactivity = setInterval(async () => {
             const now = Date.now();
@@ -256,12 +256,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 const now = Date.now();
                 const hiddenDuration = now - lastActiveRef.current; // Use ref instead of local var to be safe
                 
-                if (hiddenDuration > 1000 * 60 * 30) { // 30 mins
-                    console.log('[Auth] App backgrounded for too long. Re-syncing.');
-                    // Just verify session validity
-                    const { data, error } = await supabase.auth.getSession();
-                    if (error || !data.session) {
-                        signOut();
+                if (hiddenDuration > 1000 * 60 * 60 * 18) { // 18 hours
+                    console.log('[Auth] App inactive for > 18 hours. Signing out.');
+                    setIsInactiveSignout(true);
+                    signOut();
+                } else if (hiddenDuration > 1000 * 60 * 5) { // 5 mins
+                    console.log('[Auth] App back in focus, verifying session passively.');
+                    try {
+                        // Do not forcefully sign out on error here, because network might still be waking up.
+                        // supabase-js will dispatch SIGNED_OUT event automatically if the session is truly invalid/expired.
+                        await supabase.auth.getSession();
+                    } catch (e) {
+                        console.warn('[Auth] Passive session check failed, likely network asleep.', e);
                     }
                 }
             }
