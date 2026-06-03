@@ -30,6 +30,8 @@ export default defineConfig({
       authToken: process.env.SENTRY_AUTH_TOKEN,
       url: 'https://de.sentry.io/',
       telemetry: false,
+      release: { cleanArtifacts: false },
+      errorHandler: (err) => { console.warn('Sentry source map upload failed (non-fatal):', err.message); },
     })] : []),
   ],
 })
