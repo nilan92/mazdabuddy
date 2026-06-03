@@ -789,33 +789,31 @@ export const Settings = () => {
                     onChange={(e) => setSmsApiKey(e.target.value)}
                   />
                 </div>
-                <div className="flex gap-3">
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sender ID <span className="text-slate-600 normal-case font-normal">(your approved ID from text.lk)</span></label>
-                    <input
-                      type="text"
-                      placeholder="TextLKDemo"
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand"
-                      value={smsSenderId}
-                      onChange={(e) => setSmsSenderId(e.target.value)}
-                    />
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <button
-                      onClick={handleCheckBalance}
-                      disabled={smsBalanceLoading || !smsApiKey}
-                      className="px-4 py-3 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition-all active:scale-95 text-sm whitespace-nowrap"
-                    >
-                      {smsBalanceLoading ? "Checking..." : "Check Balance"}
-                    </button>
-                    <button
-                      onClick={handleSaveSMS}
-                      disabled={smsLoading}
-                      className="btn-brand px-6 py-3 rounded-xl font-bold active:scale-95 flex items-center gap-2"
-                    >
-                      <Save size={16} /> {smsLoading ? "Saving..." : "Save"}
-                    </button>
-                  </div>
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sender ID <span className="text-slate-600 normal-case font-normal">(approved ID from app.text.lk → Sender IDs)</span></label>
+                  <input
+                    type="text"
+                    placeholder="TextLKDemo"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand"
+                    value={smsSenderId}
+                    onChange={(e) => setSmsSenderId(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={handleCheckBalance}
+                    disabled={smsBalanceLoading || !smsApiKey}
+                    className="py-3 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition-all active:scale-95 text-sm"
+                  >
+                    {smsBalanceLoading ? "Checking..." : "Check Balance"}
+                  </button>
+                  <button
+                    onClick={handleSaveSMS}
+                    disabled={smsLoading}
+                    className="btn-brand py-3 rounded-xl font-bold active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Save size={16} /> {smsLoading ? "Saving..." : "Save"}
+                  </button>
                 </div>
                 {smsBalance !== null && (
                   <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border ${smsBalance.startsWith('Error') ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>

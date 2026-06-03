@@ -27,21 +27,29 @@
     </script>
     <script>
       // Recover from stale chunk errors (CDN propagation race on deploys)
-      window.addEventListener('error', function(e) {
-        var msg = e.message || '';
-        var isChunkError = msg.includes('Importing a module script failed') ||
-                           msg.includes('Failed to fetch dynamically imported module') ||
-                           msg.includes('error loading dynamically imported module') ||
-                           msg.includes('Unable to preload CSS');
+      function handleChunkError(msg) {
+        var isChunkError = (msg || '').includes('Importing a module script failed') ||
+                           (msg || '').includes('Failed to fetch dynamically imported module') ||
+                           (msg || '').includes('error loading dynamically imported module') ||
+                           (msg || '').includes('Unable to preload CSS');
         if (isChunkError) {
           var reloadedKey = 'chunk_reload_at';
           var last = parseInt(localStorage.getItem(reloadedKey) || '0', 10);
-          if (Date.now() - last > 30000) { // Only retry once per 30s
+          if (Date.now() - last > 30000) {
             localStorage.setItem(reloadedKey, String(Date.now()));
             window.location.reload();
           }
           return true;
         }
+        return false;
+      }
+      window.addEventListener('error', function(e) {
+        return handleChunkError(e.message);
+      }, true);
+      // Also catch dynamic import Promise rejections (lazy() components)
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = (e.reason && (e.reason.message || String(e.reason))) || '';
+        if (handleChunkError(msg)) e.preventDefault();
       }, true);
 
       // Suppress Chrome extension noise

@@ -472,7 +472,7 @@ export const Finances = () => {
                     <h1 className="text-3xl font-bold text-white mb-2">Financial Overview</h1>
                     <p className="text-slate-400">Track revenue, expenses, and profitability.</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-2 flex-wrap">
                     <button
                         onClick={() => downloadCSV('expenses', expenses.map((e: any) => ({
                             date: e.date, description: e.description, category: e.category,
@@ -481,19 +481,19 @@ export const Finances = () => {
                         className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors"
                         title="Export CSV"
                     >
-                        <Download size={20} />
+                        <Download size={18} />
                     </button>
                     <button
                         onClick={() => setIsReportModalOpen(true)}
-                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-cyan-500/20 transition-all active:scale-95"
+                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm"
                     >
-                        <FileText size={20} /> Generate Report
+                        <FileText size={16} /> <span className="hidden sm:inline">Generate </span>Report
                     </button>
                     <button
                         onClick={() => setIsExpenseModalOpen(true)}
-                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm"
                     >
-                        <Plus size={20} /> Add Expense
+                        <Plus size={16} /> <span className="hidden sm:inline">Add </span>Expense
                     </button>
                 </div>
             </div>
