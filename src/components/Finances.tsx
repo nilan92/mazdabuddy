@@ -3,11 +3,14 @@ import { DollarSign, TrendingUp, TrendingDown, Clock, Search, Plus, Filter, Tras
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { downloadCSV } from '../lib/csv';
 import jsPDF from 'jspdf';
 import { urlToBase64 } from '../utils/pdfHelpers';
 
 export const Finances = () => {
     const { profile } = useAuth();
+    const { toast } = useToast();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         revenue: 0,
@@ -153,7 +156,7 @@ export const Finances = () => {
         } catch (error: any) {
             if (error.name !== 'AbortError' && !error.message?.includes('AbortError')) {
                 console.error('[Finances Fetch Error]', error);
-                alert("Financial Sync Failed: " + error.message);
+                toast("Financial sync failed: " + error.message, 'error');
             }
         } finally {
             if (!signal?.aborted) setLoading(false);
@@ -193,11 +196,12 @@ export const Finances = () => {
             job_id: expenseForm.job_id || null
         });
 
-        if (error) alert("Error: " + error.message);
+        if (error) toast(error.message, 'error');
         else {
             setIsExpenseModalOpen(false);
             setExpenseForm({ amount: '', description: '', category: 'parts', date: new Date().toISOString().split('T')[0], job_id: '' });
             fetchFinances();
+            toast('Expense added.', 'success');
         }
         setSubmitting(false);
     };
@@ -205,8 +209,8 @@ export const Finances = () => {
     const handleDeleteExpense = async (id: string) => {
         if (!confirm("Delete this expense?")) return;
         const { error } = await supabase.from('user_expenses').delete().eq('id', id);
-        if (error) alert(error.message);
-        else fetchFinances();
+        if (error) toast(error.message, 'error');
+        else { fetchFinances(); toast('Expense deleted.', 'info'); }
     };
 
     // Report Generation Functions
@@ -442,10 +446,10 @@ export const Finances = () => {
             const fileName = `Financial_Report_${reportType}_${reportDateRange.startDate}_to_${reportDateRange.endDate}.pdf`;
             doc.save(fileName);
             
-            alert('Report generated successfully!');
+            toast('Report downloaded.', 'success');
         } catch (error) {
             console.error('PDF Generation Error:', error);
-            alert('Failed to generate PDF report. Please try again.');
+            toast('Failed to generate report.', 'error');
         } finally {
             setGeneratingReport(false);
         }
@@ -465,13 +469,23 @@ export const Finances = () => {
                     <p className="text-slate-400">Track revenue, expenses, and profitability.</p>
                 </div>
                 <div className="flex gap-3">
-                    <button 
+                    <button
+                        onClick={() => downloadCSV('expenses', expenses.map((e: any) => ({
+                            date: e.date, description: e.description, category: e.category,
+                            amount_lkr: e.amount_lkr, logged_by: e.logged_by,
+                        })))}
+                        className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors"
+                        title="Export CSV"
+                    >
+                        <Download size={20} />
+                    </button>
+                    <button
                         onClick={() => setIsReportModalOpen(true)}
                         className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-cyan-500/20 transition-all active:scale-95"
                     >
                         <FileText size={20} /> Generate Report
                     </button>
-                    <button 
+                    <button
                         onClick={() => setIsExpenseModalOpen(true)}
                         className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
                     >

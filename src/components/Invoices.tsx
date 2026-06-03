@@ -103,7 +103,7 @@ export const Invoices = () => {
         
         if (error) {
             console.error("Error updating invoice:", error);
-            alert(`Failed to update status: ${error.message}`);
+            console.error("Failed to update invoice status:", error.message);
         } else {
             const updatedInv = { ...selectedInvoice, status: newStatus };
             setSelectedInvoice(updatedInv);

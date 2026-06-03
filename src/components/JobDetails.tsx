@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
+import { logAudit } from '../lib/audit';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import jsPDF from 'jspdf';
@@ -435,6 +436,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         } else {
             onUpdate();
             setJob(prev => prev ? { ...prev, ...updates } : null);
+            if (job?.tenant_id) {
+                logAudit(job.tenant_id, profile?.id, `job.status_changed`, 'job_card', jobId, {
+                    from: job.status, to: status,
+                    vehicle: `${job.vehicles?.make} ${job.vehicles?.model}`,
+                    plate: job.vehicles?.license_plate,
+                });
+            }
 
             const autoSMS = tenantDetails?.sms_auto_enabled !== false; // default true
             if (status === 'completed' && job?.status !== 'completed') {
@@ -568,7 +576,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
     const handleAiAssist = async () => {
         if (!aiKey) {
-            alert("AI API Key not configured in Settings.");
+            toast("AI API Key not configured in Settings.", 'warning');
+        return;
             return;
         }
         setIsAiLoading(true);

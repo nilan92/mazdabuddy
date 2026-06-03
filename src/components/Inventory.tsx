@@ -5,10 +5,12 @@ import type { Part } from '../types';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const Inventory = () => {
     const { profile } = useAuth();
+    const { toast } = useToast();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -71,7 +73,7 @@ export const Inventory = () => {
         if (!confirm("Are you sure you want to delete this part?")) return;
         
         const { error } = await supabase.from('parts').delete().eq('id', id);
-        if (error) alert(error.message);
+        if (error) toast(error.message, 'error');
         else refreshParts();
     };
 
@@ -97,10 +99,11 @@ export const Inventory = () => {
         }
 
         if (result.error) {
-            alert("Error: " + result.error.message);
+            toast(result.error.message, 'error');
         } else {
             setIsModalOpen(false);
             refreshParts();
+            toast(editingPart ? 'Part updated.' : 'Part added.', 'success');
         }
     };
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Save,
   RefreshCcw,
@@ -12,11 +12,13 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { checkSMSBalance } from "../lib/sms";
 
 export const Settings = () => {
   const { profile, refreshProfile } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const isAdmin = profile?.role === "admin";
   const [activeTab, setActiveTab] = useState<
@@ -130,9 +132,9 @@ export const Settings = () => {
       // Invalidate all tenant-related caches so PDF/invoice use the new logo immediately
       queryClient.invalidateQueries({ queryKey: ['tenant'] });
       await refreshProfile();
-      alert("Logo updated successfully!");
+      toast("Logo updated!", 'success');
     } catch (error: any) {
-      alert(error.message);
+      toast(error.message, 'error');
     } finally {
       setUploading(false);
     }
@@ -158,20 +160,16 @@ export const Settings = () => {
 
     const contrast = checkColorContrast(brandColor);
     if (contrast === "TOO_DARK") {
-      alert(
-        "This color is too dark. It will be invisible on our dark theme. Please pick a brighter shade.",
-      );
+      toast("This color is too dark — it'll be invisible on the dark theme.", 'warning');
       return;
     }
     if (contrast === "TOO_LIGHT") {
-      alert(
-        "This color is too bright. It will make white text unreadable. Please pick a slightly darker shade.",
-      );
+      toast("This color is too bright — white text won't be readable.", 'warning');
       return;
     }
 
         if (!profile?.tenant_id) {
-            alert("Error: No Tenant ID found. Cannot update settings.");
+            toast("No tenant ID found.", 'error');
             return;
         }
         
@@ -213,13 +211,13 @@ export const Settings = () => {
             }
 
             console.log('[Settings] Update Successful');
-            alert('Settings saved successfully!');
-            await refreshProfile(); 
+            toast('Settings saved.', 'success');
+            await refreshProfile();
             fetchTenantData();
             queryClient.invalidateQueries({ queryKey: ["tenant"] });
         } catch (error: any) {
             console.error('Error saving settings:', error);
-            alert('Failed to save settings: ' + error.message);
+            toast('Failed to save settings: ' + error.message, 'error');
         }
   };
 
@@ -241,12 +239,13 @@ export const Settings = () => {
       .update(editForm)
       .eq("id", id);
     if (error) {
-      alert("Failed to update user: " + error.message);
+      toast("Failed to update user: " + error.message, 'error');
     } else {
       setUsers((prev) =>
         prev.map((u) => (u.id === id ? { ...u, ...editForm } : u)),
       );
       setEditingUserId(null);
+      toast("User updated.", 'success');
     }
   };
 
@@ -254,9 +253,10 @@ export const Settings = () => {
     if (!confirm(`Are you sure you want to remove ${name}?`)) return;
     const { error } = await supabase.from("profiles").delete().eq("id", id);
     if (error) {
-      alert("Failed to delete user: " + error.message);
+      toast("Failed to delete user: " + error.message, 'error');
     } else {
       setUsers((prev) => prev.filter((u) => u.id !== id));
+      toast("User removed.", 'info');
     }
   };
 
@@ -268,9 +268,9 @@ export const Settings = () => {
         .update({ ai_api_key: aiApiKey })
         .eq("id", profile?.tenant_id);
       if (error) throw error;
-      alert("AI configuration updated!");
+      toast("AI configuration saved.", 'success');
     } catch (error: any) {
-      alert("Error saving AI key: " + error.message);
+      toast("Error saving AI key: " + error.message, 'error');
     } finally {
       setAiLoading(false);
     }
@@ -298,9 +298,9 @@ export const Settings = () => {
         .update({ sms_api_key: smsApiKey, sms_sender_id: smsSenderId, sms_auto_enabled: smsAutoEnabled })
         .eq("id", profile?.tenant_id);
       if (error) throw error;
-      alert("SMS configuration saved!");
+      toast("SMS configuration saved.", 'success');
     } catch (error: any) {
-      alert("Error saving SMS config: " + error.message);
+      toast("Error saving SMS config: " + error.message, 'error');
     } finally {
       setSmsLoading(false);
     }
@@ -362,12 +362,23 @@ export const Settings = () => {
             onClick={() => setActiveTab("ai")}
             className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}
             style={{
-              borderBottomColor:
-                activeTab === "ai" ? brandColor : "transparent",
+              borderBottomColor: activeTab === "ai" ? brandColor : "transparent",
               color: activeTab === "ai" ? brandColor : undefined,
             }}
           >
             AI & Intelligence
+          </button>
+        )}
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab("audit" as any)}
+            className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}
+            style={{
+              borderBottomColor: activeTab === ("audit" as any) ? brandColor : "transparent",
+              color: activeTab === ("audit" as any) ? brandColor : undefined,
+            }}
+          >
+            Audit Log
           </button>
         )}
       </div>
@@ -572,9 +583,7 @@ export const Settings = () => {
                     onClick={() => {
                       if (profile?.tenant_id) {
                         navigator.clipboard.writeText(profile.tenant_id);
-                        alert(
-                          "Workshop ID copied! Staff can use this to register.",
-                        );
+                        toast("Workshop ID copied!", 'success');
                       }
                     }}
                     className="p-1 hover:bg-slate-800 rounded transition-colors text-slate-500"
@@ -591,9 +600,7 @@ export const Settings = () => {
                   onClick={() => {
                     const registerUrl = `${window.location.origin}${window.location.pathname}#/register?workshop_id=${profile?.tenant_id}`;
                     navigator.clipboard.writeText(registerUrl);
-                    alert(
-                      "Registration link copied! Send this to your staff member to invite them.",
-                    );
+                    toast("Invite link copied — send to your staff member.", 'success');
                   }}
                   className="text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-500"
                 >
@@ -884,16 +891,12 @@ export const Settings = () => {
                             jobOrphans.map((j) => j.id),
                           );
                         if (error) throw error;
-                        alert(
-                          `Successfully repaired ${jobOrphans.length} job cards!`,
-                        );
+                        toast(`Repaired ${jobOrphans.length} job cards.`, 'success');
                       } else {
-                        alert(
-                          "No orphaned job cards found. Your data looks good!",
-                        );
+                        toast("No orphaned job cards found — data looks good!", 'info');
                       }
                     } catch (e: any) {
-                      alert("Repair Error: " + e.message);
+                      toast("Repair error: " + e.message, 'error');
                     } finally {
                       setLoading(false);
                     }
@@ -910,7 +913,52 @@ export const Settings = () => {
             </div>
           </div>
         )}
+
+        {(activeTab as any) === "audit" && isAdmin && (
+          <AuditLogTab tenantId={profile?.tenant_id} />
+        )}
       </div>
     </div>
   );
 };
+
+function AuditLogTab({ tenantId }: { tenantId?: string }) {
+  const [logs, setLogs] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const { supabase: _sb } = { supabase: null }; // unused — using module import below
+
+  React.useEffect(() => {
+    if (!tenantId) return;
+    import('../lib/supabase').then(({ supabase }) => {
+      supabase
+        .from('audit_logs')
+        .select('*, profiles(full_name)')
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false })
+        .limit(100)
+        .then(({ data }) => { setLogs(data || []); setLoading(false); });
+    });
+  }, [tenantId]);
+
+  if (loading) return <div className="text-slate-500 text-center py-12">Loading audit log...</div>;
+  if (!logs.length) return <div className="text-slate-500 text-center py-12">No activity recorded yet.</div>;
+
+  return (
+    <div className="space-y-2">
+      {logs.map(log => (
+        <div key={log.id} className="flex items-start gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-xl">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono bg-slate-800 text-cyan-400 px-2 py-0.5 rounded">{log.action}</span>
+              {log.meta?.plate && <span className="text-xs text-slate-400">{log.meta.plate}</span>}
+              {log.meta?.from && <span className="text-xs text-slate-500">{log.meta.from} → {log.meta.to}</span>}
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              {log.profiles?.full_name || 'System'} · {new Date(log.created_at).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

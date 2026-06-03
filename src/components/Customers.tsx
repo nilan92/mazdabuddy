@@ -13,6 +13,7 @@ import type { Customer, Vehicle, JobCard } from '../types';
 export const Customers = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
+
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -37,7 +38,8 @@ export const Customers = () => {
             const { data, error } = await supabase
                 .from('customers')
                 .select('*')
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .limit(500);
             if (error) throw error;
             return data as Customer[];
         }
@@ -82,12 +84,11 @@ export const Customers = () => {
         
         if (editingCustomer) {
              const { error } = await supabase.from('customers').update(customerForm).eq('id', editingCustomer.id);
-             if (error) alert(error.message);
+             if (error) toast(error.message, 'error');
         } else {
-             // Added tenant_id to payload
              const payload = { ...customerForm, tenant_id: profile?.tenant_id };
              const { error } = await supabase.from('customers').insert([payload]);
-             if (error) alert(error.message);
+             if (error) toast(error.message, 'error');
         }
         
         setIsCustomerModalOpen(false);
@@ -110,10 +111,10 @@ export const Customers = () => {
         if (editingVehicle) {
             const { tenant_id, ...updatePayload } = payload; 
             const { error } = await supabase.from('vehicles').update(updatePayload).eq('id', editingVehicle.id);
-            if (error) alert(error.message);
+            if (error) toast(error.message, 'error');
         } else {
             const { error } = await supabase.from('vehicles').insert([payload]);
-            if (error) alert(error.message);
+            if (error) toast(error.message, 'error');
         }
         
         setIsVehicleModalOpen(false);
@@ -125,8 +126,8 @@ export const Customers = () => {
     const deleteCustomer = async (id: string) => {
         if (!confirm('Are you sure? This will delete all vehicles for this customer.')) return;
         const { error } = await supabase.from('customers').delete().eq('id', id);
-        if (error) alert(error.message);
-        else refreshData();
+        if (error) toast(error.message, 'error');
+        else { refreshData(); }
     };
 
     const fetchHistory = async (customerId: string) => {
@@ -160,11 +161,8 @@ export const Customers = () => {
     const handleDeleteVehicle = async (vehicleId: string) => {
         if (!confirm("Are you sure? This will permanently delete this vehicle and all its job history.")) return;
         const { error } = await supabase.from('vehicles').delete().eq('id', vehicleId);
-        if (error) {
-            alert("Error deleting vehicle: " + error.message);
-        } else {
-            refreshData();
-        }
+        if (error) toast("Error deleting vehicle: " + error.message, 'error');
+        else refreshData();
     };
 
     return (
