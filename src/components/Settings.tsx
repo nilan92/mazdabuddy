@@ -334,7 +334,7 @@ export const Settings = () => {
         </div>
       </div>
 
-      <div className="flex border-b border-slate-800 mb-6">
+      <div className="flex border-b border-slate-800 mb-6 overflow-x-auto scrollbar-none whitespace-nowrap">
         <button
           onClick={() => setActiveTab("general")}
           className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}

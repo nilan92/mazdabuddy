@@ -389,22 +389,21 @@ export const Invoices = () => {
                                     ← Back to List
                                 </button>
                                 
-                                {/* Company Header (Visible in Preview & Print) */}
-                                <div className="flex justify-between items-start border-b border-slate-800 pb-6 mb-6">
-                                    <div>
-                                         <h1 className="text-2xl font-black text-white uppercase tracking-tight" style={{ color: tenant?.brand_color || '#06b6d4' }}>
+                                {/* Company Header */}
+                                <div className="flex flex-col gap-3 border-b border-slate-800 pb-4 mb-4 sm:flex-row sm:justify-between sm:items-start">
+                                    <div className="min-w-0">
+                                        <h1 className="text-lg font-black text-white uppercase tracking-tight leading-tight truncate" style={{ color: tenant?.brand_color || '#06b6d4' }}>
                                             {tenant?.name || 'Service Center'}
-                                         </h1>
-                                         <div className="text-sm text-slate-400 mt-1 space-y-0.5">
-                                            <p>{tenant?.address}</p>
+                                        </h1>
+                                        <div className="text-xs text-slate-400 mt-1 space-y-0.5">
+                                            <p className="truncate">{tenant?.address}</p>
                                             <p>{tenant?.phone}</p>
-                                            <p>{tenant?.email}</p>
-                                         </div>
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Invoice</div>
-                                        <div className="text-xl font-mono text-white">{selectedInvoice.invoiceNumber}</div>
-                                        <div className="text-xs text-slate-500 mt-1">{selectedInvoice.date}</div>
+                                    <div className="text-left sm:text-right flex-shrink-0">
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Invoice</div>
+                                        <div className="text-base font-mono text-white font-bold">{selectedInvoice.invoiceNumber}</div>
+                                        <div className="text-xs text-slate-500 mt-0.5">{selectedInvoice.date}</div>
                                     </div>
                                 </div>
                                     
@@ -431,7 +430,7 @@ export const Invoices = () => {
                             </div>
 
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}
-                            <div className="w-full bg-slate-950 rounded-xl border border-slate-800 mb-4 mx-4 md:mx-0 w-[calc(100%-2rem)] md:w-full">
+                            <div className="w-full bg-slate-950 rounded-xl border border-slate-800 mb-4 overflow-x-auto">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
                                         <tr>

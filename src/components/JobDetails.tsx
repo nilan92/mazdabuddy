@@ -7,6 +7,7 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
 import { logAudit } from '../lib/audit';
+import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import jsPDF from 'jspdf';
@@ -449,6 +450,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             const autoSMS = tenantDetails?.sms_auto_enabled !== false; // default true
             if (status === 'completed' && job?.status !== 'completed') {
                 toast("Job completed & invoice generated!", 'success');
+                // Push to all tenant admins/managers
+                if (job?.tenant_id) {
+                    sendPushNotification({
+                        tenantId: job.tenant_id,
+                        title: '✅ Job Completed',
+                        body: `${job.vehicles?.make} ${job.vehicles?.model} (${job.vehicles?.license_plate}) is ready.`,
+                        tag: 'job-completed',
+                        url: `/mazdabuddy/#/jobs`,
+                    }).catch(() => {});
+                }
                 if (autoSMS) {
                     const phone = getCustomerPhone();
                     if (phone && job?.tenant_id) {
