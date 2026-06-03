@@ -730,7 +730,7 @@ export const Settings = () => {
                 <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-3">
                   OpenRouter API Key
                 </label>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <input
                     type="password"
                     placeholder="sk-or-v1-..."
@@ -741,7 +741,7 @@ export const Settings = () => {
                   <button
                     onClick={handleSaveAiKey}
                     disabled={aiLoading}
-                    className="btn-brand px-6 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                    className="btn-brand px-6 py-3 rounded-xl font-bold transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 whitespace-nowrap"
                   >
                     <Save size={18} /> {aiLoading ? "Saving..." : "Apply Key"}
                   </button>

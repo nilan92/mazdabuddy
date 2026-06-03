@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle, XCircle, Info, AlertTriangle, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -49,21 +50,28 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       {children}
       {createPortal(
         <div className="fixed top-4 right-4 z-[99999] flex flex-col gap-2 pointer-events-none max-w-sm w-full pr-0">
+          <AnimatePresence mode="popLayout">
           {toasts.map(t => {
             const Icon = ICONS[t.type];
             return (
-              <div
+              <motion.div
                 key={t.id}
-                className={`flex items-start gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur-md shadow-2xl pointer-events-auto animate-fade-in ${COLORS[t.type]}`}
+                layout
+                initial={{ opacity: 0, x: 48, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                exit={{ opacity: 0, x: 48, scale: 0.95 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 30, mass: 0.7 }}
+                className={`flex items-start gap-3 px-4 py-3 rounded-xl border border-slate-700 bg-slate-900/95 backdrop-blur-md shadow-2xl pointer-events-auto ${COLORS[t.type]}`}
               >
                 <Icon size={16} className="mt-0.5 flex-shrink-0" />
                 <span className="text-sm text-slate-200 flex-1 leading-snug">{t.message}</span>
                 <button onClick={() => dismiss(t.id)} className="text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0">
                   <X size={14} />
                 </button>
-              </div>
+              </motion.div>
             );
           })}
+          </AnimatePresence>
         </div>,
         document.body
       )}

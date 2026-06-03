@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertTriangle } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface ConfirmOptions {
   title?: string;
@@ -44,13 +45,20 @@ export const ConfirmProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
+      <AnimatePresence>
       {state?.visible && createPortal(
-        <div
+        <motion.div
           className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
           onClick={() => handle(false)}
         >
-          <div
+          <motion.div
             className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+            initial={{ scale: 0.92, opacity: 0, y: 12 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 8 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-start gap-4 mb-6">
@@ -76,10 +84,11 @@ export const ConfirmProvider = ({ children }: { children: ReactNode }) => {
                 {state.confirmLabel ?? 'Confirm'}
               </button>
             </div>
-          </div>
-        </div>,
+          </motion.div>
+        </motion.div>,
         document.body
       )}
+      </AnimatePresence>
     </ConfirmContext.Provider>
   );
 };

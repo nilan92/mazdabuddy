@@ -66,7 +66,65 @@
   }
 }
 
-/* Custom Scrollbar */
+/* ── Futuristic micro-animations ─────────────────────────── */
+
+/* Subtle glow pulse on active elements */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--brand-soft); }
+  50%       { box-shadow: 0 0 20px var(--brand-primary), 0 0 40px var(--brand-soft); }
+}
+
+/* Success checkmark / confirm ripple */
+@keyframes success-ripple {
+  0%   { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Subtle data-scan line (used on SmartScan, HUD elements) */
+@keyframes scan-sweep {
+  0%   { transform: translateY(-100%); opacity: 0.6; }
+  50%  { opacity: 1; }
+  100% { transform: translateY(100%); opacity: 0.6; }
+}
+
+/* Soft fade-up entrance */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Stat card number shimmer */
+@keyframes number-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0% 0 0); }
+}
+
+/* Kanban card entrance stagger */
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-fade-up   { animation: fade-up 0.25s ease-out forwards; }
+.animate-card-in   { animation: card-in 0.22s ease-out forwards; }
+.animate-glow      { animation: glow-pulse 2.5s ease-in-out infinite; }
+
+/* Stagger helpers */
+.stagger-1 { animation-delay: 0.06s; }
+.stagger-2 { animation-delay: 0.12s; }
+.stagger-3 { animation-delay: 0.18s; }
+.stagger-4 { animation-delay: 0.24s; }
+
+/* Interactive card lift */
+.card-hover {
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+}
+
+/* ── Custom Scrollbar ─────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

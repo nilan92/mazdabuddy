@@ -288,12 +288,12 @@ export const Jobs = () => {
                             </div>
                             <div className="p-3 space-y-3 flex-1 overflow-y-auto">
                                 {filteredJobs.filter(j => j.status === col.id).map(job => (
-                                    <div 
-                                        key={job.id} 
+                                    <div
+                                        key={job.id}
                                         draggable
                                         onDragStart={(e) => handleDragStart(e, job.id)}
                                         onClick={() => setSelectedJobId(job.id)}
-                                        className="bg-slate-900 hover:bg-slate-800 p-4 rounded-lg border border-slate-800 cursor-pointer shadow-sm hover:border-cyan-500/50 transition-all group"
+                                        className="bg-slate-900 hover:bg-slate-800 p-4 rounded-lg border border-slate-800 cursor-pointer shadow-sm hover:border-cyan-500/50 transition-all group card-hover animate-card-in"
                                     >
                                         <div className="flex justify-between items-start mb-2">
                                             <span className="text-xs font-mono text-brand bg-brand-soft px-1.5 py-0.5 rounded border border-brand/20">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -165,38 +166,20 @@ export const Dashboard = () => {
             </>
         ) : (
             <>
-                <StatCard
-                  title="Monthly Revenue"
-                  value={`LKR ${(stats.revenue).toLocaleString()}`}
-                  subtext="Invoices this month"
-                  icon={DollarSign}
-                  colorClass="text-emerald-400"
-                  onClick={() => navigate('/finances')}
-                />
-                <StatCard
-                  title="Active Jobs"
-                  value={stats.activeJobs}
-                  subtext="Currently on floor"
-                  icon={Briefcase}
-                  colorClass="text-brand"
-                  onClick={() => navigate('/jobs')}
-                />
-                <StatCard
-                  title="Total Customers"
-                  value={stats.totalCustomers}
-                  subtext="Registered clients"
-                  icon={Users}
-                  colorClass="text-violet-400"
-                  onClick={() => navigate('/customers')}
-                />
-                <StatCard
-                  title="Efficiency"
-                  value={stats.efficiency}
-                  subtext={stats.efficiency === 'N/A' ? 'No labor data yet' : 'Last 20 completed jobs'}
-                  icon={Activity}
-                  colorClass="text-amber-400"
-                  onClick={handleEfficiencyClick}
-                />
+                {[
+                  { title: 'Monthly Revenue', value: `LKR ${(stats.revenue).toLocaleString()}`, subtext: 'Invoices this month', icon: DollarSign, colorClass: 'text-emerald-400', onClick: () => navigate('/finances') },
+                  { title: 'Active Jobs', value: stats.activeJobs, subtext: 'Currently on floor', icon: Briefcase, colorClass: 'text-brand', onClick: () => navigate('/jobs') },
+                  { title: 'Total Customers', value: stats.totalCustomers, subtext: 'Registered clients', icon: Users, colorClass: 'text-violet-400', onClick: () => navigate('/customers') },
+                  { title: 'Efficiency', value: stats.efficiency, subtext: stats.efficiency === 'N/A' ? 'No labor data yet' : 'Last 20 completed jobs', icon: Activity, colorClass: 'text-amber-400', onClick: handleEfficiencyClick },
+                ].map((card, i) => (
+                  <motion.div key={card.title}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.07, ease: [0.25, 0.1, 0.25, 1] }}
+                  >
+                    <StatCard {...card} />
+                  </motion.div>
+                ))}
             </>
         )}
       </div>
