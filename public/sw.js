@@ -10,6 +10,13 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(clients.claim());
 });
 
+// ── Fetch pass-through ────────────────────────────────────
+// iOS Safari PWA silently drops cross-origin POST requests when a SW
+// is registered without a fetch handler. This explicit pass-through fixes it.
+self.addEventListener('fetch', (e) => {
+  e.respondWith(fetch(e.request));
+});
+
 // ── Push notifications ────────────────────────────────────
 self.addEventListener('push', (e) => {
   if (!e.data) return;
