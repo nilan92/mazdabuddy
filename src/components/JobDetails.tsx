@@ -154,10 +154,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         }
     };
 
+    // Lock body scroll while slide-over is open
+    useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = prev; };
+    }, []);
+
     useEffect(() => {
         const controller = new AbortController();
         fetchJobDetails(controller.signal);
-        
+
         return () => {
             controller.abort();
         };
@@ -932,6 +939,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         ))}
                                         {jobLabor.length === 0 && <p className="text-center text-slate-600 py-2 text-sm italic">No labor entries yet.</p>}
                                     </div>
+                                </div>
+
+                                {/* ── BOTTOM CLOSE (one-handed) ─────────── */}
+                                <div className="border-t border-slate-800 p-4">
+                                    <button
+                                        onClick={handleClose}
+                                        className="w-full py-3 rounded-xl text-sm font-bold text-slate-400 bg-slate-800/60 hover:bg-slate-700 hover:text-white border border-slate-700 transition-colors active:scale-95 flex items-center justify-center gap-2"
+                                    >
+                                        <X size={16} /> Close Job Card
+                                    </button>
                                 </div>
 
                             </div>

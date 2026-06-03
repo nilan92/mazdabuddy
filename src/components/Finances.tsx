@@ -13,6 +13,8 @@ export const Finances = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
     const confirm = useConfirm();
+    const [expPage, setExpPage] = useState(0);
+    const EXP_PER_PAGE = 20;
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         revenue: 0,
@@ -458,7 +460,7 @@ export const Finances = () => {
     };
 
     return (
-        <div className="p-2 space-y-8 h-[calc(100vh-100px)] flex flex-col overflow-y-auto">
+        <div className="p-2 space-y-8 overflow-x-hidden">
             {loading && (
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900/90 border border-cyan-500/20 px-4 py-2 rounded-full backdrop-blur shadow-xl animate-fade-in">
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-500 border-t-transparent"></div>
@@ -538,7 +540,7 @@ export const Finances = () => {
             </div>
 
             {/* Expenses Table */}
-            <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-2xl flex flex-col">
+            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl flex flex-col">
                 <div className="p-6 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Clock size={20} className="text-cyan-400" /> Expense Log
@@ -554,33 +556,33 @@ export const Finances = () => {
                     </div>
                 </div>
                 
-                <div className="flex-1 overflow-x-auto">
-                    <table className="w-full text-left text-sm">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm min-w-[500px]">
                         <thead className="bg-slate-950/50 text-slate-400 uppercase text-[10px] font-bold tracking-widest">
                             <tr>
-                                <th className="px-6 py-4">Date</th>
-                                <th className="px-6 py-4">Description</th>
-                                <th className="px-6 py-4">Category</th>
-                                <th className="px-6 py-4">Logged By</th>
-                                <th className="px-6 py-4 text-right">Amount (LKR)</th>
-                                <th className="px-6 py-4 text-center">Action</th>
+                                <th className="px-4 py-3">Date</th>
+                                <th className="px-4 py-3">Description</th>
+                                <th className="px-4 py-3">Category</th>
+                                <th className="px-4 py-3 hidden md:table-cell">Logged By</th>
+                                <th className="px-4 py-3 text-right">Amount</th>
+                                <th className="px-4 py-3 text-center w-10"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
-                            {expenses.map((exp) => (
+                            {expenses.slice(expPage * EXP_PER_PAGE, (expPage + 1) * EXP_PER_PAGE).map((exp) => (
 
                                 <tr key={exp.id} className="border-b border-slate-800 hover:bg-slate-800/20 group transition-colors">
-                                    <td className="px-6 py-4 text-slate-400 font-mono text-sm">{new Date(exp.date).toLocaleDateString()}</td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-white font-medium">{exp.description}</div>
+                                    <td className="px-4 py-3 text-slate-400 font-mono text-xs whitespace-nowrap">{new Date(exp.date).toLocaleDateString()}</td>
+                                    <td className="px-4 py-3">
+                                        <div className="text-white font-medium text-sm">{exp.description}</div>
                                         {exp.job_cards && (
                                             <div className="text-xs text-slate-500 mt-0.5">
-                                                Job #{exp.job_cards.id ? exp.job_cards.id.slice(0, 8).toUpperCase() : '???'} • {exp.job_cards.vehicles?.customers?.name || 'Unknown Customer'}
+                                                {exp.job_cards.vehicles?.customers?.name || 'Customer'}
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded ${
+                                    <td className="px-4 py-3">
+                                        <span className={`text-xs font-bold uppercase px-2 py-0.5 rounded ${
                                             exp.category === 'parts' ? 'bg-blue-500/10 text-blue-400' :
                                             exp.category === 'labor' ? 'bg-emerald-500/10 text-emerald-400' :
                                             'bg-slate-700 text-slate-300'
@@ -588,26 +590,21 @@ export const Finances = () => {
                                             {exp.category}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-slate-400 text-sm">
+                                    <td className="px-4 py-3 text-slate-400 text-xs hidden md:table-cell">
                                         {exp.profiles?.full_name || 'System'}
                                     </td>
-                                    <td className="px-6 py-4 text-right font-mono font-bold text-white">
+                                    <td className="px-4 py-3 text-right font-mono font-bold text-sm whitespace-nowrap">
                                         {(exp.category === 'labor' || exp.category === 'part_margin') ? (
-                                            <span className="text-emerald-400 flex flex-col items-end">
-                                                <span>+ {(exp.display_amount || 0).toLocaleString()}</span>
-                                                <span className="text-[10px] text-emerald-500/50">PROFIT</span>
-                                            </span>
+                                            <span className="text-emerald-400">+ {(exp.display_amount || 0).toLocaleString()}</span>
                                         ) : (
-                                            exp.amount_lkr.toLocaleString()
+                                            <span className="text-white">{exp.amount_lkr.toLocaleString()}</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-4 text-center">
+                                    <td className="px-4 py-3 text-center">
                                         {!exp.is_automatic && (
-                                            <button 
-                                                onClick={() => handleDeleteExpense(exp.id)}
-                                                className="text-slate-600 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                                            >
-                                                <Trash2 size={16} />
+                                            <button onClick={() => handleDeleteExpense(exp.id)}
+                                                className="text-slate-600 hover:text-rose-500 transition-colors">
+                                                <Trash2 size={14} />
                                             </button>
                                         )}
                                     </td>
@@ -621,6 +618,26 @@ export const Finances = () => {
                         </tbody>
                     </table>
                 </div>
+                {/* Pagination */}
+                {expenses.length > EXP_PER_PAGE && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-slate-800">
+                        <span className="text-xs text-slate-500">
+                            {expPage * EXP_PER_PAGE + 1}–{Math.min((expPage + 1) * EXP_PER_PAGE, expenses.length)} of {expenses.length}
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setExpPage(p => Math.max(0, p - 1))}
+                                disabled={expPage === 0}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >← Prev</button>
+                            <button
+                                onClick={() => setExpPage(p => p + 1)}
+                                disabled={(expPage + 1) * EXP_PER_PAGE >= expenses.length}
+                                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >Next →</button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Add Expense Modal */}
