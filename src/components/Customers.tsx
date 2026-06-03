@@ -29,6 +29,11 @@ export const Customers = () => {
     
     const [customerHistory, setCustomerHistory] = useState<JobCard[]>([]);
     
+    // Service reminder SMS modal
+    const [smsModal, setSmsModal] = useState<{ customer: Customer; vehicle: Vehicle | null } | null>(null);
+    const [smsMessage, setSmsMessage] = useState('');
+    const [smsSending, setSmsSending] = useState(false);
+
     // Forms
     const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
     const [vehicleForm, setVehicleForm] = useState({ make: '', model: '', year: '', license_plate: '', color: '', vin: '' });
@@ -238,16 +243,14 @@ export const Customers = () => {
                                         onClick={async () => {
                                             if (!customer.phone) { toast("No phone number for this customer.", 'warning'); return; }
                                             if (!profile?.tenant_id) return;
-                                            // Get first vehicle for the reminder
                                             const veh = (vehicles as Vehicle[]).find(v => v.customer_id === customer.id);
-                                            const make = veh?.make || 'your vehicle';
-                                            const model = veh?.model || '';
-                                            const plate = veh?.license_plate || '';
                                             const { data: tenant } = await supabase.from('tenants').select('name, phone').eq('id', profile.tenant_id).single();
-                                            try {
-                                                await sendSMS(customer.phone, smsTemplates.serviceReminder(customer.name, make, model, plate, tenant?.name || 'us', tenant?.phone || ''), profile.tenant_id);
-                                                toast(`Service reminder sent to ${customer.name}.`, 'success');
-                                            } catch (e: any) { toast("SMS failed: " + e.message, 'error'); }
+                                            const defaultMsg = smsTemplates.serviceReminder(
+                                                customer.name, veh?.make || 'your vehicle', veh?.model || '',
+                                                veh?.license_plate || '', tenant?.name || 'us', tenant?.phone || ''
+                                            );
+                                            setSmsMessage(defaultMsg);
+                                            setSmsModal({ customer, vehicle: veh || null });
                                         }}
                                         className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-blue-400 transition-colors"
                                         title="Send Service Reminder SMS"
@@ -445,6 +448,64 @@ export const Customers = () => {
                         ))
                     )}
                 </div>
+            </Modal>
+
+            {/* Service Reminder SMS Modal */}
+            <Modal isOpen={!!smsModal} onClose={() => setSmsModal(null)} title="Send Service Reminder">
+                {smsModal && (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700">
+                            <div>
+                                <p className="text-white font-bold text-sm">{smsModal.customer.name}</p>
+                                <p className="text-slate-400 text-xs">{smsModal.customer.phone}</p>
+                                {smsModal.vehicle && (
+                                    <p className="text-slate-500 text-xs mt-0.5">
+                                        {smsModal.vehicle.make} {smsModal.vehicle.model} · {smsModal.vehicle.license_plate}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">
+                                Message <span className="text-slate-600 normal-case font-normal">({smsMessage.length} chars)</span>
+                            </label>
+                            <textarea
+                                rows={5}
+                                value={smsMessage}
+                                onChange={e => setSmsMessage(e.target.value)}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-brand resize-none"
+                                placeholder="Type your message..."
+                            />
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setSmsModal(null)}
+                                className="flex-1 py-3 rounded-xl font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                disabled={smsSending || !smsMessage.trim()}
+                                onClick={async () => {
+                                    if (!profile?.tenant_id || !smsModal.customer.phone) return;
+                                    setSmsSending(true);
+                                    try {
+                                        await sendSMS(smsModal.customer.phone, smsMessage, profile.tenant_id);
+                                        toast(`Reminder sent to ${smsModal.customer.name}.`, 'success');
+                                        setSmsModal(null);
+                                    } catch (e: any) {
+                                        toast("SMS failed: " + e.message, 'error');
+                                    } finally {
+                                        setSmsSending(false);
+                                    }
+                                }}
+                                className="flex-1 py-3 rounded-xl font-bold btn-brand disabled:opacity-50 transition-all active:scale-95"
+                            >
+                                {smsSending ? 'Sending...' : 'Send SMS'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </div>
     );
