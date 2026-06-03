@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -23,15 +22,5 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    // Upload source maps to Sentry on production builds
-    ...(process.env.SENTRY_AUTH_TOKEN ? [sentryVitePlugin({
-      org: 'nilanhobbies',
-      project: 'javascript-react',
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      url: 'https://de.sentry.io/',
-      telemetry: false,
-      release: { cleanArtifacts: false },
-      errorHandler: (err) => { console.warn('Sentry source map upload failed (non-fatal):', err.message); },
-    })] : []),
   ],
 })
