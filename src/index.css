@@ -87,13 +87,20 @@
   100% { transform: translateY(100%); opacity: 0.6; }
 }
 
-/* Job card slide-in from right */
+/* Job card slide-in/out from right */
 @keyframes slide-in-right {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
 }
+@keyframes slide-out-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
 .animate-slide-in-right {
   animation: slide-in-right 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+.animate-slide-out-right {
+  animation: slide-out-right 0.22s cubic-bezier(0.55, 0, 1, 0.45) forwards;
 }
 
 /* Page transition — CSS only, no unmount, no Suspense flash */

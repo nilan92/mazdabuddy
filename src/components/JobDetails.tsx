@@ -24,6 +24,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const { toast } = useToast();
     const confirm = useConfirm();
     const [job, setJob] = useState<JobCard | null>(null);
+    const [closing, setClosing] = useState(false);
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
     const [jobLabor, setJobLabor] = useState<JobLabor[]>([]);
     const [allParts, setAllParts] = useState<Part[]>([]);
@@ -335,6 +336,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         }
     };
 
+    const doClose = () => {
+        if (closing) return; // already closing
+        setClosing(true);
+        setTimeout(() => onClose(), 220);
+    };
+
     const handleClose = async () => {
         if (isDirty) {
             const ok = await confirm({
@@ -344,13 +351,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                 cancelLabel: 'Close Anyway',
                 confirmStyle: 'default',
             });
-            if (ok) {
-                await handleUpdateJob();
-            }
-            // Both "Update & Close" and "Close Anyway" close the panel
-            onClose();
+            if (ok) await handleUpdateJob();
+            doClose();
         } else {
-            onClose();
+            doClose();
         }
     };
 
@@ -673,7 +677,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={handleClose} />
                 <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-0 md:pl-10">
-                    <div className="pointer-events-auto w-screen max-w-lg animate-slide-in-right">
+                    <div className={`pointer-events-auto w-screen max-w-lg ${closing ? 'animate-slide-out-right' : 'animate-slide-in-right'}`}>
                         <div className="flex h-[100dvh] flex-col bg-slate-900 border-l border-slate-800 shadow-2xl">
                             
                             {/* Header */}
