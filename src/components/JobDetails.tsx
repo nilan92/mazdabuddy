@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -47,6 +47,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     });
     const [laborForm, setLaborForm] = useState({ description: '', hours: '', hourly_rate_lkr: '5000' }); // Default 5000
 
+    // Dirty state tracking
+    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '' });
+    const isDirty = (
+        mileage !== initialState.current.mileage ||
+        techNotes !== initialState.current.techNotes ||
+        status !== initialState.current.status ||
+        assignedTech !== initialState.current.assignedTech ||
+        estimatedHours !== initialState.current.estimatedHours
+    );
+    const [savedSuccessfully, setSavedSuccessfully] = useState(false);
+
     // AI State
     const [aiKey, setAiKey] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
@@ -67,11 +78,19 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
             if (jobData) {
                 setJob(jobData as JobCard);
-                setMileage(jobData.mileage?.toString() || '');
-                setTechNotes(jobData.technician_notes || '');
-                setStatus(jobData.status);
-                setAssignedTech(jobData.assigned_technician_id || '');
-                setEstimatedHours(jobData.estimated_hours?.toString() || '');
+                const m = jobData.mileage?.toString() || '';
+                const n = jobData.technician_notes || '';
+                const s = jobData.status;
+                const a = jobData.assigned_technician_id || '';
+                const e = jobData.estimated_hours?.toString() || '';
+                setMileage(m);
+                setTechNotes(n);
+                setStatus(s);
+                setAssignedTech(a);
+                setEstimatedHours(e);
+                // Capture initial state for dirty tracking
+                initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e };
+                setSavedSuccessfully(false);
             }
 
             // Parts
@@ -310,6 +329,21 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         }
     };
 
+    const handleClose = async () => {
+        if (isDirty) {
+            const ok = await confirm({
+                title: 'Unsaved Changes',
+                message: 'You have unsaved changes. Update the job before closing?',
+                confirmLabel: 'Update & Close',
+                confirmStyle: 'default',
+            });
+            if (ok) {
+                await handleUpdateJob();
+            }
+        }
+        onClose();
+    };
+
     const getCustomerPhone = () => {
         // @ts-ignore
         return job?.vehicles?.customers?.phone as string | undefined;
@@ -489,6 +523,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             } else {
                 toast("Job updated successfully.", 'success');
             }
+            // Reset dirty tracking after successful save
+            initialState.current = { mileage, techNotes, status, assignedTech, estimatedHours };
+            setSavedSuccessfully(true);
         }
     };
 
@@ -624,7 +661,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     return createPortal(
         <div className="fixed inset-0 z-[9999] overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
             <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={onClose} />
+                <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={handleClose} />
                 <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-0 md:pl-10">
                     <div className="pointer-events-auto w-screen max-w-lg transform transition-all">
                         <div className="flex h-[100dvh] flex-col bg-slate-900 border-l border-slate-800 shadow-2xl">
@@ -645,28 +682,29 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         </span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 md:gap-3">
-                                     {/* WhatsApp — real brand green */}
+                                <div className="flex items-center gap-1 md:gap-2">
+                                     {/* WhatsApp */}
                                      <button
                                         onClick={handleWhatsApp}
-                                        className="p-2 text-slate-400 hover:text-white rounded-lg transition-colors"
-                                        style={{ '--hover-bg': '#25D366' } as React.CSSProperties}
                                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(37,211,102,0.12)')}
                                         onMouseLeave={e => (e.currentTarget.style.background = '')}
-                                        title="Notify Customer via WhatsApp"
+                                        className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors"
+                                        title="WhatsApp Customer"
                                      >
-                                        {/* WhatsApp SVG icon */}
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#25D366' }}>
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="#25D366">
                                           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
                                         </svg>
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase leading-none">WA</span>
                                      </button>
 
+                                     {/* SMS */}
                                      <button
                                         onClick={() => handleSendSMS(status === 'completed' ? 'completed' : 'status')}
-                                        className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                        className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
                                         title="Send SMS to Customer"
                                      >
-                                        <Smartphone size={20} />
+                                        <Smartphone size={18} />
+                                        <span className="text-[9px] font-bold uppercase leading-none">SMS</span>
                                      </button>
 
                                      {/* Job Card PDF — prominent */}
@@ -685,7 +723,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                          </button>
                                      )}
                                      <div className="h-6 w-px bg-slate-800 hidden md:block"></div>
-                                     <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+                                     <button onClick={handleClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
                                         <X size={20} />
                                     </button>
                                 </div>
@@ -923,9 +961,26 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         LKR {(totalParts + totalLabor).toLocaleString()}
                                     </div>
                                 </div>
-                                <button onClick={handleUpdateJob} className="w-full btn-brand py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-sm">
-                                    <Save size={18} /> Update Job
-                                </button>
+                                {savedSuccessfully && !isDirty ? (
+                                    <button
+                                        onClick={generateJobCardPDF}
+                                        className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
+                                    >
+                                        <Download size={18} /> Download Job Card
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleUpdateJob}
+                                        disabled={!isDirty}
+                                        className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-sm ${
+                                            isDirty
+                                                ? 'btn-brand'
+                                                : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                                        }`}
+                                    >
+                                        <Save size={18} /> {isDirty ? 'Update Job' : 'No Changes'}
+                                    </button>
+                                )}
                             </div>
 
                         </div>
