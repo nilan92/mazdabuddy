@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Customer, Vehicle, JobCard } from '../types';
@@ -13,7 +14,7 @@ import type { Customer, Vehicle, JobCard } from '../types';
 export const Customers = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
-
+    const confirm = useConfirm();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -124,7 +125,7 @@ export const Customers = () => {
     };
 
     const deleteCustomer = async (id: string) => {
-        if (!confirm('Are you sure? This will delete all vehicles for this customer.')) return;
+        if (!await confirm({ title: 'Delete Customer', message: 'This will permanently delete the customer and all their vehicles.', confirmLabel: 'Delete' })) return;
         const { error } = await supabase.from('customers').delete().eq('id', id);
         if (error) toast(error.message, 'error');
         else { refreshData(); }
@@ -159,7 +160,7 @@ export const Customers = () => {
     );
 
     const handleDeleteVehicle = async (vehicleId: string) => {
-        if (!confirm("Are you sure? This will permanently delete this vehicle and all its job history.")) return;
+        if (!await confirm({ title: 'Delete Vehicle', message: 'This will permanently delete this vehicle and all its job history.', confirmLabel: 'Delete' })) return;
         const { error } = await supabase.from('vehicles').delete().eq('id', vehicleId);
         if (error) toast("Error deleting vehicle: " + error.message, 'error');
         else refreshData();

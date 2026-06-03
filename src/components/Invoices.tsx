@@ -15,10 +15,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { urlToBase64 } from '../utils/pdfHelpers';
 import { downloadCSV } from '../lib/csv';
+import { useConfirm } from '../context/ConfirmContext';
 
 export const Invoices = () => {
     const queryClient = useQueryClient();
     const { profile } = useAuth();
+    const confirm = useConfirm();
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -91,9 +93,7 @@ export const Invoices = () => {
         if (!selectedInvoice) return;
         
         // Confirmation for payment status change
-        if (!window.confirm(`Are you sure you want to mark this invoice as ${newStatus}?`)) {
-            return;
-        }
+        if (!await confirm({ message: `Mark this invoice as ${newStatus}?`, confirmLabel: 'Update', confirmStyle: 'default' })) return;
 
         setUpdatingStatus(true);
         const { error } = await supabase

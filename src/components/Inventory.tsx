@@ -6,11 +6,13 @@ import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 export const Inventory = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
+    const confirm = useConfirm();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
     
@@ -70,7 +72,7 @@ export const Inventory = () => {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm("Are you sure you want to delete this part?")) return;
+        if (!await confirm({ title: 'Delete Part', message: 'This will permanently delete this part from inventory.', confirmLabel: 'Delete' })) return;
         
         const { error } = await supabase.from('parts').delete().eq('id', id);
         if (error) toast(error.message, 'error');

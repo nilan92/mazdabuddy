@@ -4,6 +4,7 @@ import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
 import { logAudit } from '../lib/audit';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
@@ -20,6 +21,7 @@ interface JobDetailsProps {
 export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const { profile } = useAuth();
     const { toast } = useToast();
+    const confirm = useConfirm();
     const [job, setJob] = useState<JobCard | null>(null);
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
     const [jobLabor, setJobLabor] = useState<JobLabor[]>([]);
@@ -480,7 +482,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     };
 
     const handleArchive = async () => {
-        if(!confirm("Archive this job? It will be hidden from the active board.")) return;
+        const ok = await confirm({ message: "Archive this job? It will be hidden from the active board.", confirmLabel: "Archive", confirmStyle: "warning" });
+        if (!ok) return;
         const { error } = await supabase.from('job_cards').update({ archived: true }).eq('id', jobId);
         if (error) toast(error.message, 'error');
         else {
@@ -560,7 +563,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     };
 
     const handleRemovePart = async (id: string) => {
-        if(!confirm("Remove this part? Stock will be returned to inventory.")) return;
+        const ok = await confirm({ message: "Remove this part? Stock will be returned to inventory.", confirmLabel: "Remove" });
+        if (!ok) return;
 
         const { error } = await supabase.rpc('remove_job_part_transaction', { p_job_part_id: id });
 

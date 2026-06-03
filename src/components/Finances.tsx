@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { downloadCSV } from '../lib/csv';
 import jsPDF from 'jspdf';
 import { urlToBase64 } from '../utils/pdfHelpers';
@@ -11,6 +12,7 @@ import { urlToBase64 } from '../utils/pdfHelpers';
 export const Finances = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
+    const confirm = useConfirm();
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({
         revenue: 0,
@@ -207,7 +209,7 @@ export const Finances = () => {
     };
 
     const handleDeleteExpense = async (id: string) => {
-        if (!confirm("Delete this expense?")) return;
+        if (!await confirm({ message: 'Delete this expense?', confirmLabel: 'Delete' })) return;
         const { error } = await supabase.from('user_expenses').delete().eq('id', id);
         if (error) toast(error.message, 'error');
         else { fetchFinances(); toast('Expense deleted.', 'info'); }

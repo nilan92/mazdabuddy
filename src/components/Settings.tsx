@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useConfirm } from "../context/ConfirmContext";
 import {
   Save,
   RefreshCcw,
@@ -19,6 +20,7 @@ import { checkSMSBalance } from "../lib/sms";
 export const Settings = () => {
   const { profile, refreshProfile } = useAuth();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const queryClient = useQueryClient();
   const isAdmin = profile?.role === "admin";
   const [activeTab, setActiveTab] = useState<
@@ -250,7 +252,7 @@ export const Settings = () => {
   };
 
   const deleteUser = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to remove ${name}?`)) return;
+    if (!await confirm({ title: 'Remove User', message: `Remove ${name} from the workshop?`, confirmLabel: 'Remove' })) return;
     const { error } = await supabase.from("profiles").delete().eq("id", id);
     if (error) {
       toast("Failed to delete user: " + error.message, 'error');
@@ -369,6 +371,16 @@ export const Settings = () => {
             AI & Intelligence
           </button>
         )}
+        <button
+          onClick={() => setActiveTab("mfa" as any)}
+          className="px-6 py-3 font-bold text-sm transition-colors border-b-2"
+          style={{
+            borderBottomColor: activeTab === ("mfa" as any) ? brandColor : "transparent",
+            color: activeTab === ("mfa" as any) ? brandColor : undefined,
+          }}
+        >
+          Security
+        </button>
         {isAdmin && (
           <button
             onClick={() => setActiveTab("audit" as any)}
@@ -859,12 +871,7 @@ export const Settings = () => {
                 </p>
                 <button
                   onClick={async () => {
-                    if (
-                      !confirm(
-                        "Run data repair? This will link your orphaned records to your current workshop.",
-                      )
-                    )
-                      return;
+                    if (!await confirm({ title: 'Run Data Repair', message: 'This will link orphaned records to your current workshop.', confirmLabel: 'Run Repair', confirmStyle: 'warning' })) return;
                     setLoading(true);
                     try {
                       if (!profile?.tenant_id)
@@ -914,6 +921,10 @@ export const Settings = () => {
           </div>
         )}
 
+        {(activeTab as any) === "mfa" && (
+          <MFATab />
+        )}
+
         {(activeTab as any) === "audit" && isAdmin && (
           <AuditLogTab tenantId={profile?.tenant_id} />
         )}
@@ -921,6 +932,110 @@ export const Settings = () => {
     </div>
   );
 };
+
+function MFATab() {
+  const [factors, setFactors] = React.useState<any[]>([]);
+  const [enrolling, setEnrolling] = React.useState(false);
+  const [qrCode, setQrCode] = React.useState('');
+  const [secret, setSecret] = React.useState('');
+  const [factorId, setFactorId] = React.useState('');
+  const [code, setCode] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+
+  React.useEffect(() => {
+    import('../lib/supabase').then(({ supabase }) => {
+      supabase.auth.mfa.listFactors().then(({ data }) => {
+        setFactors(data?.totp || []);
+      });
+    });
+  }, []);
+
+  const startEnroll = async () => {
+    const { supabase } = await import('../lib/supabase');
+    const { data, error } = await supabase.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'AutoPulse' });
+    if (error) { setMsg(error.message); return; }
+    setQrCode(data.totp.qr_code);
+    setSecret(data.totp.secret);
+    setFactorId(data.id);
+    setEnrolling(true);
+    setMsg('');
+  };
+
+  const verify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { supabase } = await import('../lib/supabase');
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+    if (error) { setMsg(error.message); setLoading(false); return; }
+    setEnrolling(false);
+    setMsg('MFA enabled! Your account is now protected.');
+    supabase.auth.mfa.listFactors().then(({ data }) => setFactors(data?.totp || []));
+    setLoading(false);
+  };
+
+  const unenroll = async (id: string) => {
+    const { supabase } = await import('../lib/supabase');
+    await supabase.auth.mfa.unenroll({ factorId: id });
+    setFactors(f => f.filter(x => x.id !== id));
+    setMsg('MFA removed.');
+  };
+
+  const verified = factors.filter(f => f.status === 'verified');
+
+  return (
+    <div className="max-w-lg space-y-6">
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <h3 className="text-lg font-bold text-white mb-1">Two-Factor Authentication</h3>
+        <p className="text-sm text-slate-400 mb-6">Add an authenticator app (Google Authenticator, Authy) for extra login security.</p>
+
+        {msg && <div className={`mb-4 p-3 rounded-xl text-sm ${msg.includes('enabled') ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{msg}</div>}
+
+        {verified.length > 0 ? (
+          <div className="space-y-3">
+            {verified.map(f => (
+              <div key={f.id} className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                <div>
+                  <p className="text-sm font-bold text-emerald-400">✓ MFA Active</p>
+                  <p className="text-xs text-slate-400">{f.friendly_name || 'Authenticator App'}</p>
+                </div>
+                <button onClick={() => unenroll(f.id)} className="text-xs text-red-400 hover:text-red-300 font-bold">Remove</button>
+              </div>
+            ))}
+          </div>
+        ) : enrolling ? (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-300">Scan this QR code with your authenticator app:</p>
+            <div className="bg-white p-4 rounded-xl inline-block">
+              <img src={qrCode} alt="MFA QR Code" className="w-40 h-40" />
+            </div>
+            <div className="bg-slate-800 p-3 rounded-xl">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Or enter manually:</p>
+              <p className="font-mono text-xs text-white break-all">{secret}</p>
+            </div>
+            <form onSubmit={verify} className="flex gap-3">
+              <input
+                type="text"
+                placeholder="Enter 6-digit code"
+                maxLength={6}
+                value={code}
+                onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
+                className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:border-brand"
+              />
+              <button type="submit" disabled={loading || code.length !== 6} className="btn-brand px-4 py-2 rounded-xl font-bold disabled:opacity-50">
+                {loading ? '...' : 'Verify'}
+              </button>
+            </form>
+          </div>
+        ) : (
+          <button onClick={startEnroll} className="btn-brand px-6 py-3 rounded-xl font-bold">
+            Enable Two-Factor Authentication
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function AuditLogTab({ tenantId }: { tenantId?: string }) {
   const [logs, setLogs] = React.useState<any[]>([]);

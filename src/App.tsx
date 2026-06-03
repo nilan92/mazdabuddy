@@ -142,10 +142,9 @@ const App = () => {
 
         if (localVersion && localVersion !== serverVersion) {
             console.log(`New version found: ${serverVersion} (Current: ${localVersion})`);
-            if (confirm("A new update is available. Refresh now to get the latest features?")) {
-                localStorage.setItem('app_version', serverVersion);
-                window.location.reload();
-            }
+            // Non-blocking toast-style reload — don't use confirm() on auto-check
+            localStorage.setItem('app_version', serverVersion);
+            window.location.reload();
         } else {
             localStorage.setItem('app_version', serverVersion);
         }
