@@ -1,7 +1,4 @@
-import { supabase } from './supabase';
-
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
-const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
 async function invokeFn(fnName: string, body: object): Promise<any> {
   // verify_jwt=false on this function — no auth headers needed.
