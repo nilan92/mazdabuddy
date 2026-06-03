@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare } from 'lucide-react';
+import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, Download } from 'lucide-react';
+import { downloadCSV } from '../lib/csv';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
@@ -174,7 +175,16 @@ export const Customers = () => {
                     <p className="text-slate-400">Manage clients and vehicle registries.</p>
                 </div>
                 <div className="flex gap-2">
-                    <button 
+                    <button
+                        onClick={() => downloadCSV('customers', customers.map((c: any) => ({
+                            name: c.name, phone: c.phone, email: c.email, address: c.address,
+                        })))}
+                        className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                        title="Export CSV"
+                    >
+                        <Download size={20} />
+                    </button>
+                    <button
                         onClick={refreshData}
                         className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
                         title="Refresh"

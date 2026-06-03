@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, RefreshCcw, Archive, UserCheck } from 'lucide-react';
+import { Plus, Search, RefreshCcw, Archive, UserCheck, Download } from 'lucide-react';
+import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
@@ -235,7 +236,20 @@ export const Jobs = () => {
                         <Archive size={16} /> {showArchived ? 'Archived' : 'Active'}
                      </button>
 
-                     <button onClick={() => fetchJobs()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
+                     <button
+                        onClick={() => downloadCSV('jobs', filteredJobs.map(j => ({
+                            plate: j.vehicles?.license_plate,
+                            vehicle: `${j.vehicles?.make} ${j.vehicles?.model}`,
+                            status: j.status,
+                            description: j.description,
+                            created: new Date(j.created_at).toLocaleDateString(),
+                        })))}
+                        className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                        title="Export CSV"
+                    >
+                        <Download size={20} />
+                    </button>
+                    <button onClick={() => fetchJobs()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
                     <button onClick={() => setIsNewJobModalOpen(true)} className="flex items-center gap-2 btn-brand px-4 py-2 rounded-lg font-bold shadow-lg">

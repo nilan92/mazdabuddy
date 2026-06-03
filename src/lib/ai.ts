@@ -1,84 +1,50 @@
-export const generateDiagnosis = async (apiKey: string, vehicle: string, description: string, symptoms: string) => {
-    try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://mazdabuddy.com",
-                "X-Title": "MazdaBuddy",
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                "model": "google/gemini-2.0-flash-exp:free",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are an expert automotive technician assistant. Provide concise, potential diagnoses and a checklist of 3-5 things to check based on the vehicle and reported issue. Keep it professional and short."
-                    },
-                    {
-                        "role": "user",
-                        "content": `Vehicle: ${vehicle}\nIssue: ${description}\nNotes: ${symptoms}`
-                    }
-                ]
-            })
-        });
+import { supabase } from './supabase';
 
-        if (!response.ok) {
-            throw new Error(`AI API Error: ${response.status}`);
-        }
+// All AI calls go through the ai-assist edge function.
+// The OpenRouter API key never touches the frontend.
 
-        const data = await response.json();
-        return data.choices[0]?.message?.content || "No diagnosis generated.";
+export async function generateDiagnosis(
+  _apiKey: string, // kept for backwards compat, ignored — key is fetched server-side
+  vehicle: string,
+  description: string,
+  symptoms: string
+): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
 
-    } catch (error) {
-        console.error("AI Service Error:", error);
-        throw error;
-    }
-};
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .single();
 
-export const analyzeVehicleImage = async (apiKey: string, base64Image: string) => {
-    try {
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "HTTP-Referer": "https://mazdabuddy.com",
-                "X-Title": "AutoPulse",
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                "model": "google/gemini-2.0-pro-exp-02-05:free", // Use pro for better vision
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "Analyze this vehicle image. Extract the following information in JSON format: { \"licensePlate\": \"string\", \"make\": \"string\", \"model\": \"string\", \"color\": \"string\" }. If you can't see something, put 'Unknown'. Be very accurate even if the image is blurry."
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": base64Image
-                                }
-                            }
-                        ]
-                    }
-                ],
-                "response_format": { "type": "json_object" }
-            })
-        });
+  const { data, error } = await supabase.functions.invoke('ai-assist', {
+    body: { action: 'diagnose', tenant_id: profile?.tenant_id, vehicle, description, symptoms },
+  });
 
-        if (!response.ok) {
-            throw new Error(`AI API Error: ${response.status}`);
-        }
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data.result;
+}
 
-        const data = await response.json();
-        const content = data.choices[0]?.message?.content;
-        return JSON.parse(content);
+export async function analyzeVehicleImage(
+  _apiKey: string, // ignored — key fetched server-side
+  base64Image: string
+): Promise<{ licensePlate: string; make: string; model: string; color: string }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
 
-    } catch (error) {
-        console.error("AI Vision Error:", error);
-        throw error;
-    }
-};
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', user.id)
+    .single();
+
+  const { data, error } = await supabase.functions.invoke('ai-assist', {
+    body: { action: 'scan', tenant_id: profile?.tenant_id, image: base64Image },
+  });
+
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  return data.result;
+}

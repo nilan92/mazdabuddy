@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, Plus, AlertTriangle, Package, RefreshCcw, Edit, Trash2 } from 'lucide-react';
+import { Search, Plus, AlertTriangle, Package, RefreshCcw, Edit, Trash2, Download } from 'lucide-react';
+import { downloadCSV } from '../lib/csv';
 import type { Part } from '../types';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
@@ -116,7 +117,18 @@ export const Inventory = () => {
                     <p className="text-slate-400">Track parts, stock levels, and pricing.</p>
                 </div>
                 <div className="flex gap-2">
-                    <button 
+                    <button
+                        onClick={() => downloadCSV('inventory', parts.map((p: any) => ({
+                            name: p.name, part_number: p.part_number, location: p.location,
+                            stock: p.stock_quantity, min_stock: p.min_stock_level,
+                            price_lkr: p.price_lkr, cost_lkr: p.cost_lkr,
+                        })))}
+                        className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
+                        title="Export CSV"
+                    >
+                        <Download size={20} />
+                    </button>
+                    <button
                         onClick={refreshParts}
                         className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors"
                         title="Refresh"

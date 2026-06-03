@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { urlToBase64 } from '../utils/pdfHelpers';
+import { downloadCSV } from '../lib/csv';
 
 export const Invoices = () => {
     const queryClient = useQueryClient();
@@ -314,6 +315,17 @@ export const Invoices = () => {
                     <p className="text-slate-400">Manage billing and payments.</p>
                 </div>
                 <div className="flex gap-2">
+                    <button
+                        onClick={() => downloadCSV('invoices', filteredInvoices.map((inv: any) => ({
+                            invoice_number: inv.invoiceNumber, customer: inv.customer,
+                            vehicle: inv.vehicle, date: inv.date,
+                            status: inv.status, total_lkr: inv.total,
+                        })))}
+                        className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors"
+                        title="Export CSV"
+                    >
+                        <Download size={20} />
+                    </button>
                     <button onClick={refreshInvoices} className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
