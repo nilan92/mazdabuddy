@@ -155,9 +155,19 @@ const App = () => {
 
         if (localVersion && localVersion !== serverVersion) {
             console.log(`New version found: ${serverVersion} (Current: ${localVersion})`);
-            // Non-blocking toast-style reload — don't use confirm() on auto-check
             localStorage.setItem('app_version', serverVersion);
-            window.location.reload();
+            // Show a toast instead of hard-reloading immediately.
+            // Immediate reload races with CDN propagation → chunk load failures.
+            const toast = document.createElement('div');
+            toast.innerHTML = '🔄 Update available — <strong style="cursor:pointer;text-decoration:underline" onclick="window.location.reload()">tap to refresh</strong>';
+            Object.assign(toast.style, {
+                position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+                background: '#0f172a', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.3)',
+                padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: '600',
+                zIndex: '99999', boxShadow: '0 8px 32px rgba(0,0,0,0.5)', whiteSpace: 'nowrap',
+            });
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 10000);
         } else {
             localStorage.setItem('app_version', serverVersion);
         }

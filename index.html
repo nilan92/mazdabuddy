@@ -26,11 +26,29 @@
       })();
     </script>
     <script>
-      // Aggressive error suppression for Chrome extensions that break the app
+      // Recover from stale chunk errors (CDN propagation race on deploys)
       window.addEventListener('error', function(e) {
         var msg = e.message || '';
-        if (msg.includes('injectTMButton') || 
-            msg.includes('chrome-extension') || 
+        var isChunkError = msg.includes('Importing a module script failed') ||
+                           msg.includes('Failed to fetch dynamically imported module') ||
+                           msg.includes('error loading dynamically imported module') ||
+                           msg.includes('Unable to preload CSS');
+        if (isChunkError) {
+          var reloadedKey = 'chunk_reload_at';
+          var last = parseInt(localStorage.getItem(reloadedKey) || '0', 10);
+          if (Date.now() - last > 30000) { // Only retry once per 30s
+            localStorage.setItem(reloadedKey, String(Date.now()));
+            window.location.reload();
+          }
+          return true;
+        }
+      }, true);
+
+      // Suppress Chrome extension noise
+      window.addEventListener('error', function(e) {
+        var msg = e.message || '';
+        if (msg.includes('injectTMButton') ||
+            msg.includes('chrome-extension') ||
             msg.includes('message channel closed')) {
           e.stopImmediatePropagation();
           e.preventDefault();
