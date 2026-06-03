@@ -26,6 +26,9 @@ dist-ssr
 # Claude Code
 CLAUDE.md
 
+# MCP config (contains tokens)
+.mcp.json
+
 # Security
 .env
 .env.local
