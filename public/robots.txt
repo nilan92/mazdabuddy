@@ -1,8 +1,4 @@
 User-agent: *
-Allow: /mazdabuddy/about.html
-Allow: /mazdabuddy/privacy.html
-Allow: /mazdabuddy/terms.html
-Allow: /mazdabuddy/sitemap.xml
-Disallow: /mazdabuddy/
+Disallow:
 
 Sitemap: https://nilan92.github.io/mazdabuddy/sitemap.xml
