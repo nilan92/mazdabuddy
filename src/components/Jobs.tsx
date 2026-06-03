@@ -90,12 +90,12 @@ export const Jobs = () => {
         if (state?.openJobId) {
             setSelectedJobId(state.openJobId);
             // Clear state to prevent reopening on reload
-            window.history.replaceState({}, '', '/#/jobs');
+            window.history.replaceState({}, '', '/mazdabuddy/#/jobs');
         }
 
         if (queryParams.get('action') === 'new') {
             setIsNewJobModalOpen(true);
-            window.history.replaceState({}, '', '/#/jobs'); 
+            window.history.replaceState({}, '', '/mazdabuddy/#/jobs'); 
         }
     }, [profile, location, location.search]);
 

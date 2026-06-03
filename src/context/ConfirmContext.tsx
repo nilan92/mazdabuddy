@@ -7,6 +7,7 @@ interface ConfirmOptions {
   title?: string;
   message: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   confirmStyle?: 'danger' | 'warning' | 'default';
 }
 
@@ -66,7 +67,7 @@ export const ConfirmProvider = ({ children }: { children: ReactNode }) => {
                 onClick={() => handle(false)}
                 className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors"
               >
-                Cancel
+                {state.cancelLabel ?? 'Cancel'}
               </button>
               <button
                 onClick={() => handle(true)}
