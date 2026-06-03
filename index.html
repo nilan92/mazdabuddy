@@ -13,6 +13,19 @@
     <meta name="apple-mobile-web-app-title" content="AutoPulse" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <script>
+      // Redirect unauthenticated visitors to the landing page
+      (function() {
+        var hash = window.location.hash;
+        var hasAppRoute = hash && hash.length > 2 && hash !== '#/';
+        var hasSession = Object.keys(localStorage).some(function(k) {
+          return k.indexOf('supabase') !== -1;
+        });
+        if (!hasAppRoute && !hasSession) {
+          window.location.replace('/mazdabuddy/about.html');
+        }
+      })();
+    </script>
+    <script>
       // Aggressive error suppression for Chrome extensions that break the app
       window.addEventListener('error', function(e) {
         var msg = e.message || '';
