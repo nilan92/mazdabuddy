@@ -707,14 +707,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <span className="text-[9px] font-bold uppercase leading-none">SMS</span>
                                      </button>
 
-                                     {/* Job Card PDF — prominent */}
+                                     {/* Job Card PDF */}
                                      <button
                                         onClick={generateJobCardPDF}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-brand hover:text-white text-slate-300 rounded-lg transition-all text-xs font-bold border border-slate-700 hover:border-brand active:scale-95"
+                                        className="flex flex-col items-center gap-0.5 px-2 py-1.5 bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded-lg transition-all border border-emerald-600/30 hover:border-emerald-500 active:scale-95"
                                         title="Download Job Card PDF"
                                      >
-                                        <Download size={14} />
-                                        <span className="hidden sm:inline">PDF</span>
+                                        <Download size={16} />
+                                        <span className="text-[9px] font-bold uppercase leading-none">PDF</span>
                                      </button>
 
                                      {job.status === 'completed' && !job.archived && (
