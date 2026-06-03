@@ -13,6 +13,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
+import { checkSMSBalance } from "../lib/sms";
 
 export const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -27,6 +28,8 @@ export const Settings = () => {
   const [smsSenderId, setSmsSenderId] = useState("");
   const [smsAutoEnabled, setSmsAutoEnabled] = useState(true);
   const [smsLoading, setSmsLoading] = useState(false);
+  const [smsBalance, setSmsBalance] = useState<string | null>(null);
+  const [smsBalanceLoading, setSmsBalanceLoading] = useState(false);
 
   // Tenant Settings State
   const [tenantName, setTenantName] = useState("");
@@ -269,6 +272,20 @@ export const Settings = () => {
       alert("Error saving AI key: " + error.message);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleCheckBalance = async () => {
+    if (!profile?.tenant_id) return;
+    setSmsBalanceLoading(true);
+    setSmsBalance(null);
+    try {
+      const balance = await checkSMSBalance(profile.tenant_id);
+      setSmsBalance(balance);
+    } catch (e: any) {
+      setSmsBalance('Error: ' + e.message);
+    } finally {
+      setSmsBalanceLoading(false);
     }
   };
 
@@ -743,10 +760,10 @@ export const Settings = () => {
               <p className="text-xs text-slate-500 mb-5">Auto-send SMS when jobs are opened or completed. Uses <strong className="text-slate-400">text.lk</strong> (swap provider in edge function).</p>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">API Key <span className="text-slate-600 normal-case font-normal">(format: email:apikey)</span></label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">API Token <span className="text-slate-600 normal-case font-normal">(from app.text.lk → Developers)</span></label>
                   <input
                     type="password"
-                    placeholder="user@email.com:your_api_key"
+                    placeholder="3388|uXAvFuPDOORLY..."
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand"
                     value={smsApiKey}
                     onChange={(e) => setSmsApiKey(e.target.value)}
@@ -764,7 +781,14 @@ export const Settings = () => {
                       onChange={(e) => setSmsSenderId(e.target.value)}
                     />
                   </div>
-                  <div className="flex items-end">
+                  <div className="flex items-end gap-2">
+                    <button
+                      onClick={handleCheckBalance}
+                      disabled={smsBalanceLoading || !smsApiKey}
+                      className="px-4 py-3 rounded-xl font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 transition-all active:scale-95 text-sm whitespace-nowrap"
+                    >
+                      {smsBalanceLoading ? "Checking..." : "Check Balance"}
+                    </button>
                     <button
                       onClick={handleSaveSMS}
                       disabled={smsLoading}
@@ -774,6 +798,11 @@ export const Settings = () => {
                     </button>
                   </div>
                 </div>
+                {smsBalance !== null && (
+                  <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border ${smsBalance.startsWith('Error') ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>
+                    {smsBalance.startsWith('Error') ? '✗' : '✓'} {smsBalance.startsWith('Error') ? smsBalance : `SMS balance: ${smsBalance} units`}
+                  </div>
+                )}
                 {/* Auto SMS toggle */}
                 <div className="flex items-center justify-between p-3 bg-slate-900 rounded-xl border border-slate-800 mt-1">
                   <div>

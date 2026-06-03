@@ -2,11 +2,24 @@ import { supabase } from './supabase';
 
 export async function sendSMS(to: string, message: string, tenantId: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke('send-sms', {
-    body: { to, message, tenant_id: tenantId },
+    body: { action: 'send', to, message, tenant_id: tenantId },
   });
-
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
+}
+
+export async function checkSMSBalance(tenantId: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke('send-sms', {
+    body: { action: 'balance', tenant_id: tenantId },
+  });
+  if (error) throw new Error(error.message);
+  if (data?.error) throw new Error(data.error);
+  // text.lk returns balance as an object — extract a readable value
+  const b = data?.balance;
+  if (typeof b === 'object' && b !== null) {
+    return b.sms_unit ?? b.balance ?? b.remaining ?? JSON.stringify(b);
+  }
+  return String(b ?? 'Unknown');
 }
 
 // Pre-built message templates
