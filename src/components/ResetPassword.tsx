@@ -82,7 +82,7 @@ export const ResetPassword = () => {
                                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-slate-500 mt-2 italic px-1">At least 6 characters required.</p>
+                                <p className="text-[10px] text-slate-400 mt-2 italic px-1">At least 6 characters required.</p>
                             </div>
 
                             <button 

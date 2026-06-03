@@ -853,19 +853,19 @@ export const Finances = () => {
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-3 gap-3">
                                         <div className="bg-slate-950 rounded-lg p-3 border border-emerald-500/20">
-                                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Revenue</div>
+                                            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Revenue</div>
                                             <div className="text-emerald-400 font-bold font-mono text-sm">
                                                 LKR {previewData.revenue.toLocaleString()}
                                             </div>
                                         </div>
                                         <div className="bg-slate-950 rounded-lg p-3 border border-rose-500/20">
-                                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Expenses</div>
+                                            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Expenses</div>
                                             <div className="text-rose-400 font-bold font-mono text-sm">
                                                 LKR {previewData.expenses.toLocaleString()}
                                             </div>
                                         </div>
                                         <div className={`bg-slate-950 rounded-lg p-3 border ${previewData.profit >= 0 ? 'border-emerald-500/20' : 'border-rose-500/20'}`}>
-                                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Profit</div>
+                                            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Profit</div>
                                             <div className={`font-bold font-mono text-sm ${previewData.profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                 LKR {previewData.profit.toLocaleString()}
                                             </div>
@@ -880,7 +880,7 @@ export const Finances = () => {
                                     {/* Category Breakdown */}
                                     {Object.keys(previewData.categoryBreakdown).length > 0 && (
                                         <div className="border-t border-slate-800 pt-3 mt-3">
-                                            <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Expense Categories</div>
+                                            <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-2">Expense Categories</div>
                                             <div className="space-y-1">
                                                 {Object.entries(previewData.categoryBreakdown).map(([category, amount]) => (
                                                     <div key={category} className="flex items-center justify-between text-xs">

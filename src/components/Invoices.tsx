@@ -408,7 +408,7 @@ export const Invoices = () => {
                                 </div>
                                     
                                     <div className="flex flex-col items-end gap-1 w-full md:w-auto">
-                                        <label className="text-[10px] text-slate-500 font-bold uppercase">Payment Status</label>
+                                        <label className="text-[10px] text-slate-400 font-bold uppercase">Payment Status</label>
                                         <div className="flex items-center gap-2 w-full md:w-auto">
                                             <div className="text-slate-400 hidden md:block">
                                                 {getStatusIcon(selectedInvoice.status)}

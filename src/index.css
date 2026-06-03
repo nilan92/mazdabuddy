@@ -66,6 +66,18 @@
   }
 }
 
+/* ── Accessibility: placeholder contrast ─────────────────── */
+::placeholder { color: #94a3b8; opacity: 1; } /* slate-400, 6.8:1 on dark bg */
+::-webkit-input-placeholder { color: #94a3b8; }
+
+/* ── Accessibility: small uppercase labels ────────────────── */
+/* text-[10px] / text-[11px] with text-slate-500 fail WCAG AA.
+   Override globally — these are field labels, must be readable. */
+.text-\[10px\].text-slate-500,
+.text-\[11px\].text-slate-500 {
+  color: #94a3b8 !important; /* slate-400: 6.8:1 contrast */
+}
+
 /* ── Futuristic micro-animations ─────────────────────────── */
 
 /* Subtle glow pulse on active elements */

@@ -92,7 +92,7 @@ export const HelpModal = ({ isOpen, onClose }: HelpModalProps) => {
                                 </div>
                                 <div className="space-y-0.5">
                                     <div className="text-white text-xs font-bold">{w.title}</div>
-                                    <div className="text-[10px] text-slate-500 leading-tight">{w.desc}</div>
+                                    <div className="text-[10px] text-slate-400 leading-tight">{w.desc}</div>
                                 </div>
                             </div>
                         ))}

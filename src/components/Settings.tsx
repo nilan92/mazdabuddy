@@ -545,7 +545,7 @@ export const Settings = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
-                  <label className="text-[10px] text-slate-500 uppercase font-bold mb-2 block">
+                  <label className="text-[10px] text-slate-400 uppercase font-bold mb-2 block">
                     Default Labor Rate (LKR / hr)
                   </label>
                   <div className="flex items-center gap-3">
@@ -564,7 +564,7 @@ export const Settings = () => {
                   </div>
                 </div>
                 <div className="p-4 bg-slate-950/50 rounded-xl border border-slate-800 opacity-50">
-                  <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold mb-1">
                     Tax Configuration
                   </div>
                   <div className="text-white font-mono">0.00 % (Flat Rate)</div>
@@ -582,7 +582,7 @@ export const Settings = () => {
                   Staff Management
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-slate-500 uppercase font-black">
+                  <span className="text-[10px] text-slate-400 uppercase font-black">
                     Workshop ID:
                   </span>
                   <code
@@ -680,7 +680,7 @@ export const Settings = () => {
                           <div className="font-bold text-white text-sm">
                             {user.full_name}
                           </div>
-                          <div className="text-[10px] text-slate-500 flex items-center gap-1 uppercase tracking-widest font-black">
+                          <div className="text-[10px] text-slate-400 flex items-center gap-1 uppercase tracking-widest font-black">
                             {user.role === "admin" && (
                               <Shield size={10} style={{ color: brandColor }} />
                             )}
@@ -746,7 +746,7 @@ export const Settings = () => {
                     <Save size={18} /> {aiLoading ? "Saving..." : "Apply Key"}
                   </button>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-4 leading-relaxed italic">
+                <p className="text-[10px] text-slate-400 mt-4 leading-relaxed italic">
                   We use <strong>OpenRouter</strong> to provide high-performance
                   vision models like Gemini 2.0. Get your key at{" "}
                   <a
@@ -780,7 +780,7 @@ export const Settings = () => {
               <p className="text-xs text-slate-500 mb-5">Auto-send SMS when jobs are opened or completed. Uses <strong className="text-slate-400">text.lk</strong>. Find your Sender ID at <span className="text-slate-400">app.text.lk → Sender IDs</span>.</p>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">API Token <span className="text-slate-600 normal-case font-normal">(from app.text.lk → Developers)</span></label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">API Token <span className="text-slate-400 normal-case font-normal">(from app.text.lk → Developers)</span></label>
                   <input
                     type="password"
                     placeholder="3388|uXAvFuPDOORLY..."
@@ -790,7 +790,7 @@ export const Settings = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sender ID <span className="text-slate-600 normal-case font-normal">(approved ID from app.text.lk → Sender IDs)</span></label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sender ID <span className="text-slate-400 normal-case font-normal">(approved ID from app.text.lk → Sender IDs)</span></label>
                   <input
                     type="text"
                     placeholder="TextLKDemo"
@@ -824,7 +824,7 @@ export const Settings = () => {
                 <div className="flex items-center justify-between p-3 bg-slate-900 rounded-xl border border-slate-800 mt-1">
                   <div>
                     <p className="text-sm font-bold text-white">Auto-send SMS</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">Fires on: job in progress · job completed</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Fires on: job in progress · job completed</p>
                   </div>
                   <button
                     type="button"
@@ -1008,7 +1008,7 @@ function MFATab() {
               <img src={qrCode} alt="MFA QR Code" className="w-40 h-40" />
             </div>
             <div className="bg-slate-800 p-3 rounded-xl">
-              <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Or enter manually:</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest mb-1">Or enter manually:</p>
               <p className="font-mono text-xs text-white break-all">{secret}</p>
             </div>
             <form onSubmit={verify} className="flex gap-3">

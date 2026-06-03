@@ -25,6 +25,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const confirm = useConfirm();
     const [job, setJob] = useState<JobCard | null>(null);
     const [closing, setClosing] = useState(false);
+    const isInitialLoad = useRef(true);
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
     const [jobLabor, setJobLabor] = useState<JobLabor[]>([]);
     const [allParts, setAllParts] = useState<Part[]>([]);
@@ -78,19 +79,23 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
             if (jobData) {
                 setJob(jobData as JobCard);
-                const m = jobData.mileage?.toString() || '';
-                const n = jobData.technician_notes || '';
-                const s = jobData.status;
-                const a = jobData.assigned_technician_id || '';
-                const e = jobData.estimated_hours?.toString() || '';
-                setMileage(m);
-                setTechNotes(n);
-                setStatus(s);
-                setAssignedTech(a);
-                setEstimatedHours(e);
-                // Capture initial state for dirty tracking
-                initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e };
-                setSavedSuccessfully(false);
+                if (isInitialLoad.current) {
+                    // Only set form fields on first load — subsequent refreshes (after
+                    // adding parts/labor) must NOT overwrite user's unsaved edits
+                    const m = jobData.mileage?.toString() || '';
+                    const n = jobData.technician_notes || '';
+                    const s = jobData.status;
+                    const a = jobData.assigned_technician_id || '';
+                    const e = jobData.estimated_hours?.toString() || '';
+                    setMileage(m);
+                    setTechNotes(n);
+                    setStatus(s);
+                    setAssignedTech(a);
+                    setEstimatedHours(e);
+                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e };
+                    setSavedSuccessfully(false);
+                    isInitialLoad.current = false;
+                }
             }
 
             // Parts
@@ -163,6 +168,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     }, []);
 
     useEffect(() => {
+        isInitialLoad.current = true; // reset on new job
         const controller = new AbortController();
         fetchJobDetails(controller.signal);
 
@@ -868,11 +874,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                     <input required placeholder="Part name (e.g. Engine Oil 4L)" value={partForm.custom_name} onChange={e => setPartForm({...partForm, custom_name: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
                                                     <div className="flex gap-2">
                                                         <div className="relative flex-1">
-                                                            <span className="absolute left-2 top-2 text-[10px] text-slate-500">Sell</span>
+                                                            <span className="absolute left-2 top-2 text-[10px] text-slate-400">Sell</span>
                                                             <input required type="number" onFocus={(e) => e.target.select()} value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
                                                         </div>
                                                         <div className="relative flex-1">
-                                                            <span className="absolute left-2 top-2 text-[10px] text-slate-500">Cost</span>
+                                                            <span className="absolute left-2 top-2 text-[10px] text-slate-400">Cost</span>
                                                             <input required type="number" onFocus={(e) => e.target.select()} value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
                                                         </div>
                                                         <input type="number" min="1" onFocus={(e) => e.target.select()} value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
@@ -921,7 +927,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             </div>
                                             <div className="flex gap-2 items-center">
                                                 <div className="flex-1 relative">
-                                                    <span className="absolute left-2 top-2 text-[10px] text-slate-500">LKR/hr</span>
+                                                    <span className="absolute left-2 top-2 text-[10px] text-slate-400">LKR/hr</span>
                                                     <input required type="number" onFocus={(e) => e.target.select()} value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-12 text-white text-sm font-mono" />
                                                 </div>
                                                 <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
