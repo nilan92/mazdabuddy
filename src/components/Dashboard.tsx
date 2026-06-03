@@ -6,17 +6,17 @@ import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // --- UI Components ---
-const StatCard = ({ title, value, subtext, icon: Icon, color, onClick }: any) => (
-  <div 
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, onClick }: any) => (
+  <div
     onClick={onClick}
     className={`bg-slate-900/50 backdrop-blur border border-slate-800 p-4 rounded-2xl relative overflow-hidden group ${onClick ? 'cursor-pointer hover:bg-slate-800/80 transition-all active:scale-[0.98]' : ''}`}
   >
-    <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
+    <div className={`absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity ${colorClass}`}>
       <Icon size={48} />
     </div>
     <div className="flex items-center gap-3 mb-2">
-      <div className={`p-2 rounded-xl ${color} bg-opacity-10 text-white`}>
-        <Icon size={20} className={color.replace('bg-', 'text-')} />
+      <div className={`p-2 rounded-xl bg-slate-800 ${colorClass}`}>
+        <Icon size={20} />
       </div>
       <h3 className="text-slate-400 font-medium text-sm">{title}</h3>
     </div>
@@ -92,25 +92,30 @@ export const Dashboard = () => {
         .order('completed_at', { ascending: false })
         .limit(20);
 
-      let shopEfficiency = 100; // Default
+      let shopEfficiency: string = 'N/A';
       if (effJobs && effJobs.length > 0) {
-           const totalEff = effJobs.reduce((acc, job: any) => {
-               const est = job.estimated_hours || 0;
-               const actual = (job.total_labor_time || 0) / 60; // Minutes to Hours
-               if (actual === 0) return acc + 100; // Avoid divide by zero, assume perfect
-               // Cap at 200% to avoid outliers skewing data too much? No, raw is fine.
-               return acc + ((est / actual) * 100);
-           }, 0);
-           shopEfficiency = Math.round(totalEff / effJobs.length);
+          const validJobs = effJobs.filter((job: any) => {
+              const est = job.estimated_hours || 0;
+              const actual = (job.total_labor_time || 0) / 60;
+              return est > 0 && actual > 0;
+          });
+          if (validJobs.length > 0) {
+              const totalEff = validJobs.reduce((acc: number, job: any) => {
+                  const est = job.estimated_hours;
+                  const actual = (job.total_labor_time) / 60;
+                  return acc + Math.min((est / actual) * 100, 300); // cap outliers at 300%
+              }, 0);
+              shopEfficiency = `${Math.round(totalEff / validJobs.length)}%`;
+          }
       }
 
       return {
           stats: {
             revenue: stats.monthly_revenue || 0,
             activeJobs: stats.active_jobs || 0,
-            totalCustomers: stats.total_customers || 0, // <--- Correctly mapped
+            totalCustomers: stats.total_customers || 0,
             completedMonth: stats.completed_jobs_month || 0,
-            efficiency: `${shopEfficiency}%` 
+            efficiency: shopEfficiency,
           },
           recentJobs: recent || [],
           lowStock: lowStock || []
@@ -160,36 +165,36 @@ export const Dashboard = () => {
             </>
         ) : (
             <>
-                <StatCard 
-                  title="Monthly Revenue" 
-                  value={`LKR ${(stats.revenue).toLocaleString()}`} 
-                  subtext="Invoices this month" 
-                  icon={DollarSign} 
-                  color="text-emerald-400"
+                <StatCard
+                  title="Monthly Revenue"
+                  value={`LKR ${(stats.revenue).toLocaleString()}`}
+                  subtext="Invoices this month"
+                  icon={DollarSign}
+                  colorClass="text-emerald-400"
                   onClick={() => navigate('/finances')}
                 />
-                <StatCard 
-                  title="Active Jobs" 
-                  value={stats.activeJobs} 
-                  subtext="Currently on floor" 
-                  icon={Briefcase} 
-                  color="text-brand bg-brand-soft"
+                <StatCard
+                  title="Active Jobs"
+                  value={stats.activeJobs}
+                  subtext="Currently on floor"
+                  icon={Briefcase}
+                  colorClass="text-brand"
                   onClick={() => navigate('/jobs')}
                 />
-                <StatCard 
-                  title="Total Customers" 
-                  value={stats.totalCustomers} 
-                  subtext="Registered clients" 
-                  icon={Users} 
-                  color="text-violet-400"
+                <StatCard
+                  title="Total Customers"
+                  value={stats.totalCustomers}
+                  subtext="Registered clients"
+                  icon={Users}
+                  colorClass="text-violet-400"
                   onClick={() => navigate('/customers')}
                 />
-                <StatCard 
-                  title="Efficiency" 
-                  value={stats.efficiency} 
-                  subtext="Shop performance" 
-                  icon={Activity} 
-                  color="text-amber-400"
+                <StatCard
+                  title="Efficiency"
+                  value={stats.efficiency}
+                  subtext={stats.efficiency === 'N/A' ? 'No labor data yet' : 'Last 20 completed jobs'}
+                  icon={Activity}
+                  colorClass="text-amber-400"
                   onClick={handleEfficiencyClick}
                 />
             </>
@@ -259,16 +264,18 @@ export const Dashboard = () => {
             ) : (
             <div className="space-y-3">
                      {lowStock.map((part: any) => (
-                       <div 
-                           key={part.id} 
+                       <div
+                           key={part.id}
                            onClick={() => navigate('/inventory')}
                            className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-slate-800/30 cursor-pointer hover:bg-slate-800 transition-colors group"
                        >
-                          <div>
-                              <div className="text-sm font-medium text-slate-200 group-hover:text-cyan-400 transition-colors">{part.name}</div>
-                              <div className="text-xs text-slate-500">Part #: {part.part_number}</div>
+                          <div className="min-w-0">
+                              <div className="text-sm font-medium text-slate-200 group-hover:text-cyan-400 transition-colors truncate">{part.name}</div>
+                              <div className="text-xs text-slate-500">{part.part_number || 'No part #'}</div>
                           </div>
-                          <div className="text-red-400 text-sm font-bold">{part.stock_quantity} Left</div>
+                          <div className={`text-sm font-bold flex-shrink-0 ml-2 ${part.stock_quantity === 0 ? 'text-red-400' : 'text-amber-400'}`}>
+                              {part.stock_quantity === 0 ? 'Out of stock' : `${part.stock_quantity} left`}
+                          </div>
                        </div>
                      ))}
                      {lowStock.length === 0 && <div className="text-slate-500 text-center py-4">Inventory looks good!</div>}

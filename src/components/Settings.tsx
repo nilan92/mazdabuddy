@@ -116,7 +116,10 @@ export const Settings = () => {
       if (updateError) throw updateError;
 
       setLogoUrl(publicUrl);
-      alert("Logo updated! Please refresh the page.");
+      // Invalidate all tenant-related caches so PDF/invoice use the new logo immediately
+      queryClient.invalidateQueries({ queryKey: ['tenant'] });
+      await refreshProfile();
+      alert("Logo updated successfully!");
     } catch (error: any) {
       alert(error.message);
     } finally {

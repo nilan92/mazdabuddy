@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, FileText, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import jsPDF from 'jspdf';
@@ -16,6 +17,7 @@ interface JobDetailsProps {
 
 export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const { profile } = useAuth();
+    const { toast } = useToast();
     const [job, setJob] = useState<JobCard | null>(null);
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
     const [jobLabor, setJobLabor] = useState<JobLabor[]>([]);
@@ -140,7 +142,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
     const generateJobCardPDF = async () => {
         if (!job || !tenantDetails) {
-            alert("Job or Shop details missing. Please wait for data to load.");
+            toast("Job or shop details still loading, please wait.", 'warning');
             return;
         }
 
@@ -299,7 +301,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
         } catch (e: any) {
             console.error(e);
-            alert("Error generating PDF: " + e.message);
+            toast("Error generating PDF: " + e.message, 'error');
         }
     };
 
@@ -307,7 +309,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
          // @ts-ignore
          const phone = job?.vehicles?.customers?.phone;
          if (!phone) {
-             alert("No customer phone number found.");
+             toast("No customer phone number on file.", 'warning');
              return;
          }
          
@@ -386,36 +388,35 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                 });
 
                 if (invError) {
-                    alert("Warning: Job marked completed, but Invoice creation failed. " + invError.message);
-                    return; 
+                    toast("Job completed, but invoice creation failed: " + invError.message, 'error');
+                    return;
                 }
             }
-        } 
+        }
         else if (status !== 'completed' && job?.status === 'completed') {
             updates.completed_at = null;
         }
         // --- NEW LOGIC END ---
 
         const { error } = await supabase.from('job_cards').update(updates).eq('id', jobId);
-        
+
         if (error) {
-            alert(error.message);
+            toast(error.message, 'error');
         } else {
             onUpdate();
-            // Optimistic update for UI
             setJob(prev => prev ? { ...prev, ...updates } : null);
             if (status === 'completed' && job?.status !== 'completed') {
-                alert("Job Completed & Invoice Generated!");
+                toast("Job completed & invoice generated!", 'success');
             } else {
-                alert("Job Updated Successfully!");
+                toast("Job updated successfully.", 'success');
             }
         }
     };
 
     const handleArchive = async () => {
-        if(!confirm("Are you sure? Archived jobs will be hidden from the board.")) return;
+        if(!confirm("Archive this job? It will be hidden from the active board.")) return;
         const { error } = await supabase.from('job_cards').update({ archived: true }).eq('id', jobId);
-        if (error) alert(error.message);
+        if (error) toast(error.message, 'error');
         else {
             onUpdate();
             onClose();
@@ -441,16 +442,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             });
             
             if (error) {
-                alert(error.message);
+                toast(error.message, 'error');
             } else {
                 fetchJobDetails();
                 setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
+                toast("Custom part added.", 'success');
             }
             return;
         }
-        
+
         // 2. Handle Inventory Parts (Secure Transaction)
-        // This calls the SQL function we created in Phase 1
         const { data, error } = await supabase.rpc('add_job_part_transaction', {
             p_job_id: jobId,
             p_part_id: partForm.part_id,
@@ -460,12 +461,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
         if (error) {
             console.error(error);
-            alert("Transaction failed: " + error.message);
+            toast("Transaction failed: " + error.message, 'error');
         } else if (data && !data.success) {
-            alert("Error: " + data.message); // Will show "Insufficient stock available"
+            toast(data.message, 'error');
         } else {
-            fetchJobDetails(); // Refresh UI
+            fetchJobDetails();
             setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
+            toast("Part added to job.", 'success');
         }
     };
 
@@ -482,29 +484,28 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             if(!error) {
                 fetchJobDetails();
                 setLaborForm(prev => ({...prev, description: '', hours: ''}));
+                toast("Labor entry added.", 'success');
             } else {
-                alert(error.message);
+                toast(error.message, 'error');
             }
         } catch (err) {
-            alert("Unexpected error adding labor");
+            toast("Unexpected error adding labor.", 'error');
         }
     };
 
     const handleRemovePart = async (id: string) => {
         if(!confirm("Remove this part? Stock will be returned to inventory.")) return;
 
-        // Calls the secure SQL function that restores stock automatically
-        const { error } = await supabase.rpc('remove_job_part_transaction', {
-            p_job_part_id: id
-        });
+        const { error } = await supabase.rpc('remove_job_part_transaction', { p_job_part_id: id });
 
-        if (error) alert("Error removing part: " + error.message);
-        else fetchJobDetails();
+        if (error) toast("Error removing part: " + error.message, 'error');
+        else { fetchJobDetails(); toast("Part removed, stock restored.", 'info'); }
     };
-    
+
     const handleRemoveLabor = async (id: string) => {
-        await supabase.from('job_labor').delete().eq('id', id);
-        fetchJobDetails();
+        const { error } = await supabase.from('job_labor').delete().eq('id', id);
+        if (error) toast("Error removing labor entry.", 'error');
+        else fetchJobDetails();
     };
 
     const handleAiAssist = async () => {
@@ -520,7 +521,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             const newNotes = techNotes ? `${techNotes}\n\n--- AI Suggestion ---\n${suggestion}` : `--- AI Suggestion ---\n${suggestion}`;
             setTechNotes(newNotes);
         } catch (e) {
-            alert("AI Error: Failed to generate diagnosis.");
+            toast("AI Error: Failed to generate diagnosis.", 'error');
         } finally {
             setIsAiLoading(false);
         }
@@ -553,10 +554,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                     <div className="flex items-center gap-2 mt-1">
                                         <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded font-mono">{job.vehicles?.license_plate}</span>
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold
-                                            ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 
-                                              job.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400' : 
+                                            ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
+                                              job.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400' :
+                                              job.status === 'waiting_parts' ? 'bg-orange-500/10 text-orange-400' :
+                                              job.status === 'cancelled' ? 'bg-red-500/10 text-red-400' :
                                               'bg-slate-700 text-slate-400'}`}>
-                                            {job.status.replace('_', ' ')}
+                                            {job.status.replace(/_/g, ' ')}
                                         </span>
                                     </div>
                                 </div>

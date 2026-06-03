@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, RefreshCcw, Archive, UserCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { JobDetails } from './JobDetails'; // New Component
+import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { JobCard, Vehicle } from '../types';
 
 export const Jobs = () => {
     const { profile } = useAuth();
+    const { toast } = useToast();
     const queryClient = useQueryClient();
     
     // Filters
@@ -39,15 +41,14 @@ export const Jobs = () => {
     const { data: jobs = [], isLoading: jobsLoading } = useQuery({
         queryKey: ['jobs'],
         queryFn: async () => {
-    const { data } = await supabase
-        .from('job_cards')
-        // @ts-ignore
-        .select('*, vehicles(id, make, model, license_plate), profiles(full_name)')
-        .order('created_at', { ascending: false })
-        .limit(50); // <--- Added Limit to prevent crashing
-    
-    return data as JobCard[] || [];
-}
+            const { data } = await supabase
+                .from('job_cards')
+                // @ts-ignore
+                .select('*, vehicles(id, make, model, license_plate), profiles(id, full_name)')
+                .order('created_at', { ascending: false })
+                .limit(50);
+            return data as JobCard[] || [];
+        }
     });
 
     const { data: vehicles = [], isLoading: vehiclesLoading } = useQuery({
@@ -161,7 +162,7 @@ export const Jobs = () => {
             setVehicleSearchTerm('');
             fetchJobs();
         } catch (error: any) {
-            alert(error.message);
+            toast(error.message, 'error');
         }
     };
 
@@ -171,16 +172,23 @@ export const Jobs = () => {
 
     const handleDrop = async (e: React.DragEvent, status: string) => {
         const id = e.dataTransfer.getData('jobId');
-        await supabase.from('job_cards').update({ status }).eq('id', id);
-        fetchJobs(); // Sync full data via React Query invalidate
+        const { error } = await supabase.from('job_cards').update({ status }).eq('id', id);
+        if (error) {
+            toast("Failed to update job status.", 'error');
+        } else {
+            fetchJobs();
+        }
     };
 
     const handleDragOver = (e: React.DragEvent) => e.preventDefault();
 
     const filteredJobs = jobs.filter(job => {
-        const matchesSearch = job.vehicles?.make.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              job.vehicles?.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              job.vehicles?.license_plate.toLowerCase().includes(searchTerm.toLowerCase());
+        const q = searchTerm.toLowerCase();
+        const matchesSearch = !q ||
+                              job.vehicles?.make?.toLowerCase().includes(q) ||
+                              job.vehicles?.model?.toLowerCase().includes(q) ||
+                              job.vehicles?.license_plate?.toLowerCase().includes(q) ||
+                              job.description?.toLowerCase().includes(q);
                               
         const matchesArchive = showArchived ? job.archived : !job.archived;
         
@@ -278,8 +286,11 @@ export const Jobs = () => {
                                                 {job.vehicles?.license_plate}
                                             </span>
                                             {job.assigned_technician_id && (
-                                                <div className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                                    <UserCheck size={10} /> Assigned
+                                                <div className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[90px] truncate">
+                                                    <UserCheck size={10} className="flex-shrink-0" />
+                                                    <span className="truncate">
+                                                        {(job as any).profiles?.full_name?.split(' ')[0] || 'Assigned'}
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
