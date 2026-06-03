@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 import { 
     LayoutDashboard, 
     PenTool as Tool, 
@@ -284,18 +283,10 @@ export const Layout = ({ children }: LayoutProps) => {
          <div className="absolute top-0 left-0 w-full h-96 bg-cyan-500/5 rounded-full blur-[120px] -translate-y-1/2 pointer-events-none" />
          <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-[120px] translate-y-1/2 pointer-events-none" />
          
-         <AnimatePresence mode="sync">
-           <motion.div
-             key={location.pathname}
-             className="relative z-10"
-             initial={{ opacity: 0 }}
-             animate={{ opacity: 1 }}
-             exit={{ opacity: 0 }}
-             transition={{ duration: 0.15, ease: 'easeInOut' }}
-           >
-             {children}
-           </motion.div>
-         </AnimatePresence>
+         {/* CSS-only fade — no unmount, no Suspense flash */}
+         <div key={location.pathname} className="relative z-10 animate-page-in">
+           {children}
+         </div>
       </main>
     </div>
   );

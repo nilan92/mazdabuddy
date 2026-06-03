@@ -672,7 +672,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         <div className="fixed inset-0 z-[9999] overflow-hidden" aria-labelledby="slide-over-title" role="dialog" aria-modal="true">
             <div className="absolute inset-0 overflow-hidden">
                 <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity" onClick={handleClose} />
-                <div className="pointer-events-none fixed inset-y-0 right-0 flex max-w-full pl-0 md:pl-10">
+                <div className="pointer-events-none fixed inset-y-0 left-0 flex max-w-full pr-0 md:pr-10">
                     <div className="pointer-events-auto w-screen max-w-lg transform transition-all">
                         <div className="flex h-[100dvh] flex-col bg-slate-900 border-l border-slate-800 shadow-2xl">
                             
