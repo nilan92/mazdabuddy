@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw } from 'lucide-react';
+import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { sendSMS, smsTemplates } from '../lib/sms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Customer, Vehicle, JobCard } from '../types';
 
 export const Customers = () => {
     const { profile } = useAuth();
+    const { toast } = useToast();
     const queryClient = useQueryClient();
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -222,7 +225,27 @@ export const Customers = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-2 w-full md:w-auto justify-end">
-                                     <button 
+                                    <button
+                                        onClick={async () => {
+                                            if (!customer.phone) { toast("No phone number for this customer.", 'warning'); return; }
+                                            if (!profile?.tenant_id) return;
+                                            // Get first vehicle for the reminder
+                                            const veh = (vehicles as Vehicle[]).find(v => v.customer_id === customer.id);
+                                            const make = veh?.make || 'your vehicle';
+                                            const model = veh?.model || '';
+                                            const plate = veh?.license_plate || '';
+                                            const { data: tenant } = await supabase.from('tenants').select('name, phone').eq('id', profile.tenant_id).single();
+                                            try {
+                                                await sendSMS(customer.phone, smsTemplates.serviceReminder(customer.name, make, model, plate, tenant?.name || 'us', tenant?.phone || ''), profile.tenant_id);
+                                                toast(`Service reminder sent to ${customer.name}.`, 'success');
+                                            } catch (e: any) { toast("SMS failed: " + e.message, 'error'); }
+                                        }}
+                                        className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-blue-400 transition-colors"
+                                        title="Send Service Reminder SMS"
+                                    >
+                                        <MessageSquare size={18} />
+                                    </button>
+                                     <button
                                         onClick={() => fetchHistory(customer.id)}
                                         className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-cyan-400 transition-colors"
                                         title="Service History"

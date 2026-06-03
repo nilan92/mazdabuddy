@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, FileText, MessageCircle } from 'lucide-react';
+import { X, Save, Plus, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, FileText, MessageCircle, Smartphone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { sendSMS, smsTemplates } from '../lib/sms';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import jsPDF from 'jspdf';
@@ -305,18 +306,47 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         }
     };
 
+    const getCustomerPhone = () => {
+        // @ts-ignore
+        return job?.vehicles?.customers?.phone as string | undefined;
+    };
+
+    const getCustomerName = () => {
+        // @ts-ignore
+        return (job?.vehicles?.customers?.name as string) || 'Customer';
+    };
+
     const handleWhatsApp = () => {
-         // @ts-ignore
-         const phone = job?.vehicles?.customers?.phone;
-         if (!phone) {
-             toast("No customer phone number on file.", 'warning');
-             return;
-         }
-         
+         const phone = getCustomerPhone();
+         if (!phone) { toast("No customer phone number on file.", 'warning'); return; }
          const vehicle = `${job?.vehicles?.make} ${job?.vehicles?.model}`;
-         const message = `Hello! regarding your ${vehicle} at ${tenantDetails?.name || 'our workshop'}. Status: ${status?.replace('_', ' ')}. ${techNotes ? `Note: ${techNotes}` : ''}`;
+         const message = `Hello! Regarding your ${vehicle} at ${tenantDetails?.name || 'our workshop'}. Status: ${status?.replace('_', ' ')}. ${techNotes ? `Note: ${techNotes}` : ''}`;
          const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
          window.open(url, '_blank');
+    };
+
+    const handleSendSMS = async (type: 'status' | 'completed') => {
+        const phone = getCustomerPhone();
+        if (!phone) { toast("No customer phone number on file.", 'warning'); return; }
+        if (!job?.tenant_id) { toast("Tenant info missing.", 'warning'); return; }
+
+        const name = getCustomerName();
+        const make = job.vehicles?.make || '';
+        const model = job.vehicles?.model || '';
+        const plate = job.vehicles?.license_plate || '';
+        const shopPhone = tenantDetails?.phone || '';
+        const shopName = tenantDetails?.name || 'the workshop';
+
+        const message = type === 'completed'
+            ? smsTemplates.jobCompleted(name, make, model, plate, shopName, shopPhone)
+            : smsTemplates.jobInProgress(name, make, model, plate, shopName);
+
+        try {
+            await sendSMS(phone, message, job.tenant_id);
+            toast("SMS sent to customer.", 'success');
+        } catch (e: any) {
+            toast("SMS failed: " + e.message, 'error');
+        }
     };
 
     const handleUpdateJob = async () => {
@@ -405,8 +435,33 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         } else {
             onUpdate();
             setJob(prev => prev ? { ...prev, ...updates } : null);
+
             if (status === 'completed' && job?.status !== 'completed') {
                 toast("Job completed & invoice generated!", 'success');
+                // Auto-SMS customer that vehicle is ready
+                const phone = getCustomerPhone();
+                if (phone && job?.tenant_id) {
+                    sendSMS(phone,
+                        smsTemplates.jobCompleted(
+                            getCustomerName(), job.vehicles?.make || '', job.vehicles?.model || '',
+                            job.vehicles?.license_plate || '', tenantDetails?.name || 'the workshop', tenantDetails?.phone || ''
+                        ),
+                        job.tenant_id
+                    ).catch(() => {}); // fire-and-forget; user already got toast for job update
+                }
+            } else if (status === 'in_progress' && job?.status !== 'in_progress') {
+                toast("Job updated — work started.", 'success');
+                // Auto-SMS customer that work has begun
+                const phone = getCustomerPhone();
+                if (phone && job?.tenant_id) {
+                    sendSMS(phone,
+                        smsTemplates.jobInProgress(
+                            getCustomerName(), job.vehicles?.make || '', job.vehicles?.model || '',
+                            job.vehicles?.license_plate || '', tenantDetails?.name || 'the workshop'
+                        ),
+                        job.tenant_id
+                    ).catch(() => {});
+                }
             } else {
                 toast("Job updated successfully.", 'success');
             }
@@ -564,12 +619,19 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 md:gap-3">
-                                     <button 
+                                     <button
                                         onClick={handleWhatsApp}
                                         className="p-2 text-slate-400 hover:text-green-500 hover:bg-green-500/10 rounded-lg transition-colors"
                                         title="Notify Customer via WhatsApp"
                                      >
                                         <MessageCircle size={20} />
+                                     </button>
+                                     <button
+                                        onClick={() => handleSendSMS(status === 'completed' ? 'completed' : 'status')}
+                                        className="p-2 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"
+                                        title="Send SMS to Customer"
+                                     >
+                                        <Smartphone size={20} />
                                      </button>
 
                                      <button 

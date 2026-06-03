@@ -23,6 +23,9 @@ export const Settings = () => {
   >("general");
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [smsApiKey, setSmsApiKey] = useState("");
+  const [smsSenderId, setSmsSenderId] = useState("");
+  const [smsLoading, setSmsLoading] = useState(false);
 
   // Tenant Settings State
   const [tenantName, setTenantName] = useState("");
@@ -60,6 +63,8 @@ export const Settings = () => {
         setBrandColor(data.brand_color || "#06b6d4");
         setAiApiKey(data.ai_api_key || "");
         setDefaultLaborRate(data.default_labor_rate?.toString() || "2500");
+        setSmsApiKey(data.sms_api_key || "");
+        setSmsSenderId(data.sms_sender_id || "");
       }
     } catch (error) {
       console.error("Error fetching tenant:", error);
@@ -256,13 +261,28 @@ export const Settings = () => {
         .from("tenants")
         .update({ ai_api_key: aiApiKey })
         .eq("id", profile?.tenant_id);
-
       if (error) throw error;
-      alert("Workshop AI configuration updated!");
+      alert("AI configuration updated!");
     } catch (error: any) {
       alert("Error saving AI key: " + error.message);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  const handleSaveSMS = async () => {
+    setSmsLoading(true);
+    try {
+      const { error } = await supabase
+        .from("tenants")
+        .update({ sms_api_key: smsApiKey, sms_sender_id: smsSenderId })
+        .eq("id", profile?.tenant_id);
+      if (error) throw error;
+      alert("SMS configuration saved!");
+    } catch (error: any) {
+      alert("Error saving SMS config: " + error.message);
+    } finally {
+      setSmsLoading(false);
     }
   };
 
@@ -703,27 +723,56 @@ export const Settings = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
-                  <div className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 italic">
-                    Active Model
-                  </div>
-                  <div className="text-white font-bold text-sm">
-                    Gemini 2.0 Flash
-                  </div>
-                  <div className="text-[9px] text-slate-500 mt-1 uppercase">
-                    Optimized for Speed
-                  </div>
+                  <div className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 italic">Active Model</div>
+                  <div className="text-white font-bold text-sm">Gemini 2.0 Flash</div>
+                  <div className="text-[9px] text-slate-500 mt-1 uppercase">Optimized for Speed</div>
                 </div>
                 <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700/50">
-                  <div className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 italic">
-                    Backup Model
+                  <div className="text-[10px] font-black text-brand uppercase tracking-widest mb-1 italic">SmartScan</div>
+                  <div className="text-white font-bold text-sm">Tesseract OCR</div>
+                  <div className="text-[9px] text-slate-500 mt-1 uppercase">On-device · No API key</div>
+                </div>
+              </div>
+            </div>
+
+            {/* SMS Settings */}
+            <div className="mt-8 p-6 bg-slate-950/50 rounded-2xl border border-slate-800">
+              <h4 className="text-sm font-black text-white uppercase tracking-widest mb-1">SMS Notifications</h4>
+              <p className="text-xs text-slate-500 mb-5">Auto-send SMS when jobs are opened or completed. Uses <strong className="text-slate-400">text.lk</strong> (swap provider in edge function).</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">API Key <span className="text-slate-600 normal-case font-normal">(format: email:apikey)</span></label>
+                  <input
+                    type="password"
+                    placeholder="user@email.com:your_api_key"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white font-mono text-sm focus:outline-none focus:border-brand"
+                    value={smsApiKey}
+                    onChange={(e) => setSmsApiKey(e.target.value)}
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sender ID <span className="text-slate-600 normal-case font-normal">(max 11 chars)</span></label>
+                    <input
+                      type="text"
+                      placeholder="AutoPulse"
+                      maxLength={11}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand"
+                      value={smsSenderId}
+                      onChange={(e) => setSmsSenderId(e.target.value)}
+                    />
                   </div>
-                  <div className="text-white font-bold text-sm">
-                    Gemini 2.0 Pro
-                  </div>
-                  <div className="text-[9px] text-slate-500 mt-1 uppercase">
-                    High Detail Vision
+                  <div className="flex items-end">
+                    <button
+                      onClick={handleSaveSMS}
+                      disabled={smsLoading}
+                      className="btn-brand px-6 py-3 rounded-xl font-bold active:scale-95 flex items-center gap-2"
+                    >
+                      <Save size={16} /> {smsLoading ? "Saving..." : "Save"}
+                    </button>
                   </div>
                 </div>
+                <p className="text-[10px] text-slate-600 italic">SMS fires automatically on: job opened (in progress) · job completed. Manual send available in job detail view.</p>
               </div>
             </div>
           </div>
