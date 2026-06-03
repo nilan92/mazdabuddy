@@ -60,9 +60,19 @@
     footer { text-align: center; padding: 0 24px 48px; font-size: 13px; color: #64748b; }
     footer a { color: #06b6d4; text-decoration: none; margin: 0 12px; }
     footer p { margin-top: 12px; }
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; max-width: 900px; margin: 0 auto; }
+    .nav-logo { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; text-decoration: none; }
+    .nav-logo span:first-child { color: #06b6d4; }
+    .nav-logo span:last-child { color: #fff; }
+    .btn-signin { background: transparent; border: 1.5px solid #06b6d4; color: #06b6d4; font-weight: 700; font-size: 14px; padding: 8px 20px; border-radius: 8px; text-decoration: none; transition: background 0.15s, color 0.15s; }
+    .btn-signin:hover { background: #06b6d4; color: #fff; }
   </style>
 </head>
 <body>
+  <nav>
+    <a href="/mazdabuddy/#/login" class="nav-logo"><span>AUTO</span><span>PULSE</span></a>
+    <a href="/mazdabuddy/#/login" class="btn-signin">Sign In →</a>
+  </nav>
   <header>
     <div class="logo-wrap">
       <a href="/mazdabuddy/#/login">
