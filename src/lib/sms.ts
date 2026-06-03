@@ -4,16 +4,12 @@ const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
 
 async function invokeFn(fnName: string, body: object): Promise<any> {
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token ?? ANON_KEY;
-
+  // verify_jwt=false on this function — no auth headers needed.
+  // Using text/plain avoids CORS preflight (no OPTIONS round-trip),
+  // which fixes "Load failed" on iOS Safari PWA.
   const res = await fetch(`${FUNCTIONS_URL}/${fnName}`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      'apikey': ANON_KEY,
-    },
+    headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify(body),
   });
 
