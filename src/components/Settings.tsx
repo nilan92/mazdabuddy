@@ -25,6 +25,7 @@ export const Settings = () => {
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [smsApiKey, setSmsApiKey] = useState("");
+  const [smsSenderId, setSmsSenderId] = useState("");
   const [smsAutoEnabled, setSmsAutoEnabled] = useState(true);
   const [smsLoading, setSmsLoading] = useState(false);
   const [smsBalance, setSmsBalance] = useState<string | null>(null);
@@ -68,6 +69,7 @@ export const Settings = () => {
         setAiApiKey(data.ai_api_key || "");
         setDefaultLaborRate(data.default_labor_rate?.toString() || "2500");
         setSmsApiKey(data.sms_api_key || "");
+        setSmsSenderId(data.sms_sender_id || "");
         setSmsAutoEnabled(data.sms_auto_enabled !== false); // default true
       }
     } catch (error) {
@@ -293,7 +295,7 @@ export const Settings = () => {
     try {
       const { error } = await supabase
         .from("tenants")
-        .update({ sms_api_key: smsApiKey, sms_auto_enabled: smsAutoEnabled })
+        .update({ sms_api_key: smsApiKey, sms_sender_id: smsSenderId, sms_auto_enabled: smsAutoEnabled })
         .eq("id", profile?.tenant_id);
       if (error) throw error;
       alert("SMS configuration saved!");
@@ -756,7 +758,7 @@ export const Settings = () => {
             {/* SMS Settings */}
             <div className="mt-8 p-6 bg-slate-950/50 rounded-2xl border border-slate-800">
               <h4 className="text-sm font-black text-white uppercase tracking-widest mb-1">SMS Notifications</h4>
-              <p className="text-xs text-slate-500 mb-5">Auto-send SMS when jobs are opened or completed. Uses <strong className="text-slate-400">text.lk</strong>. Sender ID is your workshop phone number — make sure it's set in General settings.</p>
+              <p className="text-xs text-slate-500 mb-5">Auto-send SMS when jobs are opened or completed. Uses <strong className="text-slate-400">text.lk</strong>. Find your Sender ID at <span className="text-slate-400">app.text.lk → Sender IDs</span>.</p>
               <div className="space-y-3">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">API Token <span className="text-slate-600 normal-case font-normal">(from app.text.lk → Developers)</span></label>
@@ -769,7 +771,17 @@ export const Settings = () => {
                   />
                 </div>
                 <div className="flex gap-3">
-                  <div className="flex items-end gap-2 w-full justify-end">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Sender ID <span className="text-slate-600 normal-case font-normal">(your approved ID from text.lk)</span></label>
+                    <input
+                      type="text"
+                      placeholder="TextLKDemo"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand"
+                      value={smsSenderId}
+                      onChange={(e) => setSmsSenderId(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
                     <button
                       onClick={handleCheckBalance}
                       disabled={smsBalanceLoading || !smsApiKey}
