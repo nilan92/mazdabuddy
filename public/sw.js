@@ -10,10 +10,13 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(clients.claim());
 });
 
-// ── Fetch pass-through ────────────────────────────────────
-// iOS Safari PWA silently drops cross-origin POST requests when a SW
-// is registered without a fetch handler. This explicit pass-through fixes it.
+// ── Fetch handler ─────────────────────────────────────────
+// Only intercept same-origin requests. Cross-origin requests (Supabase API,
+// edge functions) must be handled natively by the browser — iOS Safari blocks
+// cross-origin fetch() calls made from within the SW context.
 self.addEventListener('fetch', (e) => {
+  if (!e.request.url.startsWith(self.location.origin)) return;
+  // Same-origin: pass through to network
   e.respondWith(fetch(e.request));
 });
 
