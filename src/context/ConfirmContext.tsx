@@ -45,50 +45,52 @@ export const ConfirmProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ConfirmContext.Provider value={confirm}>
       {children}
-      <AnimatePresence>
-      {state?.visible && createPortal(
-        <motion.div
-          className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          onClick={() => handle(false)}
-        >
-          <motion.div
-            className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
-            initial={{ scale: 0.92, opacity: 0, y: 12 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 8 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-start gap-4 mb-6">
-              <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle size={20} className="text-red-400" />
-              </div>
-              <div>
-                {state.title && <h3 className="font-bold text-white mb-1">{state.title}</h3>}
-                <p className="text-slate-300 text-sm leading-relaxed">{state.message}</p>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => handle(false)}
-                className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors"
+      {createPortal(
+        <AnimatePresence>
+          {state?.visible && (
+            <motion.div
+              className="fixed inset-0 z-[99998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              onClick={() => handle(false)}
+            >
+              <motion.div
+                className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl"
+                initial={{ scale: 0.92, opacity: 0, y: 12 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 8 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+                onClick={e => e.stopPropagation()}
               >
-                {state.cancelLabel ?? 'Cancel'}
-              </button>
-              <button
-                onClick={() => handle(true)}
-                className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors active:scale-95 ${btnStyle}`}
-              >
-                {state.confirmLabel ?? 'Confirm'}
-              </button>
-            </div>
-          </motion.div>
-        </motion.div>,
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle size={20} className="text-red-400" />
+                  </div>
+                  <div>
+                    {state.title && <h3 className="font-bold text-white mb-1">{state.title}</h3>}
+                    <p className="text-slate-300 text-sm leading-relaxed">{state.message}</p>
+                  </div>
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <button
+                    onClick={() => handle(false)}
+                    className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 transition-colors"
+                  >
+                    {state.cancelLabel ?? 'Cancel'}
+                  </button>
+                  <button
+                    onClick={() => handle(true)}
+                    className={`px-4 py-2 rounded-xl text-sm font-bold text-white transition-colors active:scale-95 ${btnStyle}`}
+                  >
+                    {state.confirmLabel ?? 'Confirm'}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
         document.body
       )}
-      </AnimatePresence>
     </ConfirmContext.Provider>
   );
 };
