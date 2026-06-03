@@ -3,7 +3,7 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { useAuth } from './context/AuthContext';
-import { registerServiceWorker, subscribeToPush } from './lib/push';
+import { registerServiceWorker } from './lib/push';
 
 // 1. LAZY IMPORTS
 const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
@@ -131,17 +131,8 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => {
-  const { profile } = useAuth();
-
-  // Register SW on app load
+  // Register SW on app load (needed for push to work later)
   useEffect(() => { registerServiceWorker(); }, []);
-
-  // Subscribe to push once profile is loaded
-  useEffect(() => {
-    if (profile?.id && profile?.tenant_id) {
-      subscribeToPush(profile.id, profile.tenant_id).catch(() => {});
-    }
-  }, [profile?.id, profile?.tenant_id]);
 
   useEffect(() => {
     const checkVersion = async () => {

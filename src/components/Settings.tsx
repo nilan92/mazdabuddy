@@ -1031,6 +1031,55 @@ function MFATab() {
           </button>
         )}
       </div>
+
+      {/* Push Notifications */}
+      <PushNotificationSection />
+    </div>
+  );
+}
+
+function PushNotificationSection() {
+  const [status, setStatus] = React.useState<'idle'|'enabled'|'denied'|'loading'>('idle');
+  React.useEffect(() => {
+    if (!('Notification' in window)) { setStatus('denied'); return; }
+    if (Notification.permission === 'granted') setStatus('enabled');
+    else if (Notification.permission === 'denied') setStatus('denied');
+  }, []);
+
+  const enable = async () => {
+    setStatus('loading');
+    const { subscribeToPush } = await import('../lib/push');
+    const { supabase } = await import('../lib/supabase');
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: prof } = await supabase.from('profiles').select('id, tenant_id').eq('id', user?.id ?? '').single();
+    if (!prof) { setStatus('idle'); return; }
+    const ok = await subscribeToPush(prof.id, prof.tenant_id);
+    setStatus(ok ? 'enabled' : Notification.permission === 'denied' ? 'denied' : 'idle');
+  };
+
+  if (!('Notification' in window) || !('PushManager' in window)) return null;
+
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+      <h3 className="text-lg font-bold text-white mb-1">Push Notifications</h3>
+      <p className="text-sm text-slate-400 mb-4">Get notified when jobs are completed or assigned to you.</p>
+      {status === 'enabled' && (
+        <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
+          <span>✓</span> Push notifications enabled
+        </div>
+      )}
+      {status === 'denied' && (
+        <p className="text-sm text-red-400">Notifications blocked. Enable them in your device Settings → Safari → Notifications.</p>
+      )}
+      {(status === 'idle' || status === 'loading') && (
+        <button
+          onClick={enable}
+          disabled={status === 'loading'}
+          className="btn-brand px-5 py-2.5 rounded-xl font-bold text-sm active:scale-95 disabled:opacity-50"
+        >
+          {status === 'loading' ? 'Enabling...' : 'Enable Push Notifications'}
+        </button>
+      )}
     </div>
   );
 }
