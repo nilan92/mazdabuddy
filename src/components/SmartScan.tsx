@@ -4,7 +4,6 @@ import { createWorker } from 'tesseract.js';
 import { Camera, RefreshCw, Check, Loader2, RotateCcw, Plus, AlertTriangle, Edit2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { useToast } from '../context/ToastContext';
 
 // Enhance image for better OCR: grayscale + contrast boost
 function preprocessImage(imageSrc: string): Promise<string> {
@@ -48,7 +47,6 @@ function extractPlate(raw: string): string {
 
 export const SmartScan = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const webcamRef = useRef<Webcam>(null);
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);

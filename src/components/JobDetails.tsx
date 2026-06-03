@@ -113,7 +113,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             if (profile?.tenant_id) {
                 const { data: tenantData } = await supabase
                     .from('tenants')
-                    .select('name, address, phone, logo_url, terms_and_conditions, ai_api_key, brand_color, default_labor_rate')
+                    .select('name, address, phone, logo_url, terms_and_conditions, ai_api_key, brand_color, default_labor_rate, sms_auto_enabled')
                     .eq('id', profile.tenant_id)
                     .single();
                 
@@ -436,31 +436,34 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             onUpdate();
             setJob(prev => prev ? { ...prev, ...updates } : null);
 
+            const autoSMS = tenantDetails?.sms_auto_enabled !== false; // default true
             if (status === 'completed' && job?.status !== 'completed') {
                 toast("Job completed & invoice generated!", 'success');
-                // Auto-SMS customer that vehicle is ready
-                const phone = getCustomerPhone();
-                if (phone && job?.tenant_id) {
-                    sendSMS(phone,
-                        smsTemplates.jobCompleted(
-                            getCustomerName(), job.vehicles?.make || '', job.vehicles?.model || '',
-                            job.vehicles?.license_plate || '', tenantDetails?.name || 'the workshop', tenantDetails?.phone || ''
-                        ),
-                        job.tenant_id
-                    ).catch(() => {}); // fire-and-forget; user already got toast for job update
+                if (autoSMS) {
+                    const phone = getCustomerPhone();
+                    if (phone && job?.tenant_id) {
+                        sendSMS(phone,
+                            smsTemplates.jobCompleted(
+                                getCustomerName(), job.vehicles?.make || '', job.vehicles?.model || '',
+                                job.vehicles?.license_plate || '', tenantDetails?.name || 'the workshop', tenantDetails?.phone || ''
+                            ),
+                            job.tenant_id
+                        ).catch(() => {});
+                    }
                 }
             } else if (status === 'in_progress' && job?.status !== 'in_progress') {
                 toast("Job updated — work started.", 'success');
-                // Auto-SMS customer that work has begun
-                const phone = getCustomerPhone();
-                if (phone && job?.tenant_id) {
-                    sendSMS(phone,
-                        smsTemplates.jobInProgress(
-                            getCustomerName(), job.vehicles?.make || '', job.vehicles?.model || '',
-                            job.vehicles?.license_plate || '', tenantDetails?.name || 'the workshop'
-                        ),
-                        job.tenant_id
-                    ).catch(() => {});
+                if (autoSMS) {
+                    const phone = getCustomerPhone();
+                    if (phone && job?.tenant_id) {
+                        sendSMS(phone,
+                            smsTemplates.jobInProgress(
+                                getCustomerName(), job.vehicles?.make || '', job.vehicles?.model || '',
+                                job.vehicles?.license_plate || '', tenantDetails?.name || 'the workshop'
+                            ),
+                            job.tenant_id
+                        ).catch(() => {});
+                    }
                 }
             } else {
                 toast("Job updated successfully.", 'success');

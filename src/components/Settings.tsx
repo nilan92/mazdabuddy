@@ -25,6 +25,7 @@ export const Settings = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [smsApiKey, setSmsApiKey] = useState("");
   const [smsSenderId, setSmsSenderId] = useState("");
+  const [smsAutoEnabled, setSmsAutoEnabled] = useState(true);
   const [smsLoading, setSmsLoading] = useState(false);
 
   // Tenant Settings State
@@ -65,6 +66,7 @@ export const Settings = () => {
         setDefaultLaborRate(data.default_labor_rate?.toString() || "2500");
         setSmsApiKey(data.sms_api_key || "");
         setSmsSenderId(data.sms_sender_id || "");
+        setSmsAutoEnabled(data.sms_auto_enabled !== false); // default true
       }
     } catch (error) {
       console.error("Error fetching tenant:", error);
@@ -275,7 +277,7 @@ export const Settings = () => {
     try {
       const { error } = await supabase
         .from("tenants")
-        .update({ sms_api_key: smsApiKey, sms_sender_id: smsSenderId })
+        .update({ sms_api_key: smsApiKey, sms_sender_id: smsSenderId, sms_auto_enabled: smsAutoEnabled })
         .eq("id", profile?.tenant_id);
       if (error) throw error;
       alert("SMS configuration saved!");
@@ -772,7 +774,21 @@ export const Settings = () => {
                     </button>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-600 italic">SMS fires automatically on: job opened (in progress) · job completed. Manual send available in job detail view.</p>
+                {/* Auto SMS toggle */}
+                <div className="flex items-center justify-between p-3 bg-slate-900 rounded-xl border border-slate-800 mt-1">
+                  <div>
+                    <p className="text-sm font-bold text-white">Auto-send SMS</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Fires on: job in progress · job completed</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSmsAutoEnabled(p => !p)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${smsAutoEnabled ? 'bg-brand' : 'bg-slate-700'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${smsAutoEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-600 italic">Manual send is always available via the SMS button in any job detail panel.</p>
               </div>
             </div>
           </div>
