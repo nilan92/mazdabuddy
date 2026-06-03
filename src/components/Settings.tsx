@@ -25,7 +25,6 @@ export const Settings = () => {
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [smsApiKey, setSmsApiKey] = useState("");
-  const [smsSenderId, setSmsSenderId] = useState("");
   const [smsAutoEnabled, setSmsAutoEnabled] = useState(true);
   const [smsLoading, setSmsLoading] = useState(false);
   const [smsBalance, setSmsBalance] = useState<string | null>(null);
@@ -69,7 +68,6 @@ export const Settings = () => {
         setAiApiKey(data.ai_api_key || "");
         setDefaultLaborRate(data.default_labor_rate?.toString() || "2500");
         setSmsApiKey(data.sms_api_key || "");
-        setSmsSenderId(data.sms_sender_id || "");
         setSmsAutoEnabled(data.sms_auto_enabled !== false); // default true
       }
     } catch (error) {
