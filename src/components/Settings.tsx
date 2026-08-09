@@ -45,6 +45,9 @@ export const Settings = () => {
   const [brandColor, setBrandColor] = useState("#06b6d4");
   const [defaultLaborRate, setDefaultLaborRate] = useState("2500");
   const [uploading, setUploading] = useState(false);
+  const [paymentQrUrl, setPaymentQrUrl] = useState("");
+  const [paymentLink, setPaymentLink] = useState("");
+  const [uploadingQr, setUploadingQr] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Users Settings State
@@ -72,6 +75,8 @@ export const Settings = () => {
         setBrandColor(data.brand_color || "#06b6d4");
         setAiApiKey(data.ai_api_key || "");
         setDefaultLaborRate(data.default_labor_rate?.toString() || "2500");
+        setPaymentQrUrl(data.payment_qr_url || "");
+        setPaymentLink(data.payment_link || "");
         setSmsApiKey(data.sms_api_key || "");
         setSmsSenderId(data.sms_sender_id || "");
         setSmsAutoEnabled(data.sms_auto_enabled !== false); // default true
@@ -142,6 +147,38 @@ export const Settings = () => {
     }
   };
 
+  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingQr(true);
+      if (!e.target.files || e.target.files.length === 0) return;
+
+      const file = e.target.files[0];
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${profile?.tenant_id}/qr-${crypto.randomUUID()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("logos")
+        .upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from("logos").getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from("tenants")
+        .update({ payment_qr_url: publicUrl })
+        .eq("id", profile?.tenant_id);
+      if (updateError) throw updateError;
+
+      setPaymentQrUrl(publicUrl);
+      queryClient.invalidateQueries({ queryKey: ['tenant'] });
+      toast("Payment QR updated!", 'success');
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'QR upload failed', 'error');
+    } finally {
+      setUploadingQr(false);
+    }
+  };
+
   const checkColorContrast = (hex: string) => {
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -198,7 +235,8 @@ export const Settings = () => {
                     phone: phone,
                     terms_and_conditions: terms,
                     brand_color: brandColor,
-                    default_labor_rate: parseFloat(defaultLaborRate)
+                    default_labor_rate: parseFloat(defaultLaborRate),
+                    payment_link: paymentLink || null
                 })
                 .eq('id', profile.tenant_id)
                 .select();
@@ -435,6 +473,52 @@ export const Settings = () => {
                         {uploading ? "Processing..." : "Change Logo"}
                       </span>
                     </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-800/50 space-y-3">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      Payment QR
+                    </label>
+                    <div className="w-32 h-32 rounded-2xl bg-slate-800 border-2 border-dashed border-slate-700 flex flex-col items-center justify-center relative overflow-hidden group">
+                      {paymentQrUrl ? (
+                        <img src={paymentQrUrl} alt="Payment QR" className="w-full h-full object-contain bg-white" />
+                      ) : (
+                        <div className="text-slate-500 flex flex-col items-center">
+                          <Plus size={24} />
+                          <span className="text-[10px] mt-1 uppercase font-bold tracking-widest">QR</span>
+                        </div>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleQrUpload}
+                        disabled={uploadingQr}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        <span className="text-white text-xs font-bold">
+                          {uploadingQr ? "Processing..." : paymentQrUrl ? "Change QR" : "Upload QR"}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      LankaQR or your bank's QR. Appears on the invoice PDF.
+                    </p>
+
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">
+                      Payment Link
+                    </label>
+                    <input
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://pay.example.lk/yourshop"
+                      value={paymentLink}
+                      onChange={(e) => setPaymentLink(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand"
+                    />
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      Included in the WhatsApp message. Saved with Save Settings.
+                    </p>
                   </div>
 
                   <div className="pt-4 border-t border-slate-800/50">

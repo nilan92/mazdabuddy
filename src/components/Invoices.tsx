@@ -7,15 +7,24 @@ import {
     Search, 
     CheckCircle, 
     Clock, 
-    AlertCircle 
+    AlertCircle,
+    MessageCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
-import { urlToBase64 } from '../utils/pdfHelpers';
+import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
+import { shareInvoice, invoiceMessage } from '../lib/whatsapp';
 import { downloadCSV } from '../lib/csv';
 import { useConfirm } from '../context/ConfirmContext';
+
+type ShareableInvoice = {
+    invoiceNumber: string;
+    vehicle: string;
+    total: number;
+    customerDetails?: { phone?: string | null } | null;
+};
 
 export const Invoices = () => {
     const queryClient = useQueryClient();
@@ -24,6 +33,7 @@ export const Invoices = () => {
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [sharing, setSharing] = useState(false);
 
     // 1. Fetch Invoices
     const { data: invoices = [], isLoading: loading } = useQuery({
@@ -70,7 +80,7 @@ export const Invoices = () => {
             if (!profile?.tenant_id) return null;
             const { data } = await supabase
                 .from('tenants')
-                .select('name, address, phone, email, brand_color, logo_url, terms_and_conditions')
+                .select('name, address, phone, email, brand_color, logo_url, terms_and_conditions, payment_qr_url, payment_link')
                 .eq('id', profile.tenant_id)
                 .single();
             return data;
@@ -121,7 +131,7 @@ export const Invoices = () => {
     };
 
     // 5. PDF Generation (B&W / Minimalist / Professional)
-    const generatePDF = async (inv: any) => {
+    const buildInvoicePdf = async (inv: any): Promise<{ doc: jsPDF; filename: string }> => {
         const doc = new jsPDF();
         
         // --- Header ---
@@ -273,6 +283,37 @@ export const Invoices = () => {
         const totalStr = `LKR ${inv.total.toLocaleString()}`;
         doc.text(totalStr, pageWidth - marginRight, yPos, { align: 'right' });
         
+        // Payment QR / link — above Terms, since it's what the customer acts on
+        if (tenant?.payment_qr_url || tenant?.payment_link) {
+            yPos += 16;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.text('Payment', marginLeft, yPos);
+            yPos += 5;
+
+            let qrBottom = yPos;
+            if (tenant.payment_qr_url) {
+                try {
+                    const qrImg = await urlToBase64(tenant.payment_qr_url);
+                    const qrProps = doc.getImageProperties(qrImg);
+                    const { width, height } = fitLogoBox(qrProps.width, qrProps.height, 34, 34);
+                    doc.addImage(qrImg, 'PNG', marginLeft, yPos, width, height);
+                    qrBottom = yPos + height;
+                } catch (e) { console.warn('Payment QR error', e); }
+            }
+
+            if (tenant.payment_link) {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(6, 182, 212);
+                doc.textWithLink(tenant.payment_link, marginLeft + 40, yPos + 8, { url: tenant.payment_link });
+            }
+
+            doc.setTextColor(0);
+            yPos = Math.max(qrBottom, yPos + 8);
+        }
+
         // Terms & Conditions
         if (tenant?.terms_and_conditions) {
             yPos += 20;
@@ -302,7 +343,43 @@ export const Invoices = () => {
         const dateObj = inv.rawDate || new Date(); 
         const day = String(dateObj.getDate()).padStart(2, '0');
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-        doc.save(`Invoice-${inv.invoiceNumber}-${firstName}-${day}${month}.pdf`);
+        return { doc, filename: `Invoice-${inv.invoiceNumber}-${firstName}-${day}${month}.pdf` };
+    };
+
+    // `unknown` is assignable to buildInvoicePdf's parameter; this only forwards.
+    const generatePDF = async (inv: unknown) => {
+        const { doc, filename } = await buildInvoicePdf(inv);
+        doc.save(filename);
+    };
+
+    const shareOnWhatsApp = async (inv: ShareableInvoice) => {
+        setSharing(true);
+        try {
+            const { doc, filename } = await buildInvoicePdf(inv);
+            const file = new File([doc.output('blob')], filename, { type: 'application/pdf' });
+            const text = invoiceMessage({
+                invoiceNumber: inv.invoiceNumber,
+                vehicle: inv.vehicle,
+                total: inv.total,
+                shopName: tenant?.name,
+                paymentLink: tenant?.payment_link,
+            });
+
+            const result = await shareInvoice({
+                file,
+                title: `Invoice ${inv.invoiceNumber}`,
+                text,
+                phone: inv.customerDetails?.phone,
+            });
+
+            // Share sheet couldn't take the file, so WhatsApp only got the text —
+            // save the PDF too so there's something to attach manually.
+            if (result === 'fallback') doc.save(filename);
+        } catch (e) {
+            console.error('WhatsApp share failed:', e);
+        } finally {
+            setSharing(false);
+        }
     };
 
 
@@ -482,7 +559,17 @@ export const Invoices = () => {
                             </div>
 
                             {/* Actions - Pinned Bottom */}
-                            <div className="flex gap-4 p-4 mt-auto border-t border-slate-800 bg-slate-900 sticky bottom-0 z-20">
+                            <div className="flex gap-3 p-4 mt-auto border-t border-slate-800 bg-slate-900 sticky bottom-0 z-20">
+                                <button
+                                    onClick={() => shareOnWhatsApp(selectedInvoice)}
+                                    disabled={sharing}
+                                    title="Send this invoice to the customer on WhatsApp"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                                >
+                                    <MessageCircle size={20} />
+                                    <span className="hidden md:inline">{sharing ? 'Preparing…' : 'WhatsApp'}</span>
+                                    <span className="md:hidden">{sharing ? '…' : 'WhatsApp'}</span>
+                                </button>
                                 <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
                                     <Download size={20} /> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span>
                                 </button>

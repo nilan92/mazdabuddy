@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { calcInvoiceTotal, DEFAULT_LABOR_RATE_LKR } from '../src/lib/totals.ts';
 import { fitLogoBox } from '../src/utils/pdfHelpers.ts';
+import { toSriLankanMsisdn, waMeUrl, invoiceMessage } from '../src/lib/whatsapp.ts';
 
 // --- calcInvoiceTotal ---
 assert.equal(calcInvoiceTotal([], []), 0, 'empty job invoices at zero');
@@ -40,5 +41,32 @@ assert.deepEqual(fitLogoBox(600, 200, 30, 22), { width: 30, height: 10 }, 'wide 
 assert.equal(fitLogoBox(200, 600, 30, 22).height, 22, 'portrait logo never exceeds max height');
 assert.ok(fitLogoBox(200, 600, 30, 22).width <= 30, 'portrait logo never exceeds max width');
 assert.deepEqual(fitLogoBox(0, 0, 30, 22), { width: 30, height: 22 }, 'degenerate image falls back to the box');
+
+// --- WhatsApp: Sri Lankan number normalisation ---
+assert.equal(toSriLankanMsisdn('0771234567'), '94771234567', 'local 0-prefixed');
+assert.equal(toSriLankanMsisdn('+94 77 123 4567'), '94771234567', 'international with spaces');
+assert.equal(toSriLankanMsisdn('771234567'), '94771234567', 'bare 9-digit');
+assert.equal(toSriLankanMsisdn('94771234567'), '94771234567', 'already normalised');
+assert.equal(toSriLankanMsisdn('(077) 123-4567'), '94771234567', 'punctuation stripped');
+assert.equal(toSriLankanMsisdn(''), null, 'empty is rejected');
+assert.equal(toSriLankanMsisdn('123'), null, 'too short is rejected');
+assert.equal(toSriLankanMsisdn('07712345678'), null, 'too long is rejected');
+
+// A bad number must still open WhatsApp, just without a recipient — never a
+// wa.me/<garbage> link that 404s.
+assert.ok(waMeUrl('0771234567', 'hi').startsWith('https://wa.me/94771234567?text='), 'valid number targets the chat');
+assert.ok(waMeUrl('nonsense', 'hi').startsWith('https://wa.me/?text='), 'invalid number falls back to picker');
+assert.ok(waMeUrl(null, 'a b&c').includes(encodeURIComponent('a b&c')), 'text is url-encoded');
+
+// --- WhatsApp: message body ---
+const msg = invoiceMessage({
+    invoiceNumber: 'INV-ABC12345', vehicle: 'Mazda Axela (CAB-1234)',
+    total: 21700, shopName: 'Performance Automotive', paymentLink: 'https://pay.lk/x',
+});
+assert.ok(msg.includes('INV-ABC12345'), 'message carries the invoice number');
+assert.ok(msg.includes('21,700'), 'total is thousands-separated');
+assert.ok(msg.includes('https://pay.lk/x'), 'payment link included when set');
+assert.ok(!invoiceMessage({ invoiceNumber: 'X', vehicle: 'V', total: 1 }).includes('Pay here'),
+    'no payment line when no link configured');
 
 console.log('selfcheck: all assertions passed');
