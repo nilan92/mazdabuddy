@@ -10,8 +10,10 @@ import { logAudit } from '../lib/audit';
 import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
+import { ensureInvoiceForJob } from '../lib/invoices';
+import { useQueryClient } from '@tanstack/react-query';
 import jsPDF from 'jspdf';
-import { urlToBase64 } from '../utils/pdfHelpers';
+import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
 
 interface JobDetailsProps {
     jobId: string;
@@ -23,6 +25,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const { profile } = useAuth();
     const { toast } = useToast();
     const confirm = useConfirm();
+    const queryClient = useQueryClient();
     const [job, setJob] = useState<JobCard | null>(null);
     const [closing, setClosing] = useState(false);
     const isInitialLoad = useRef(true);
@@ -188,23 +191,32 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             const pageWidth = doc.internal.pageSize.getWidth();
             
             // --- Header ---
-            // Logo
+            // Logo. Bounded on BOTH axes: 22mm tall keeps it clear of the rule at
+            // y=40, and logoRight reserves horizontal space for the shop name.
+            let logoRight = 15;
             if (tenantDetails.logo_url) {
                 try {
                     const base64Img = await urlToBase64(tenantDetails.logo_url);
                     const imgProps = doc.getImageProperties(base64Img);
-                    const ratio = imgProps.height / imgProps.width;
-                    const width = 30; 
-                    const height = width * ratio;
+                    const { width, height } = fitLogoBox(imgProps.width, imgProps.height, 30, 22);
                     doc.addImage(base64Img, 'PNG', 15, 10, width, height);
+                    logoRight = 15 + width;
                 } catch (e) { console.warn("Logo error", e); }
             }
 
-            // Shop Details
-            doc.setFontSize(18);
+            // Shop Details. Right-aligned, but shrunk until it clears the logo so a
+            // long workshop name can't run over it.
+            const nameMaxWidth = (pageWidth - 15) - logoRight - 6;
             doc.setFont('helvetica', 'bold');
-            doc.text(tenantDetails.name || 'Workshop', pageWidth - 15, 20, { align: 'right' });
-            
+            let nameFontSize = 18;
+            doc.setFontSize(nameFontSize);
+            const shopName = tenantDetails.name || 'Workshop';
+            while (nameFontSize > 9 && doc.getTextWidth(shopName) > nameMaxWidth) {
+                nameFontSize -= 1;
+                doc.setFontSize(nameFontSize);
+            }
+            doc.text(shopName, pageWidth - 15, 20, { align: 'right' });
+
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(100);
@@ -437,54 +449,21 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             }
         }
 
-        // --- NEW LOGIC START: Generate Invoice on Completion ---
+        // --- Generate Invoice on Completion ---
+        let invoiceCreated = false;
         if (status === 'completed' && job?.status !== 'completed') {
             updates.completed_at = now.toISOString();
-            // Force stop timer if not already handled by "Moving OUT" logic (which it is, but safe to be sure)
-            
-            // 1. Calculate Parts Total
-            // (Note: jobParts comes from your existing state in this file)
-            const partsTotal = jobParts.reduce((sum: number, p: any) => 
-                sum + (p.quantity * (p.price_at_time_lkr || 0)), 0
-            );
 
-            // 2. Calculate Labor Total
-            const laborTotal = jobLabor.reduce((sum: number, l: any) => 
-                sum + (Number(l.hours) * (l.hourly_rate_lkr || 1500)), 0
-            );
-
-            const grandTotal = partsTotal + laborTotal;
-
-            // 3. Check if invoice already exists to prevent duplicates
-            const { data: existingInv } = await supabase
-                .from('invoices')
-                .select('id')
-                .eq('job_id', jobId)
-                .single();
-
-            if (!existingInv) {
-                // 4. Create the Real Invoice Record
-                const { error: invError } = await supabase.from('invoices').insert({
-                    job_id: jobId,
-                    tenant_id: job.tenant_id,
-                    subtotal_lkr: grandTotal,
-                    tax_lkr: 0,
-                    discount_lkr: 0,
-                    total_amount_lkr: grandTotal,
-                    created_at: now.toISOString(),
-                    status: 'Unpaid' 
-                });
-
-                if (invError) {
-                    toast("Job completed, but invoice creation failed: " + invError.message, 'error');
-                    return;
-                }
+            const { created, error: invError } = await ensureInvoiceForJob(jobId, job.tenant_id);
+            if (invError) {
+                toast("Job completed, but invoice creation failed: " + invError, 'error');
+                return;
             }
+            invoiceCreated = created;
         }
         else if (status !== 'completed' && job?.status === 'completed') {
             updates.completed_at = null;
         }
-        // --- NEW LOGIC END ---
 
         const { error } = await supabase.from('job_cards').update(updates).eq('id', jobId);
 
@@ -503,7 +482,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
             const autoSMS = tenantDetails?.sms_auto_enabled !== false; // default true
             if (status === 'completed' && job?.status !== 'completed') {
-                toast("Job completed & invoice generated!", 'success');
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                toast(invoiceCreated
+                    ? "Job completed & invoice generated!"
+                    : "Job completed. An invoice already existed for it.", 'success');
                 // Push to all tenant admins/managers
                 if (job?.tenant_id) {
                     sendPushNotification({

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Search, RefreshCcw, Archive, UserCheck, Download } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
+import { ensureInvoiceForJob } from '../lib/invoices';
 import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
@@ -173,11 +174,40 @@ export const Jobs = () => {
 
     const handleDrop = async (e: React.DragEvent, status: string) => {
         const id = e.dataTransfer.getData('jobId');
-        const { error } = await supabase.from('job_cards').update({ status }).eq('id', id);
+        const job = jobs.find(j => j.id === id);
+        if (!job || job.status === status) return;
+
+        const updates: Record<string, unknown> = { status };
+        let invoiceCreated = false;
+
+        // Completing from the board must produce an invoice, same as completing
+        // from the job card. Invoice first — a completed job with no invoice is
+        // worse than a job that stayed put.
+        if (status === 'completed') {
+            updates.completed_at = new Date().toISOString();
+            if (!job.tenant_id) {
+                toast("Cannot invoice this job — it has no workshop assigned.", 'error');
+                return;
+            }
+            const { created, error: invError } = await ensureInvoiceForJob(id, job.tenant_id);
+            if (invError) {
+                toast("Invoice failed, job not completed: " + invError, 'error');
+                return;
+            }
+            invoiceCreated = created;
+        }
+
+        const { error } = await supabase.from('job_cards').update(updates).eq('id', id);
         if (error) {
             toast("Failed to update job status.", 'error');
         } else {
             fetchJobs();
+            if (status === 'completed') {
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                toast(invoiceCreated
+                    ? "Job completed & invoice generated."
+                    : "Job completed. An invoice already existed for it.", 'success');
+            }
         }
     };
 
