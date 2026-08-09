@@ -308,7 +308,7 @@ export const Invoices = () => {
 
 
     return (
-        <div className="p-2 h-[calc(100vh-100px)] flex flex-col">
+        <div className="p-2 h-[calc(100dvh-100px)] flex flex-col">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h1 className="text-3xl font-bold text-white mb-2">Invoices</h1>
@@ -380,11 +380,11 @@ export const Invoices = () => {
                 </div>
 
                 {/* PREVIEW */}
-                <div className={`w-full md:flex-1 bg-slate-900 border border-slate-800 rounded-2xl md:p-6 flex flex-col overflow-hidden ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`w-full flex-1 min-h-0 bg-slate-900 border border-slate-800 rounded-2xl md:p-6 flex flex-col overflow-hidden ${!selectedInvoice ? 'hidden md:flex' : 'flex'}`}>
                     {selectedInvoice ? (
-                        <div className="flex-1 flex flex-col h-full overflow-y-auto relative"> 
+                        <div className="flex-1 min-h-0 flex flex-col overflow-y-auto relative">
                             {/* Mobile Back & Header */}
-                            <div className="flex flex-col gap-4 mb-6 border-b border-slate-800 pb-4 p-4 md:p-0">
+                            <div className="flex shrink-0 flex-col gap-4 mb-6 border-b border-slate-800 pb-4 p-4 md:p-0">
                                 <button onClick={() => setSelectedInvoice(null)} className="md:hidden text-slate-400 flex items-center gap-2 self-start hover:text-white transition-colors print:hidden">
                                     ← Back to List
                                 </button>
@@ -430,7 +430,7 @@ export const Invoices = () => {
                             </div>
 
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}
-                            <div className="w-full bg-slate-950 rounded-xl border border-slate-800 mb-4 overflow-x-auto">
+                            <div className="w-full shrink-0 bg-slate-950 rounded-xl border border-slate-800 mb-4 overflow-x-auto">
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
                                         <tr>
