@@ -1,0 +1,13 @@
+name = "mazdabuddy-photos"
+main = "src/index.ts"
+compatibility_date = "2026-08-01"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "mazdabuddy"
+
+[vars]
+SUPABASE_URL = "https://mkvlfnjxeifriagktrbc.supabase.co"
+SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1rdmxmbmp4ZWlmcmlhZ2t0cmJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjU1NTcwNTksImV4cCI6MjA4MTEzMzA1OX0.md6i4yiVBQHO9To6TjDfERk0f-Na34oLelCiSy3z5-s"
+PUBLIC_BASE = "https://pub-20baf55b435d421f9e1399dc26ab8742.r2.dev"
+ALLOWED_ORIGINS = "https://nilan92.github.io,http://localhost:5173,http://localhost:4173"

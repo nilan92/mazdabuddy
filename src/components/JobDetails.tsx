@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download } from 'lucide-react';
+import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -11,9 +11,17 @@ import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import { ensureInvoiceForJob } from '../lib/invoices';
+import { uploadJobPhoto, deleteJobPhotoObject } from '../lib/photos';
 import { useQueryClient } from '@tanstack/react-query';
 import jsPDF from 'jspdf';
 import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
+
+interface JobPhoto {
+    id: string;
+    url: string;
+    object_key: string;
+    created_at: string;
+}
 
 interface JobDetailsProps {
     jobId: string;
@@ -32,6 +40,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
     const [jobLabor, setJobLabor] = useState<JobLabor[]>([]);
     const [allParts, setAllParts] = useState<Part[]>([]);
+    const [photos, setPhotos] = useState<JobPhoto[]>([]);
+    const [uploadingPhotos, setUploadingPhotos] = useState(false);
     const [profiles, setProfiles] = useState<{id: string, full_name: string}[]>([]);
 
     // Forms
@@ -121,6 +131,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             
             if (signal?.aborted) return;
             if (laborData) setJobLabor(laborData);
+
+            // Photos
+            const { data: photoData } = await supabase
+                .from('job_photos')
+                .select('id, url, object_key, created_at')
+                .eq('job_id', jobId)
+                .order('created_at', { ascending: true })
+                .abortSignal(signal!);
+
+            if (signal?.aborted) return;
+            if (photoData) setPhotos(photoData as JobPhoto[]);
 
             // Inventory list (for dropdown)
             const { data: invData } = await supabase
@@ -622,6 +643,58 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         else { fetchJobDetails(); toast("Part removed, stock restored.", 'info'); }
     };
 
+    const refreshPhotos = async () => {
+        const { data } = await supabase
+            .from('job_photos')
+            .select('id, url, object_key, created_at')
+            .eq('job_id', jobId)
+            .order('created_at', { ascending: true });
+        if (data) setPhotos(data as JobPhoto[]);
+    };
+
+    const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files ?? []);
+        e.target.value = ''; // let the same file be picked again after a failure
+        if (files.length === 0 || !job?.tenant_id) return;
+
+        setUploadingPhotos(true);
+        let failures = 0;
+        for (const file of files) {
+            try {
+                const { key, url } = await uploadJobPhoto(file, jobId);
+                const { error } = await supabase.from('job_photos').insert({
+                    tenant_id: job.tenant_id,
+                    job_id: jobId,
+                    url,
+                    object_key: key,
+                    uploaded_by: profile?.id ?? null,
+                });
+                if (error) throw new Error(error.message);
+            } catch (err) {
+                failures++;
+                console.error('Photo upload failed:', err);
+                toast(err instanceof Error ? err.message : 'Photo upload failed', 'error');
+            }
+        }
+        setUploadingPhotos(false);
+        await refreshPhotos();
+        if (failures < files.length) {
+            toast(files.length - failures === 1 ? 'Photo added.' : `${files.length - failures} photos added.`, 'success');
+        }
+    };
+
+    const handleDeletePhoto = async (photo: JobPhoto) => {
+        if (!await confirm({ title: 'Delete Photo', message: 'Remove this photo permanently?', confirmLabel: 'Delete' })) return;
+        try {
+            await deleteJobPhotoObject(photo.object_key);
+            const { error } = await supabase.from('job_photos').delete().eq('id', photo.id);
+            if (error) throw new Error(error.message);
+            setPhotos(prev => prev.filter(p => p.id !== photo.id));
+        } catch (err) {
+            toast(err instanceof Error ? err.message : 'Could not delete photo', 'error');
+        }
+    };
+
     const handleRemoveLabor = async (id: string) => {
         const { error } = await supabase.from('job_labor').delete().eq('id', id);
         if (error) toast("Error removing labor entry.", 'error');
@@ -930,6 +1003,56 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             </div>
                                         ))}
                                         {jobLabor.length === 0 && <p className="text-center text-slate-600 py-2 text-sm italic">No labor entries yet.</p>}
+                                    </div>
+                                </div>
+
+                                {/* ── PHOTOS ────────────────────────────── */}
+                                <div className="border-t border-slate-800">
+                                    <div className="flex items-center justify-between px-4 pt-5 pb-3">
+                                        <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                                            <Camera size={16} className="text-brand" /> Photos
+                                        </h3>
+                                        <label className={`text-xs font-bold px-3 py-2 rounded-lg cursor-pointer transition-colors ${uploadingPhotos ? 'bg-slate-800 text-slate-500' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
+                                            {uploadingPhotos ? 'Uploading…' : '+ Add'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                capture="environment"
+                                                multiple
+                                                disabled={uploadingPhotos}
+                                                onChange={handlePhotoSelect}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                    </div>
+                                    <div className="px-4 pb-6">
+                                        {photos.length === 0 ? (
+                                            <p className="text-center text-slate-600 py-2 text-sm italic">
+                                                No photos yet. Snap before/after shots to settle disputes later.
+                                            </p>
+                                        ) : (
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {photos.map(photo => (
+                                                    <div key={photo.id} className="relative group aspect-square rounded-lg overflow-hidden border border-slate-800 bg-slate-950">
+                                                        <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                                                            <img
+                                                                src={photo.url}
+                                                                alt="Job photo"
+                                                                loading="lazy"
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                        </a>
+                                                        <button
+                                                            onClick={() => handleDeletePhoto(photo)}
+                                                            title="Delete photo"
+                                                            className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/70 text-slate-300 hover:text-red-400 hover:bg-black/90 transition-colors"
+                                                        >
+                                                            <Trash2 size={13} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
