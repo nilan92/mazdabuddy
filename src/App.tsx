@@ -18,6 +18,7 @@ const Login = lazy(() => import('./components/Login').then(module => ({ default:
 const Register = lazy(() => import('./components/Register').then(module => ({ default: module.Register })));
 const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(module => ({ default: module.ForgotPassword })));
 const ResetPassword = lazy(() => import('./components/ResetPassword').then(module => ({ default: module.ResetPassword })));
+const JobStatus = lazy(() => import('./components/JobStatus').then(module => ({ default: module.JobStatus })));
 const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
 
 // Reusable Loading Screen
@@ -182,6 +183,9 @@ const App = () => {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/onboarding" element={<Onboarding />} />
+                {/* Public: customers open this with no account, so it must sit
+                    outside AuthGuard. Authorised solely by the unguessable token. */}
+                <Route path="/status/:token" element={<JobStatus />} />
                 
                 <Route path="/*" element={
                     <AuthGuard>
