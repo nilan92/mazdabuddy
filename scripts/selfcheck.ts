@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { calcInvoiceTotal, DEFAULT_LABOR_RATE_LKR } from '../src/lib/totals.ts';
 import { fitLogoBox } from '../src/utils/pdfHelpers.ts';
 import { toSriLankanMsisdn, waMeUrl, invoiceMessage } from '../src/lib/whatsapp.ts';
-import { smartTitleCase, tidyName } from '../src/lib/textCase.ts';
+import { smartTitleCase, tidyName, withTitle, CUSTOMER_TITLES } from '../src/lib/textCase.ts';
 
 // --- calcInvoiceTotal ---
 assert.equal(calcInvoiceTotal([], []), 0, 'empty job invoices at zero');
@@ -84,5 +84,15 @@ assert.equal(smartTitleCase(''), '', 'empty string survives');
 assert.equal(tidyName('  nimal  perera  '), 'Nimal Perera', 'tidyName trims');
 assert.equal(tidyName(null), '', 'tidyName tolerates null');
 assert.equal(tidyName(undefined), '', 'tidyName tolerates undefined');
+
+// --- withTitle ---
+assert.equal(withTitle('Mr.', 'Mohan'), 'Mr. Mohan', 'title is prefixed');
+assert.equal(withTitle('Ms.', 'NISHANI SENEVIRATHNE'), 'Ms. NISHANI SENEVIRATHNE', 'works with caps names');
+assert.equal(withTitle('Mr.', 'MR. MOHAN'), 'MR. MOHAN', 'no doubling when name already carries the title');
+assert.equal(withTitle('Mr.', 'mr. mohan'), 'mr. mohan', 'doubling check is case-insensitive');
+assert.equal(withTitle(null, 'Kamal'), 'Kamal', 'missing title just returns the name');
+assert.equal(withTitle('Dr.', ''), '', 'no name means no output');
+assert.equal(withTitle('Prof.', 'Silva'), 'Prof. Silva', 'Prof. supported');
+assert.equal(CUSTOMER_TITLES.length, 4, 'four titles offered');
 
 console.log('selfcheck: all assertions passed');

@@ -4,7 +4,7 @@ import { downloadCSV } from '../lib/csv';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { calcInvoiceTotal } from '../lib/totals';
-import { tidyName } from '../lib/textCase';
+import { tidyName, withTitle, CUSTOMER_TITLES } from '../lib/textCase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -47,7 +47,7 @@ export const Customers = () => {
     const [smsSending, setSmsSending] = useState(false);
 
     // Forms
-    const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
+    const [customerForm, setCustomerForm] = useState({ title: 'Mr.', name: '', phone: '', email: '', address: '' });
     const [vehicleForm, setVehicleForm] = useState({ make: '', model: '', year: '', license_plate: '', color: '', vin: '' });
 
     const { data: customers = [], isLoading: customersLoading } = useQuery({
@@ -113,7 +113,7 @@ export const Customers = () => {
         
         setIsCustomerModalOpen(false);
         setEditingCustomer(null);
-        setCustomerForm({ name: '', phone: '', email: '', address: '' });
+        setCustomerForm({ title: 'Mr.', name: '', phone: '', email: '', address: '' });
         refreshData();
     };
 
@@ -214,7 +214,7 @@ export const Customers = () => {
                     <button 
                         onClick={() => {
                             setEditingCustomer(null);
-                            setCustomerForm({ name: '', phone: '', email: '', address: '' });
+                            setCustomerForm({ title: 'Mr.', name: '', phone: '', email: '', address: '' });
                             setIsCustomerModalOpen(true);
                         }}
                         className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-cyan-500/20"
@@ -247,7 +247,7 @@ export const Customers = () => {
                                         {(customer.name?.[0] || '?').toUpperCase()}
                                     </div>
                                     <div className="min-w-0">
-                                        <h3 className="text-xl font-bold text-white truncate">{customer.name}</h3>
+                                        <h3 className="text-xl font-bold text-white truncate">{withTitle(customer.title, customer.name)}</h3>
                                         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400 mt-1">
                                             <span className="flex items-center gap-1"><Phone size={14}/> {customer.phone}</span>
                                             {customer.email && <span className="flex items-center gap-1"><Mail size={14}/> {customer.email}</span>}
@@ -283,7 +283,7 @@ export const Customers = () => {
                                     <button 
                                         onClick={() => {
                                             setEditingCustomer(customer);
-                                            setCustomerForm({ name: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '' });
+                                            setCustomerForm({ title: customer.title || 'Mr.', name: customer.name, phone: customer.phone, email: customer.email || '', address: customer.address || '' });
                                             setIsCustomerModalOpen(true);
                                         }}
                                         className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
@@ -363,7 +363,16 @@ export const Customers = () => {
                 <form onSubmit={handleSaveCustomer} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-400 mb-1">Full Name *</label>
-                        <input type="text" required className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3" value={customerForm.name} onChange={e => setCustomerForm({...customerForm, name: e.target.value})} />
+                        <div className="flex gap-2">
+                            <select
+                                value={customerForm.title}
+                                onChange={e => setCustomerForm({...customerForm, title: e.target.value})}
+                                className="bg-slate-800 border border-slate-700 text-white rounded-lg p-3"
+                            >
+                                {CUSTOMER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <input type="text" required className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white rounded-lg p-3" value={customerForm.name} onChange={e => setCustomerForm({...customerForm, name: e.target.value})} />
+                        </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -411,7 +420,7 @@ export const Customers = () => {
             </Modal>
 
             {/* History Modal */}
-            <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Service History: ${selectedCustomer?.name}`}>
+            <Modal isOpen={isHistoryModalOpen} onClose={() => setIsHistoryModalOpen(false)} title={`Service History: ${withTitle(selectedCustomer?.title, selectedCustomer?.name)}`}>
                 <div className="space-y-4 max-h-[60vh] overflow-y-auto">
                      {/* Summary Stats */}
                     <div className="grid grid-cols-3 gap-2 mb-4">
@@ -472,7 +481,7 @@ export const Customers = () => {
                     <div className="space-y-4">
                         <div className="flex items-center gap-3 p-3 bg-slate-800/50 rounded-xl border border-slate-700">
                             <div>
-                                <p className="text-white font-bold text-sm">{smsModal.customer.name}</p>
+                                <p className="text-white font-bold text-sm">{withTitle(smsModal.customer.title, smsModal.customer.name)}</p>
                                 <p className="text-slate-400 text-xs">{smsModal.customer.phone}</p>
                                 {smsModal.vehicle && (
                                     <p className="text-slate-500 text-xs mt-0.5">

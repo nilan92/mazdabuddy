@@ -12,6 +12,7 @@ import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import { ensureInvoiceForJob } from '../lib/invoices';
 import { uploadJobPhoto, deleteJobPhotoObject } from '../lib/photos';
+import { withTitle } from '../lib/textCase';
 import { useQueryClient } from '@tanstack/react-query';
 import jsPDF from 'jspdf';
 import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
@@ -270,7 +271,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
             // Customer & Vehicle
             // @ts-ignore
-            const customerName = job.vehicles?.customers?.name || "Walk-in Customer";
+            const customerName = withTitle(job.vehicles?.customers?.title, job.vehicles?.customers?.name) || "Walk-in Customer";
             // @ts-ignore
             const customerPhone = job.vehicles?.customers?.phone || "";
             const vehicleInfo = job.vehicles ? `${job.vehicles.year} ${job.vehicles.make} ${job.vehicles.model}` : "Unknown Vehicle";

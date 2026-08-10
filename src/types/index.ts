@@ -23,6 +23,7 @@ export type JobStatus = 'pending' | 'in_progress' | 'waiting_parts' | 'completed
 export interface Customer {
     id: string;
     tenant_id: string;
+    title?: string;
     name: string;
     phone: string;
     email?: string;

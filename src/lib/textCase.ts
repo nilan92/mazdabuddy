@@ -22,6 +22,27 @@ export function smartTitleCase(input: string): string {
     );
 }
 
+export const CUSTOMER_TITLES = ['Mr.', 'Ms.', 'Dr.', 'Prof.'] as const;
+export type CustomerTitle = typeof CUSTOMER_TITLES[number];
+
+/**
+ * "Mr." + "Mohan" → "Mr. Mohan".
+ *
+ * Skips the prefix when the name already carries the title, so the legacy
+ * "MR. MOHAN" record renders as-is instead of "Mr. MR. MOHAN" — no need to
+ * rewrite old rows.
+ */
+export function withTitle(
+    title: string | null | undefined,
+    name: string | null | undefined,
+): string {
+    const n = (name ?? '').trim();
+    const t = (title ?? '').trim();
+    if (!t || !n) return n;
+    const alreadyPrefixed = new RegExp(`^${t.replace(/\./g, '\\.')}\\s`, 'i').test(n);
+    return alreadyPrefixed ? n : `${t} ${n}`;
+}
+
 /** Trims, collapses runs of whitespace, and title-cases. Tolerates null. */
 export function tidyName(value: string | null | undefined): string {
     return smartTitleCase((value ?? '').trim().replace(/\s+/g, ' '));

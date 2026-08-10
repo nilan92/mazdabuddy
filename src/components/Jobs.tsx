@@ -3,7 +3,7 @@ import { Plus, Search, RefreshCcw, Archive, UserCheck, Download } from 'lucide-r
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { ensureInvoiceForJob } from '../lib/invoices';
-import { tidyName } from '../lib/textCase';
+import { tidyName, withTitle, CUSTOMER_TITLES } from '../lib/textCase';
 import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +32,7 @@ export const Jobs = () => {
         vehicle_id: '', 
         description: '',
         // Express Fields
+        customerTitle: 'Mr.',
         customerName: '',
         customerPhone: '',
         vehicleMake: '',
@@ -59,7 +60,7 @@ export const Jobs = () => {
         queryFn: async () => {
             const { data } = await supabase
                 .from('vehicles')
-                .select('*, customers(name)');
+                .select('*, customers(title, name)');
             return data as Vehicle[] || [];
         }
     });
@@ -113,6 +114,7 @@ export const Jobs = () => {
                 const { data: customerData, error: custError } = await supabase
                     .from('customers')
                     .insert([{ 
+                        title: newJobForm.customerTitle,
                         name: tidyName(newJobForm.customerName), 
                         phone: newJobForm.customerPhone,
                         tenant_id: profile?.tenant_id
@@ -156,6 +158,7 @@ export const Jobs = () => {
             setNewJobForm({ 
                 vehicle_id: '', 
                 description: '',
+                customerTitle: 'Mr.',
                 customerName: '',
                 customerPhone: '',
                 vehicleMake: '',
@@ -410,7 +413,7 @@ export const Jobs = () => {
                                             >
                                                 <div className="flex justify-between items-start">
                                                     <div className="font-bold text-white text-sm">{v.license_plate}</div>
-                                                    <div className="text-[10px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase">{v.customers?.name}</div>
+                                                    <div className="text-[10px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase">{withTitle(v.customers?.title, v.customers?.name)}</div>
                                                 </div>
                                                 <div className="text-xs text-slate-400">{v.make} {v.model}</div>
                                             </div>
@@ -431,14 +434,23 @@ export const Jobs = () => {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Customer Name</label>
-                                    <input 
-                                        required
-                                        type="text"
-                                        placeholder="Full Name"
-                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none"
-                                        value={newJobForm.customerName}
-                                        onChange={(e) => setNewJobForm({...newJobForm, customerName: e.target.value})}
-                                    />
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={newJobForm.customerTitle}
+                                            onChange={(e) => setNewJobForm({...newJobForm, customerTitle: e.target.value})}
+                                            className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none"
+                                        >
+                                            {CUSTOMER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                        <input 
+                                            required
+                                            type="text"
+                                            placeholder="Full Name"
+                                            className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none"
+                                            value={newJobForm.customerName}
+                                            onChange={(e) => setNewJobForm({...newJobForm, customerName: e.target.value})}
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Phone Number</label>

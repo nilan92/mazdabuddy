@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
 import { shareInvoice, invoiceMessage } from '../lib/whatsapp';
+import { withTitle } from '../lib/textCase';
 import { downloadCSV } from '../lib/csv';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -45,7 +46,7 @@ export const Invoices = () => {
                     *,
                     job_cards!inner (
                         description,
-                        vehicles!inner (license_plate, make, model, year, customers!inner(name, address, phone, email)),
+                        vehicles!inner (license_plate, make, model, year, customers!inner(title, name, address, phone, email)),
                         job_parts ( quantity, price_at_time_lkr, custom_name, parts(name) ),
                         job_labor ( description, hours, hourly_rate_lkr )
                     )
@@ -58,7 +59,7 @@ export const Invoices = () => {
             return data?.map((inv: any) => ({
                 id: inv.id,
                 invoiceNumber: `INV-${inv.id.slice(0, 8).toUpperCase()}`,
-                customer: inv.job_cards?.vehicles?.customers?.name || 'Unknown',
+                customer: withTitle(inv.job_cards?.vehicles?.customers?.title, inv.job_cards?.vehicles?.customers?.name) || 'Unknown',
                 customerDetails: inv.job_cards?.vehicles?.customers,
                 vehicle: `${inv.job_cards?.vehicles?.make} ${inv.job_cards?.vehicles?.model} (${inv.job_cards?.vehicles?.license_plate})`,
                 vehicleDetails: inv.job_cards?.vehicles,
@@ -211,7 +212,7 @@ export const Invoices = () => {
         doc.setTextColor(60);
         customerY += 6;
 
-        const cName = inv.customerDetails?.name || 'Cash Customer';
+        const cName = withTitle(inv.customerDetails?.title, inv.customerDetails?.name) || 'Cash Customer';
         const cPhone = inv.customerDetails?.phone || '';
         const cAddress = inv.customerDetails?.address || '';
         
