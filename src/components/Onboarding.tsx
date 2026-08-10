@@ -39,7 +39,7 @@ export const Onboarding = () => {
             // 3. Force reload to refresh AuthContext
             // BASE_URL, not '/'. The app is served from /mazdabuddy/, so '/'
             // lands on the GitHub Pages root, which has no site — a 404.
-            window.location.href = import.meta.env.BASE_URL;
+            window.location.href = import.meta.env.BASE_URL + '#/';
 
         } catch (err: any) {
             console.error("Onboarding Error:", err);

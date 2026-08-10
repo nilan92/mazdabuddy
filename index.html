@@ -17,8 +17,11 @@
       (function() {
         var hash = window.location.hash;
         var hasAppRoute = hash && hash.length > 2 && hash !== '#/';
+        // supabase-js v2 stores the session as "sb-<project-ref>-auth-token".
+        // The old check looked for "supabase", which never matches, so every
+        // signed-in visitor was bounced to the landing page.
         var hasSession = Object.keys(localStorage).some(function(k) {
-          return k.indexOf('supabase') !== -1;
+          return k.indexOf('sb-') === 0 && k.indexOf('-auth-token') !== -1;
         });
         if (!hasAppRoute && !hasSession) {
           window.location.replace('/mazdabuddy/about.html');
