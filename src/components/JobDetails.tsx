@@ -143,6 +143,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             if (signal?.aborted) return;
             if (photoData) setPhotos(photoData as JobPhoto[]);
 
+            // A DB trigger keeps invoices.total_amount_lkr in step with parts and
+            // labour, so the cached invoice list goes stale whenever line items
+            // change. The Invoices page isn't mounted while this card is open, so
+            // this only marks it stale — no refetch cost.
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+
             // Inventory list (for dropdown)
             const { data: invData } = await supabase
                 .from('parts')
