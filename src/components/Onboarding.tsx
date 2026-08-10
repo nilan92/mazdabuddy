@@ -18,28 +18,23 @@ export const Onboarding = () => {
         try {
             if (!shopName.trim()) throw new Error("Please enter a shop name.");
 
-            // 1. Create Tenant
-            const { data: tenant, error: tenantError } = await supabase
-                .from('tenants')
-                .insert({ name: shopName })
-                .select()
-                .single();
+            // Creating the tenant and linking the profile happens in one
+            // SECURITY DEFINER function. Doing it client-side with
+            // .insert().select() failed: RETURNING is filtered by the SELECT
+            // policy ("id = get_my_tenant()"), and a brand-new user has no
+            // tenant yet, so they could not see the row they had just created.
+            const { error: rpcError } = await supabase.rpc('create_workshop', {
+                p_name: shopName.trim(),
+            });
 
-            if (tenantError) throw tenantError;
+            if (rpcError) throw rpcError;
 
-            // 2. Link Profile to Tenant
-            const { error: profileError } = await supabase
-                .from('profiles')
-                .update({ 
-                    tenant_id: tenant.id,
-                    role: 'admin',
-                    full_name: user.user_metadata.full_name || 'Admin', 
-                    // Ensure username is unique if possible, or let trigger handle it? 
-                    // For now, simpler is better. We assume profile exists from trigger or previous partial signup.
-                })
-                .eq('id', user.id);
-
-            if (profileError) throw profileError;
+            // Name is set separately: it is not part of workshop creation and a
+            // failure here must not leave the workshop half-built.
+            const fullName = user.user_metadata?.full_name;
+            if (fullName) {
+                await supabase.from('profiles').update({ full_name: fullName }).eq('id', user.id);
+            }
 
             // 3. Force reload to refresh AuthContext
             window.location.href = '/'; 
