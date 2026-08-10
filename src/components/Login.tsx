@@ -109,8 +109,12 @@ export const Login = () => {
         options: {
             redirectTo, // <--- CRITICAL: Tell Supabase exactly where to go
             queryParams: {
-                access_type: 'offline',
-                prompt: 'consent',
+                // select_account shows the chooser (useful on a shared workshop
+                // machine) without re-asking for authorisation. The previous
+                // prompt:'consent' forced the consent screen on every sign-in,
+                // and access_type:'offline' requested a Google refresh token the
+                // app never uses — Supabase manages its own session.
+                prompt: 'select_account',
             },
         },
     });
