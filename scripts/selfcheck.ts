@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { calcInvoiceTotal, DEFAULT_LABOR_RATE_LKR } from '../src/lib/totals.ts';
 import { fitLogoBox } from '../src/utils/pdfHelpers.ts';
 import { toSriLankanMsisdn, waMeUrl, invoiceMessage } from '../src/lib/whatsapp.ts';
+import { smartTitleCase, tidyName } from '../src/lib/textCase.ts';
 
 // --- calcInvoiceTotal ---
 assert.equal(calcInvoiceTotal([], []), 0, 'empty job invoices at zero');
@@ -68,5 +69,20 @@ assert.ok(msg.includes('21,700'), 'total is thousands-separated');
 assert.ok(msg.includes('https://pay.lk/x'), 'payment link included when set');
 assert.ok(!invoiceMessage({ invoiceNumber: 'X', vehicle: 'V', total: 1 }).includes('Pay here'),
     'no payment line when no link configured');
+
+
+// --- smartTitleCase: fix lowercase typing without wrecking real makes ---
+assert.equal(smartTitleCase('toyota corolla'), 'Toyota Corolla', 'lowercase words are capitalised');
+assert.equal(smartTitleCase('BMW'), 'BMW', 'all-caps acronym untouched');
+assert.equal(smartTitleCase('KIA Sportage'), 'KIA Sportage', 'mixed case left alone');
+assert.equal(smartTitleCase('FORD Ranger'), 'FORD Ranger', 'existing capitals preserved');
+assert.equal(smartTitleCase('DFSK'), 'DFSK', 'SL-common acronym untouched');
+assert.equal(smartTitleCase("o'brien"), "O'Brien", 'apostrophe is a word boundary');
+assert.equal(smartTitleCase('de silva'), 'De Silva', 'each lowercase word capitalised');
+assert.equal(smartTitleCase('jean-pierre'), 'Jean-Pierre', 'hyphen is a word boundary');
+assert.equal(smartTitleCase(''), '', 'empty string survives');
+assert.equal(tidyName('  nimal  perera  '), 'Nimal Perera', 'tidyName trims');
+assert.equal(tidyName(null), '', 'tidyName tolerates null');
+assert.equal(tidyName(undefined), '', 'tidyName tolerates undefined');
 
 console.log('selfcheck: all assertions passed');

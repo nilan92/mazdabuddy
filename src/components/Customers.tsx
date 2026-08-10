@@ -3,6 +3,8 @@ import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw
 import { downloadCSV } from '../lib/csv';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { calcInvoiceTotal } from '../lib/totals';
+import { tidyName } from '../lib/textCase';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -10,6 +12,16 @@ import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Customer, Vehicle, JobCard } from '../types';
+
+type HistoryJob = JobCard & {
+    job_parts?: Parameters<typeof calcInvoiceTotal>[0];
+    job_labor?: Parameters<typeof calcInvoiceTotal>[1];
+};
+
+/** job_cards has no total column; the money lives in the line items. Invoices
+ *  only exist once a job is completed, so line items are the one source that
+ *  works for every status. */
+const jobTotal = (job: HistoryJob) => calcInvoiceTotal(job.job_parts ?? [], job.job_labor ?? []);
 
 export const Customers = () => {
     const { profile } = useAuth();
@@ -27,7 +39,7 @@ export const Customers = () => {
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     
-    const [customerHistory, setCustomerHistory] = useState<JobCard[]>([]);
+    const [customerHistory, setCustomerHistory] = useState<HistoryJob[]>([]);
     
     // Service reminder SMS modal
     const [smsModal, setSmsModal] = useState<{ customer: Customer; vehicle: Vehicle | null } | null>(null);
@@ -87,12 +99,14 @@ export const Customers = () => {
 
     const handleSaveCustomer = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
+        const tidied = { ...customerForm, name: tidyName(customerForm.name) };
+
         if (editingCustomer) {
-             const { error } = await supabase.from('customers').update(customerForm).eq('id', editingCustomer.id);
+             const { error } = await supabase.from('customers').update(tidied).eq('id', editingCustomer.id);
              if (error) toast(error.message, 'error');
         } else {
-             const payload = { ...customerForm, tenant_id: profile?.tenant_id };
+             const payload = { ...tidied, tenant_id: profile?.tenant_id };
              const { error } = await supabase.from('customers').insert([payload]);
              if (error) toast(error.message, 'error');
         }
@@ -108,10 +122,12 @@ export const Customers = () => {
         if (!selectedCustomer) return;
 
         // Added tenant_id to payload
-        const payload = { 
-            ...vehicleForm, 
+        const payload = {
+            ...vehicleForm,
+            make: tidyName(vehicleForm.make),
+            model: tidyName(vehicleForm.model),
             customer_id: selectedCustomer.id,
-            tenant_id: profile?.tenant_id 
+            tenant_id: profile?.tenant_id
         };
         
         if (editingVehicle) {
@@ -151,11 +167,11 @@ export const Customers = () => {
         const { data: jobs } = await supabase
             .from('job_cards')
             // @ts-ignore
-            .select('*, vehicles(make, model, license_plate)')
+            .select('*, vehicles(make, model, license_plate), job_parts(quantity, price_at_time_lkr), job_labor(hours, hourly_rate_lkr)')
             .in('vehicle_id', vehicleIds)
             .order('created_at', { ascending: false });
             
-        if (jobs) setCustomerHistory(jobs as JobCard[]);
+        if (jobs) setCustomerHistory(jobs as HistoryJob[]);
     };
 
     const filteredCustomers = customers.filter(c => 
@@ -406,7 +422,7 @@ export const Customers = () => {
                         <div className="bg-slate-800 p-3 rounded-lg text-center col-span-2">
                              <div className="text-xs text-slate-500 uppercase">Total Value</div>
                              <div className="text-xl font-bold text-cyan-400">
-                                LKR {customerHistory.reduce((sum, job) => sum + ((job as any).total || job.estimated_cost_lkr || 0), 0).toLocaleString()}
+                                LKR {customerHistory.reduce((sum, job) => sum + jobTotal(job), 0).toLocaleString()}
                              </div>
                         </div>
                     </div>
@@ -442,7 +458,7 @@ export const Customers = () => {
                                     </h4>
                                 <p className="text-sm text-slate-400 mt-1">{job.description}</p>
                                 <div className="mt-2 pt-2 border-t border-slate-700 flex justify-end">
-                                    <span className="text-cyan-400 font-mono font-bold">LKR {((job as any).total || job.estimated_cost_lkr || 0).toLocaleString()}</span>
+                                    <span className="text-cyan-400 font-mono font-bold">LKR {jobTotal(job).toLocaleString()}</span>
                                 </div>
                             </div>
                         ))

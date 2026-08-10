@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCcw, Archive, UserCheck, Download } from 'lucide-r
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { ensureInvoiceForJob } from '../lib/invoices';
+import { tidyName } from '../lib/textCase';
 import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
 import { useAuth } from '../context/AuthContext';
@@ -112,7 +113,7 @@ export const Jobs = () => {
                 const { data: customerData, error: custError } = await supabase
                     .from('customers')
                     .insert([{ 
-                        name: newJobForm.customerName, 
+                        name: tidyName(newJobForm.customerName), 
                         phone: newJobForm.customerPhone,
                         tenant_id: profile?.tenant_id
                     }])
@@ -126,8 +127,8 @@ export const Jobs = () => {
                     .from('vehicles')
                     .insert([{
                         customer_id: customerData.id,
-                        make: newJobForm.vehicleMake,
-                        model: newJobForm.vehicleModel,
+                        make: tidyName(newJobForm.vehicleMake),
+                        model: tidyName(newJobForm.vehicleModel),
                         license_plate: newJobForm.licensePlate.toUpperCase(),
                         tenant_id: profile?.tenant_id
                     }])
