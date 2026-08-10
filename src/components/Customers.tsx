@@ -126,6 +126,9 @@ export const Customers = () => {
             ...vehicleForm,
             make: tidyName(vehicleForm.make),
             model: tidyName(vehicleForm.model),
+            // Jobs.tsx already uppercases plates on express intake; this form
+            // did not, which is how a lowercase plate got in.
+            license_plate: vehicleForm.license_plate.trim().toUpperCase(),
             customer_id: selectedCustomer.id,
             tenant_id: profile?.tenant_id
         };
