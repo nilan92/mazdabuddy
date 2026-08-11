@@ -16,6 +16,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { checkSMSBalance } from "../lib/sms";
+import { tidyName } from "../lib/textCase";
 
 export const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -54,6 +55,9 @@ export const Settings = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [staff, setStaff] = useState<{ id: string; name: string; profile_id: string | null; active: boolean }[]>([]);
+  const [newStaffName, setNewStaffName] = useState("");
+  const [savingStaff, setSavingStaff] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: "", role: "" });
 
   const fetchTenantData = async () => {
@@ -106,6 +110,7 @@ export const Settings = () => {
 
   useEffect(() => {
     fetchTenantData();
+    fetchStaff();
     if (isAdmin) fetchUsers();
   }, [isAdmin, profile?.tenant_id]);
 
@@ -145,6 +150,41 @@ export const Settings = () => {
     } finally {
       setUploading(false);
     }
+  };
+
+  const fetchStaff = async () => {
+    const { data } = await supabase
+      .from("staff")
+      .select("id, name, profile_id, active")
+      .order("name");
+    if (data) setStaff(data);
+  };
+
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = tidyName(newStaffName);
+    if (!name) return;
+    setSavingStaff(true);
+    const { error } = await supabase
+      .from("staff")
+      .insert({ tenant_id: profile?.tenant_id, name });
+    setSavingStaff(false);
+    if (error) { toast(error.message, 'error'); return; }
+    setNewStaffName("");
+    toast(`${name} added.`, 'success');
+    fetchStaff();
+  };
+
+  // Soft-delete: a name-only technician may still be on old job cards, so the
+  // row has to survive. Inactive staff drop out of the assignment dropdown.
+  const handleToggleStaff = async (member: { id: string; name: string; active: boolean }) => {
+    const { error } = await supabase
+      .from("staff")
+      .update({ active: !member.active })
+      .eq("id", member.id);
+    if (error) { toast(error.message, 'error'); return; }
+    toast(member.active ? `${member.name} deactivated.` : `${member.name} reactivated.`, 'info');
+    fetchStaff();
   };
 
   const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -660,6 +700,63 @@ export const Settings = () => {
 
         {activeTab === "users" && isAdmin && (
           <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+            {/* Technicians without logins. Jobs are assigned to staff, not to
+                accounts, so a name is all that is needed. */}
+            <div className="mb-6 pb-6 border-b border-slate-800">
+              <h3 className="text-lg font-semibold text-white mb-1">Technicians</h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Add the people who work on jobs. They do not need an account — a name is enough
+                to assign work to them.
+              </p>
+
+              <form onSubmit={handleAddStaff} className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  value={newStaffName}
+                  onChange={(e) => setNewStaffName(e.target.value)}
+                  placeholder="Technician name"
+                  className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-brand"
+                />
+                <button
+                  type="submit"
+                  disabled={savingStaff || !newStaffName.trim()}
+                  className="btn-brand px-4 py-2.5 rounded-lg font-bold text-sm disabled:opacity-40 flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Plus size={15} /> {savingStaff ? "Adding…" : "Add"}
+                </button>
+              </form>
+
+              <div className="space-y-2">
+                {staff.length === 0 && (
+                  <p className="text-sm text-slate-600 italic">No technicians yet.</p>
+                )}
+                {staff.map((member) => (
+                  <div
+                    key={member.id}
+                    className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
+                      member.active
+                        ? "bg-slate-800/40 border-slate-800"
+                        : "bg-slate-900/40 border-slate-800/60 opacity-60"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-medium truncate">{member.name}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-slate-500">
+                        {member.profile_id ? "Has a login" : "Name only"}
+                        {!member.active && " · inactive"}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleToggleStaff(member)}
+                      className="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors flex-shrink-0"
+                    >
+                      {member.active ? "Deactivate" : "Reactivate"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
               <div>
                 <h3 className="text-lg font-semibold text-white">

@@ -65,7 +65,8 @@ export interface JobCard {
   technician_notes?: string;
   estimated_cost_lkr?: number;
   mileage?: number;
-  assigned_technician_id?: string;
+  assigned_technician_id?: string; // legacy, superseded by assigned_staff_id
+  assigned_staff_id?: string;
   archived?: boolean;
   estimated_hours?: number;
   

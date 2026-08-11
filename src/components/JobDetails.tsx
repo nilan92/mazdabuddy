@@ -44,7 +44,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const [allParts, setAllParts] = useState<Part[]>([]);
     const [photos, setPhotos] = useState<JobPhoto[]>([]);
     const [uploadingPhotos, setUploadingPhotos] = useState(false);
-    const [profiles, setProfiles] = useState<{id: string, full_name: string}[]>([]);
+    const [staff, setStaff] = useState<{id: string, name: string}[]>([]);
 
     // Forms
     const [mileage, setMileage] = useState('');
@@ -100,7 +100,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                     const m = jobData.mileage?.toString() || '';
                     const n = jobData.technician_notes || '';
                     const s = jobData.status;
-                    const a = jobData.assigned_technician_id || '';
+                    const a = jobData.assigned_staff_id || '';
                     const e = jobData.estimated_hours?.toString() || '';
                     setMileage(m);
                     setTechNotes(n);
@@ -160,14 +160,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             if (signal?.aborted) return;
             if (invData) setAllParts(invData);
 
-            // Profiles (for assignment)
-            const { data: profileData } = await supabase
-                .from('profiles')
-                .select('id, full_name')
+            // Staff (for assignment). Not profiles: technicians here have no
+            // login, and a profile requires an auth user.
+            const { data: staffData } = await supabase
+                .from('staff')
+                .select('id, name')
+                .eq('active', true)
+                .order('name')
                 .abortSignal(signal!);
-            
+
             if (signal?.aborted) return;
-            if(profileData) setProfiles(profileData);
+            if (staffData) setStaff(staffData);
             
             // 5. Tenant Settings (Branding, AI & Labor Defaults)
             if (profile?.tenant_id) {
@@ -481,7 +484,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             mileage: mileage ? parseInt(mileage) : null,
             technician_notes: techNotes,
             status,
-            assigned_technician_id: assignedTech || null,
+            assigned_staff_id: assignedTech || null,
             estimated_hours: estimatedHours ? parseFloat(estimatedHours) : 0
         };
 
@@ -869,7 +872,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             <div className="relative">
                                                 <select value={assignedTech} onChange={e => setAssignedTech(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700">
                                                     <option value="">Unassigned</option>
-                                                    {profiles.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                                                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                                 </select>
                                                 <User size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                             </div>

@@ -48,7 +48,7 @@ export const Jobs = () => {
             const { data } = await supabase
                 .from('job_cards')
                 // @ts-ignore
-                .select('*, vehicles(id, make, model, license_plate), profiles(id, full_name)')
+                .select('*, vehicles(id, make, model, license_plate), staff(id, name)')
                 .order('created_at', { ascending: false })
                 .limit(50);
             return data as JobCard[] || [];
@@ -63,6 +63,18 @@ export const Jobs = () => {
                 .select('*, customers(title, name)');
             return data as Vehicle[] || [];
         }
+    });
+
+    // The signed-in user's own staff row, used for "my jobs" filtering and to
+    // assign new jobs to whoever created them.
+    const { data: myStaffId } = useQuery({
+        queryKey: ['my-staff', profile?.id],
+        queryFn: async () => {
+            if (!profile?.id) return null;
+            const { data } = await supabase.from('staff').select('id').eq('profile_id', profile.id).maybeSingle();
+            return data?.id ?? null;
+        },
+        enabled: !!profile?.id,
     });
 
     const loading = jobsLoading || vehiclesLoading;
@@ -148,7 +160,7 @@ export const Jobs = () => {
                 vehicle_id: finalVehicleId,
                 description: newJobForm.description,
                 status: 'pending',
-                assigned_technician_id: profile?.id,
+                assigned_staff_id: myStaffId,
                 tenant_id: profile?.tenant_id
             }]);
 
@@ -230,7 +242,7 @@ export const Jobs = () => {
         // Role Filtering
         let matchesRole = true;
         if (!showAllJobs && profile?.role === 'technician') {
-             matchesRole = job.assigned_technician_id === profile.id;
+             matchesRole = !!myStaffId && job.assigned_staff_id === myStaffId;
         }
 
         return matchesSearch && matchesArchive && matchesRole;
@@ -333,11 +345,11 @@ export const Jobs = () => {
                                             <span className="text-xs font-mono text-brand bg-brand-soft px-1.5 py-0.5 rounded border border-brand/20">
                                                 {job.vehicles?.license_plate}
                                             </span>
-                                            {job.assigned_technician_id && (
+                                            {job.assigned_staff_id && (
                                                 <div className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[90px] truncate">
                                                     <UserCheck size={10} className="flex-shrink-0" />
                                                     <span className="truncate">
-                                                        {(job as any).profiles?.full_name?.split(' ')[0] || 'Assigned'}
+                                                        {(job as any).staff?.name?.split(' ')[0] || 'Assigned'}
                                                     </span>
                                                 </div>
                                             )}
