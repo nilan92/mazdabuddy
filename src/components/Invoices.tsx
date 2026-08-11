@@ -234,40 +234,70 @@ export const Invoices = () => {
         // 5. Items Table
         let yPos = Math.max(leftColumnY, customerY) + 15; 
         
-        // Table Headers
-        doc.setFillColor(245, 247, 250);
-        doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 10, 'F');
-        
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0);
-        doc.text('ITEM / DESCRIPTION', marginLeft + 5, yPos + 7);
-        doc.text('COST', pageWidth - marginRight - 5, yPos + 7, { align: 'right' });
-        
-        yPos += 15;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(50);
-        
-        // Items - Parts
-        inv.parts.forEach((p: any) => {
-            const name = p.custom_name || p.parts?.name || 'Part';
-            const price = (p.quantity * p.price_at_time_lkr).toLocaleString();
-            
-            doc.text(`${name} (Qty: ${p.quantity})`, marginLeft + 5, yPos);
-            doc.text(price, pageWidth - marginRight - 5, yPos, { align: 'right' });
+        // Labour and materials are shown as separate sections, each with its own
+        // rate/quantity columns, rather than one flat list — a customer reading
+        // "3 hrs" and "Qty 2" in the same column has to work out which is which.
+        const colTotal = pageWidth - marginRight - 5;   // right edge
+        const colQty   = colTotal - 26;                 // hours / qty
+        const colUnit  = colQty - 26;                   // unit price
+        const descWidth = colUnit - (marginLeft + 5) - 4;
+
+        // unitLabel/qtyLabel omitted => description + total only (labour: the
+        // customer does not need the internal hourly rate or the hours breakdown).
+        const sectionHeader = (label: string, unitLabel?: string, qtyLabel?: string) => {
+            doc.setFillColor(245, 247, 250);
+            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 9, 'F');
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.text(label.toUpperCase(), marginLeft + 5, yPos + 6);
+            if (unitLabel) doc.text(unitLabel, colUnit, yPos + 6, { align: 'right' });
+            if (qtyLabel) doc.text(qtyLabel, colQty, yPos + 6, { align: 'right' });
+            doc.text('TOTAL', colTotal, yPos + 6, { align: 'right' });
+            yPos += 14;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(50);
+        };
+
+        const row = (desc: string, total: number, unit?: number, qty?: number | string) => {
+            const width = unit === undefined ? colTotal - (marginLeft + 5) - 6 : descWidth;
+            const lines = doc.splitTextToSize(desc, width);
+            doc.text(lines, marginLeft + 5, yPos);
+            if (unit !== undefined) doc.text(Number(unit).toLocaleString(), colUnit, yPos, { align: 'right' });
+            if (qty !== undefined) doc.text(String(qty), colQty, yPos, { align: 'right' });
+            doc.text(total.toLocaleString(), colTotal, yPos, { align: 'right' });
+            yPos += Math.max(8, lines.length * 5 + 3);
+        };
+
+        if (inv.labor.length) {
+            sectionHeader('Labour / Description');
+            inv.labor.forEach((l: any) => row(
+                l.description || 'Service',
+                (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0),
+            ));
+            yPos += 3;
+        }
+
+        if (inv.parts.length) {
+            sectionHeader('Materials', 'PRICE', 'QTY');
+            inv.parts.forEach((p: any) => row(
+                p.custom_name || p.parts?.name || 'Part',
+                (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0),
+                Number(p.price_at_time_lkr) || 0,
+                p.quantity,
+            ));
+            yPos += 3;
+        }
+
+        if (!inv.labor.length && !inv.parts.length) {
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(120);
+            doc.text('No items recorded for this job.', marginLeft + 5, yPos);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(50);
             yPos += 8;
-        });
-        
-        // Items - Labor
-        inv.labor.forEach((l: any) => {
-            const desc = l.description || 'Service';
-            const price = (l.hours * l.hourly_rate_lkr).toLocaleString();
-            
-            doc.text(`${desc} (${l.hours} hrs)`, marginLeft + 5, yPos);
-            doc.text(price, pageWidth - marginRight - 5, yPos, { align: 'right' });
-            yPos += 8;
-        });
+        }
         
         // Draw Line
         doc.setDrawColor(220);
@@ -510,37 +540,47 @@ export const Invoices = () => {
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}
                             <div className="w-full shrink-0 bg-slate-950 rounded-xl border border-slate-800 mb-4 overflow-x-auto">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
-                                        <tr>
-                                            <th className="px-3 py-3 md:px-6 md:py-4">Item / Description</th>
-                                            <th className="px-3 py-3 md:px-6 md:py-4 text-right">Cost</th>
-                                        </tr>
-                                    </thead>
                                     <tbody className="divide-y divide-slate-800 text-slate-300">
-                                        {/* Parts */}
-                                        {selectedInvoice.parts.map((p: any, i: number) => (
-                                            <tr key={`p-${i}`} className="hover:bg-slate-900/50">
-                                                <td className="px-3 py-3 md:px-6 md:py-4">
-                                                    <div className="font-medium text-white text-sm">{p.custom_name || p.parts?.name}</div>
-                                                    <div className="text-[10px] md:text-xs text-slate-500">Part (Qty: {p.quantity})</div>
-                                                </td>
-                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
-                                                    {(p.quantity * p.price_at_time_lkr).toLocaleString()}
-                                                </td>
+                                        {/* Labour, then materials — grouped, each with its own
+                                            columns, mirroring the PDF. Labour shows a total only;
+                                            the hourly rate is internal. */}
+                                        {selectedInvoice.labor.length > 0 && (
+                                            <tr className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
+                                                <th className="px-3 py-2.5 md:px-6 text-left">Labour / Description</th>
+                                                <th className="px-3 py-2.5 md:px-6 text-right">Total</th>
                                             </tr>
-                                        ))}
-                                        {/* Labor */}
+                                        )}
                                         {selectedInvoice.labor.map((l: any, i: number) => (
                                             <tr key={`l-${i}`} className="hover:bg-slate-900/50">
                                                 <td className="px-3 py-3 md:px-6 md:py-4">
                                                     <div className="font-medium text-white text-sm">{l.description}</div>
-                                                    <div className="text-[10px] md:text-xs text-slate-500">Labor ({l.hours} hrs)</div>
                                                 </td>
                                                 <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
                                                     {(l.hours * l.hourly_rate_lkr).toLocaleString()}
                                                 </td>
                                             </tr>
                                         ))}
+
+                                        {selectedInvoice.parts.length > 0 && (
+                                            <tr className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
+                                                <th className="px-3 py-2.5 md:px-6 text-left">Materials</th>
+                                                <th className="px-3 py-2.5 md:px-6 text-right">Total</th>
+                                            </tr>
+                                        )}
+                                        {selectedInvoice.parts.map((p: any, i: number) => (
+                                            <tr key={`p-${i}`} className="hover:bg-slate-900/50">
+                                                <td className="px-3 py-3 md:px-6 md:py-4">
+                                                    <div className="font-medium text-white text-sm">{p.custom_name || p.parts?.name}</div>
+                                                    <div className="text-[10px] md:text-xs text-slate-500">
+                                                        {Number(p.price_at_time_lkr).toLocaleString()} &times; {p.quantity}
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
+                                                    {(p.quantity * p.price_at_time_lkr).toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        ))}
+
                                         {selectedInvoice.parts.length === 0 && selectedInvoice.labor.length === 0 && (
                                             <tr>
                                                 <td className="px-3 py-3 md:px-6 md:py-4 text-slate-500 italic">No breakdown items available.</td>
