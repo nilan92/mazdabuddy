@@ -61,7 +61,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
         custom_price_lkr: '',
         custom_cost_lkr: '' 
     });
-    const [laborForm, setLaborForm] = useState({ description: '', hours: '', hourly_rate_lkr: '5000' }); // Default 5000
+    const [laborForm, setLaborForm] = useState({ description: '', hours: '', hourly_rate_lkr: '5000', fixedAmount: '' });
+    // Some work is priced flat (a service is 6,500 regardless of the clock).
+    const [laborMode, setLaborMode] = useState<'hourly' | 'fixed'>('hourly');
 
     // Dirty state tracking
     const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '' });
@@ -650,16 +652,23 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const handleAddLabor = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const isFixed = laborMode === 'fixed';
+            const amount = parseFloat(laborForm.fixedAmount);
+            if (isFixed && !(amount > 0)) { toast("Enter a fixed amount.", 'warning'); return; }
+
+            // A fixed charge is stored as 1 x amount, so every total that already
+            // multiplies hours by rate keeps working untouched.
             const { error } = await supabase.from('job_labor').insert({
                 job_id: jobId,
-                hours: parseFloat(laborForm.hours),
                 description: laborForm.description,
-                hourly_rate_lkr: parseFloat(laborForm.hourly_rate_lkr)
+                hours: isFixed ? 1 : parseFloat(laborForm.hours),
+                hourly_rate_lkr: isFixed ? amount : parseFloat(laborForm.hourly_rate_lkr),
+                is_fixed: isFixed,
             });
             
             if(!error) {
                 fetchJobDetails();
-                setLaborForm(prev => ({...prev, description: '', hours: ''}));
+                setLaborForm(prev => ({...prev, description: '', hours: '', fixedAmount: ''}));
                 toast("Labor entry added.", 'success');
             } else {
                 toast(error.message, 'error');
@@ -1022,17 +1031,41 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                     </div>
                                     <div className="px-4 pb-3">
                                         <form onSubmit={handleAddLabor} className="space-y-2">
-                                            <div className="flex gap-2">
-                                                <input required placeholder="Description" value={laborForm.description} onChange={e => setLaborForm({...laborForm, description: e.target.value})} className="flex-1 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
-                                                <input required type="number" step="0.5" onFocus={(e) => e.target.select()} placeholder="Hrs" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-16 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
+                                            <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
+                                                {(['hourly', 'fixed'] as const).map(mode => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        onClick={() => setLaborMode(mode)}
+                                                        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                                                            laborMode === mode ? 'bg-brand text-slate-950' : 'text-slate-400 hover:text-white'
+                                                        }`}
+                                                    >
+                                                        {mode === 'hourly' ? 'By hour' : 'Fixed price'}
+                                                    </button>
+                                                ))}
                                             </div>
-                                            <div className="flex gap-2 items-center">
-                                                <div className="flex-1 relative">
-                                                    <span className="absolute left-2 top-2 text-[10px] text-slate-400">LKR/hr</span>
-                                                    <input required type="number" onFocus={(e) => e.target.select()} value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-12 text-white text-sm font-mono" />
+
+                                            <input required placeholder="Description" value={laborForm.description} onChange={e => setLaborForm({...laborForm, description: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
+
+                                            {laborMode === 'hourly' ? (
+                                                <div className="flex gap-2 items-center">
+                                                    <input required type="number" step="0.5" onFocus={(e) => e.target.select()} placeholder="Hrs" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-16 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-2 top-2 text-[10px] text-slate-400">LKR/hr</span>
+                                                        <input required type="number" onFocus={(e) => e.target.select()} value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-12 text-white text-sm font-mono" />
+                                                    </div>
+                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
                                                 </div>
-                                                <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
-                                            </div>
+                                            ) : (
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="flex-1 relative">
+                                                        <span className="absolute left-2 top-2 text-[10px] text-slate-400">LKR</span>
+                                                        <input required type="number" onFocus={(e) => e.target.select()} placeholder="6500" value={laborForm.fixedAmount} onChange={e => setLaborForm({...laborForm, fixedAmount: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
+                                                    </div>
+                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
+                                                </div>
+                                            )}
                                         </form>
                                     </div>
                                     <div className="px-4 pb-6 space-y-2">
@@ -1040,7 +1073,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             <div key={labor.id} className="flex justify-between items-center bg-slate-800/40 p-3 rounded-lg border border-slate-800">
                                                 <div className="min-w-0">
                                                     <div className="font-medium text-white text-sm truncate">{labor.description}</div>
-                                                    <div className="text-xs text-slate-500">{labor.hours} hrs @ LKR {labor.hourly_rate_lkr.toLocaleString()}</div>
+                                                    <div className="text-xs text-slate-500">
+                                                        {(labor as unknown as { is_fixed?: boolean }).is_fixed
+                                                            ? 'Fixed price'
+                                                            : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`}
+                                                    </div>
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                                                     <span className="font-mono text-white text-sm">{(labor.hourly_rate_lkr * labor.hours).toLocaleString()}</span>
