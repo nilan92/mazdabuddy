@@ -1300,7 +1300,19 @@ function AuditLogTab({ tenantId }: { tenantId?: string }) {
         <div key={log.id} className="flex items-start gap-4 p-4 bg-slate-900/50 border border-slate-800 rounded-xl">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono bg-slate-800 text-cyan-400 px-2 py-0.5 rounded">{log.action}</span>
+              <span className={`text-xs font-mono px-2 py-0.5 rounded ${
+                log.action === 'deleted'
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  : 'bg-slate-800 text-cyan-400'
+              }`}>{log.action}</span>
+              {/* Deletions carry entity_type + a label; without them the row just
+                  said "deleted" with no indication of what was removed. */}
+              {log.action === 'deleted' && (
+                <>
+                  <span className="text-xs text-slate-400">{String(log.entity_type || '').replace(/_/g, ' ')}</span>
+                  {log.meta?.label && <span className="text-xs text-white font-medium">{log.meta.label}</span>}
+                </>
+              )}
               {log.meta?.plate && <span className="text-xs text-slate-400">{log.meta.plate}</span>}
               {log.meta?.from && <span className="text-xs text-slate-500">{log.meta.from} → {log.meta.to}</span>}
             </div>

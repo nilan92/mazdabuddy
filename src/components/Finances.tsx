@@ -31,6 +31,8 @@ export const Finances = () => {
         date: new Date().toISOString().split('T')[0],
         job_id: ''
     });
+    // Same modal, same table — income is just a signed entry (scrap metal, oil).
+    const [entryKind, setEntryKind] = useState<'expense' | 'income'>('expense');
 
     // Report Generation State
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -53,7 +55,16 @@ export const Finances = () => {
                 .abortSignal(signal!);
             
             if (jobsErr) throw jobsErr;
-            const revenue = jobs?.reduce((sum, j) => sum + (Number(j.estimated_cost_lkr) || 0), 0) || 0;
+
+            // Revenue comes from what was invoiced, not estimated_cost_lkr — that
+            // column is optional and was null on almost every job, so revenue read
+            // as zero and every month showed a loss.
+            const { data: invoiceRows, error: invErr } = await supabase
+                .from('invoices')
+                .select('total_amount_lkr, created_at')
+                .abortSignal(signal!);
+            if (invErr) console.warn('[Finances] Invoice revenue fetch error:', invErr);
+            const jobRevenue = (invoiceRows || []).reduce((sum, i) => sum + (Number(i.total_amount_lkr) || 0), 0);
             
             // Store all jobs for report generation
             setAllJobs(jobs || []);
@@ -148,7 +159,13 @@ export const Finances = () => {
                 ...integratedJobExp
             ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            const totalExpenses = allExpenses.reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
+            const otherIncome = allExpenses
+                .filter(e => e.is_income)
+                .reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
+            const totalExpenses = allExpenses
+                .filter(e => !e.is_income)
+                .reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
+            const revenue = jobRevenue + otherIncome;
 
             setStats({
                 revenue,
@@ -197,7 +214,8 @@ export const Finances = () => {
             description: expenseForm.description,
             category: expenseForm.category,
             date: expenseForm.date,
-            job_id: expenseForm.job_id || null
+            job_id: expenseForm.job_id || null,
+            is_income: entryKind === 'income'
         });
 
         if (error) toast(error.message, 'error');
@@ -205,7 +223,7 @@ export const Finances = () => {
             setIsExpenseModalOpen(false);
             setExpenseForm({ amount: '', description: '', category: 'parts', date: new Date().toISOString().split('T')[0], job_id: '' });
             fetchFinances();
-            toast('Expense added.', 'success');
+            toast(entryKind === 'income' ? 'Revenue added.' : 'Expense added.', 'success');
         }
         setSubmitting(false);
     };
@@ -260,8 +278,13 @@ export const Finances = () => {
         });
 
         const revenue = filteredJobs.reduce((sum, j) => sum + (Number(j.estimated_cost_lkr) || 0), 0);
-        const totalExpenses = filteredExpenses.reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
-        const profit = revenue - totalExpenses;
+        const totalExpenses = filteredExpenses
+            .filter(e => !e.is_income)
+            .reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
+        const reportOtherIncome = filteredExpenses
+            .filter(e => e.is_income)
+            .reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
+        const profit = revenue + reportOtherIncome - totalExpenses;
 
         // Category breakdown (filter out profit rows so they don't show as 0 expense)
         const categoryBreakdown: Record<string, number> = {};
@@ -490,7 +513,14 @@ export const Finances = () => {
                         <FileText size={16} /> <span className="hidden sm:inline">Generate </span>Report
                     </button>
                     <button
-                        onClick={() => setIsExpenseModalOpen(true)}
+                        onClick={() => { setEntryKind('income'); setExpenseForm(f => ({ ...f, category: 'scrap' })); setIsExpenseModalOpen(true); }}
+                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm"
+                        title="Income that did not come from a job — scrap metal, waste oil"
+                    >
+                        <Plus size={16} /> <span className="hidden sm:inline">Add </span>Revenue
+                    </button>
+                    <button
+                        onClick={() => { setEntryKind('expense'); setExpenseForm(f => ({ ...f, category: 'parts' })); setIsExpenseModalOpen(true); }}
                         className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm"
                     >
                         <Plus size={16} /> <span className="hidden sm:inline">Add </span>Expense
@@ -641,7 +671,7 @@ export const Finances = () => {
             </div>
 
             {/* Add Expense Modal */}
-            <Modal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} title="Record New Expense">
+            <Modal isOpen={isExpenseModalOpen} onClose={() => setIsExpenseModalOpen(false)} title={entryKind === 'income' ? 'Record Revenue' : 'Record New Expense'}>
                 <form onSubmit={handleAddExpense} className="space-y-4">
                     <div>
                         <label className="block text-sm text-slate-400 mb-1">Description</label>
@@ -683,11 +713,21 @@ export const Finances = () => {
                             value={expenseForm.category}
                             onChange={(e) => setExpenseForm({...expenseForm, category: e.target.value})}
                         >
-                            <option value="parts">Parts Purchase</option>
-                            <option value="utility">Utilities & Rent</option>
-                            <option value="marketing">Marketing</option>
-                            <option value="salary">Salaries</option>
-                            <option value="other">Other</option>
+                            {entryKind === 'income' ? (
+                                <>
+                                    <option value="scrap">Scrap Metal</option>
+                                    <option value="oil">Waste Oil</option>
+                                    <option value="other_income">Other Income</option>
+                                </>
+                            ) : (
+                                <>
+                                    <option value="parts">Parts Purchase</option>
+                                    <option value="utility">Utilities & Rent</option>
+                                    <option value="marketing">Marketing</option>
+                                    <option value="salary">Salaries</option>
+                                    <option value="other">Other</option>
+                                </>
+                            )}
                         </select>
                     </div>
                     <div>
