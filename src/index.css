@@ -170,3 +170,13 @@
 ::-webkit-scrollbar-thumb {
   @apply bg-slate-700 rounded-full hover:bg-slate-600;
 }
+
+/* Windows and Linux render <option> on a system white background while the
+   option text inherits the select's white colour — invisible until hovered.
+   macOS draws the native popup and ignores this, which is why it only shows on
+   some machines. Styling options directly fixes every dropdown at once. */
+select option,
+select optgroup {
+  background-color: #1e293b; /* slate-800, matching the selects */
+  color: #ffffff;
+}

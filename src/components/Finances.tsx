@@ -679,7 +679,7 @@ export const Finances = () => {
                             required 
                             type="text" 
                             className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white focus:border-cyan-500 focus:outline-none"
-                            placeholder="e.g. Shop Electricity Bill"
+                            placeholder={entryKind === 'income' ? 'Scrap metal sale' : 'Electricity bill'}
                             value={expenseForm.description}
                             onChange={(e) => setExpenseForm({...expenseForm, description: e.target.value})}
                         />
@@ -737,7 +737,7 @@ export const Finances = () => {
                             value={expenseForm.job_id}
                             onChange={(e) => setExpenseForm({...expenseForm, job_id: e.target.value})}
                         >
-                            <option value="">-- General Expense --</option>
+                            <option value="">{entryKind === 'income' ? '-- Not job related --' : '-- General Expense --'}</option>
                             {activeJobs.map((job) => (
                                 <option key={job.id} value={job.id}>
                                     {job.vehicles?.license_plate} - {job.vehicles?.make} {job.vehicles?.model}
@@ -751,7 +751,7 @@ export const Finances = () => {
                                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white"></div>
                                 RECORDING...
                             </>
-                        ) : 'Confirm Expense'}
+                        ) : (entryKind === 'income' ? 'Confirm Revenue' : 'Confirm Expense')}
                     </button>
                 </form>
             </Modal>
