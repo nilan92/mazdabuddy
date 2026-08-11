@@ -11,7 +11,7 @@ interface State {
   isChunkError: boolean;
 }
 
-const CHUNK_RELOAD_KEY = 'autopulse_chunk_reload';
+export const CHUNK_RELOAD_KEY = 'autopulse_chunk_reload';
 
 function isChunkLoadError(error: Error) {
   return (

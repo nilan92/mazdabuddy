@@ -4,6 +4,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Layout } from './components/Layout';
 import { useAuth } from './context/AuthContext';
 import { registerServiceWorker } from './lib/push';
+import { CHUNK_RELOAD_KEY } from './components/ErrorBoundary';
 
 // 1. LAZY IMPORTS
 const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
@@ -168,6 +169,12 @@ const App = () => {
       }
     };
     
+    // The chunk-reload guard is one-shot per tab. If the shell has mounted, a
+    // previous recovery succeeded, so clear it — otherwise the second deploy
+    // during one session leaves the user on the "Reload now" screen having to
+    // click it themselves.
+    sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+
     checkVersion();
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') checkVersion();
