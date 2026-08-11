@@ -700,13 +700,33 @@ export const Settings = () => {
 
         {activeTab === "users" && isAdmin && (
           <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-            {/* Technicians without logins. Jobs are assigned to staff, not to
-                accounts, so a name is all that is needed. */}
+            {/* Two different things, routinely confused: someone you assign work
+                to, versus someone who signs in. */}
+            <div className="mb-6 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+              <p className="text-xs text-slate-300 font-bold mb-2">Adding someone — which do you need?</p>
+              <ul className="text-xs text-slate-400 space-y-1.5 leading-relaxed">
+                <li>
+                  <span className="text-white font-semibold">Just to assign jobs to them</span> — type
+                  their name under <span className="text-brand">Technicians</span> below and press Add.
+                  No account, no email, nothing for them to do.
+                </li>
+                <li>
+                  <span className="text-white font-semibold">They need to sign in</span> — press
+                  <span className="text-brand"> Copy Invite Link</span> and send it to them. They set
+                  their own password and join this workshop. The link works once and expires after 7 days.
+                </li>
+                <li className="pt-1 text-slate-500">
+                  The <span className="text-slate-300">Workshop ID</span> below does not add anyone. It
+                  used to, but a plain ID could not be revoked or expired, so anyone who saw it could
+                  join. Use the invite link instead — the ID is only for support and reference.
+                </li>
+              </ul>
+            </div>
+
             <div className="mb-6 pb-6 border-b border-slate-800">
               <h3 className="text-lg font-semibold text-white mb-1">Technicians</h3>
               <p className="text-xs text-slate-500 mb-4">
-                Add the people who work on jobs. They do not need an account — a name is enough
-                to assign work to them.
+                People you assign jobs to. They do not need an account — a name is enough.
               </p>
 
               <form onSubmit={handleAddStaff} className="flex gap-2 mb-4">
@@ -763,8 +783,8 @@ export const Settings = () => {
                   Staff Management
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-black">
-                    Workshop ID:
+                  <span className="text-[10px] text-slate-400 uppercase font-black" title="Reference only — this does not let anyone join">
+                    Workshop ID (reference):
                   </span>
                   <code
                     className="text-[10px] bg-slate-950 px-2 py-0.5 rounded font-mono border border-slate-800"
@@ -808,7 +828,7 @@ export const Settings = () => {
                   <Plus size={14} /> COPY INVITE LINK
                 </button>
                 <p className="text-[9px] text-slate-500 text-center italic">
-                  Best for onboarding new staff
+                  Single use · expires in 7 days
                 </p>
               </div>
             </div>
