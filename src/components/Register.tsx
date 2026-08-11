@@ -13,9 +13,9 @@ export const Register = () => {
         fullName: '',
         username: '',
         shopName: new URLSearchParams(window.location.hash.split('?')[1]).get('workshop_name') || '',
-        workshopId: new URLSearchParams(window.location.hash.split('?')[1]).get('workshop_id') || '',
+        inviteToken: new URLSearchParams(window.location.hash.split('?')[1]).get('invite') || '',
     });
-    const isInvite = !!formData.workshopId;
+    const isInvite = !!formData.inviteToken;
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export const Register = () => {
         setError(null);
 
         try {
-            if (!formData.shopName) throw new Error("Please enter your Shop Name.");
+            if (!isInvite && !formData.shopName) throw new Error("Please enter your Shop Name.");
             if (formData.password !== formData.confirmPassword) throw new Error("Passwords do not match.");
 
             // 1. Sign Up User
@@ -46,36 +46,26 @@ export const Register = () => {
 
             const userId = authData.user.id;
 
-            // 2. Determine Tenant ID
-            let finalTenantId = formData.workshopId;
-            
-            if (!finalTenantId) {
-                // Create New Tenant if not an invite
-                const { data: tenantData, error: tenantError } = await supabase
-                    .from('tenants')
-                    .insert({ name: formData.shopName })
-                    .select()
-                    .single();
+            // Membership is assigned server-side. The browser used to write its
+            // own tenant_id, which meant anyone holding a workshop id could join
+            // one; that write is now rejected outright.
+            const { error: joinError } = isInvite
+                ? await supabase.rpc('redeem_invite', { p_token: formData.inviteToken })
+                : await supabase.rpc('create_workshop', { p_name: formData.shopName.trim() });
 
-                if (tenantError) throw tenantError;
-                finalTenantId = tenantData.id;
-            }
+            if (joinError) throw joinError;
 
-            // 3. Update Profile with Tenant and Role
+            // Display details are not part of joining, and failing here must not
+            // undo a successful join.
             const { error: profileError } = await supabase
                 .from('profiles')
-                .update({ 
-                    tenant_id: finalTenantId,
-                    role: isInvite ? 'technician' : 'admin',
+                .update({
                     full_name: formData.fullName,
                     username: formData.username.toLowerCase()
                 })
                 .eq('id', userId);
 
-            if (profileError) {
-                console.error("Profile link error:", profileError);
-                throw new Error("Account created but failed to link to shop. Please contact support.");
-            }
+            if (profileError) console.warn('Could not save name/username:', profileError.message);
 
             alert(isInvite ? "Joined Workshop! Please sign in." : "Workshop Registered! Welcome to AutoPulse. Please sign in.");
             navigate('/login');
@@ -141,18 +131,26 @@ export const Register = () => {
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
                                 {isInvite ? 'Joining Workshop' : 'Workshop / Garage Name'}
                             </label>
+                            {isInvite ? (
+                                // The invitee cannot read the workshop's name before
+                                // joining — RLS hides it — so don't show an empty box.
+                                <div className="flex items-center gap-2 text-sm text-slate-300 bg-slate-950 border border-slate-700 rounded-lg p-2.5">
+                                    <Building2 size={16} className="text-cyan-400 flex-shrink-0" />
+                                    You've been invited to join an existing workshop.
+                                </div>
+                            ) : (
                             <div className="relative">
                                 <Building2 size={16} className="absolute left-3 top-3 text-slate-500" />
                                 <input 
                                     required 
                                     type="text" 
-                                    disabled={isInvite}
-                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none disabled:opacity-50" 
+                                    className="w-full bg-slate-950 border border-slate-700 text-white rounded-lg p-2.5 pl-10 focus:border-cyan-500 focus:outline-none" 
                                     value={formData.shopName} 
                                     onChange={e => setFormData({...formData, shopName: e.target.value})} 
                                     placeholder="Elite Auto Care" 
                                 />
                             </div>
+                            )}
                         </div>
                         
                         <div className="pt-2 border-t border-slate-800 my-4"></div>

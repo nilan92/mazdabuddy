@@ -693,10 +693,18 @@ export const Settings = () => {
               </div>
               <div className="flex flex-col gap-2 w-full md:w-auto">
                 <button
-                  onClick={() => {
-                    const registerUrl = `${window.location.origin}${window.location.pathname}#/register?workshop_id=${profile?.tenant_id}`;
-                    navigator.clipboard.writeText(registerUrl);
-                    toast("Invite link copied — send to your staff member.", 'success');
+                  onClick={async () => {
+                    // Was: the workshop's raw UUID in the URL, with the browser
+                    // setting its own tenant_id. Never expired, could not be
+                    // revoked, and anyone holding a workshop id could join.
+                    const { data: token, error } = await supabase.rpc('create_invite', { p_role: 'technician' });
+                    if (error || !token) {
+                      toast(error?.message || 'Could not create an invite.', 'error');
+                      return;
+                    }
+                    const registerUrl = `${window.location.origin}${window.location.pathname}#/register?invite=${token}`;
+                    await navigator.clipboard.writeText(registerUrl);
+                    toast("Invite link copied — single use, expires in 7 days.", 'success');
                   }}
                   className="text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-500"
                 >
