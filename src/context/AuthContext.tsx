@@ -14,6 +14,24 @@ interface AuthContextType {
     refreshProfile: () => Promise<void>;
 }
 
+const AUTH_RECOVER_KEY = 'autopulse_auth_recover';
+const PROFILE_FETCH_TIMEOUT_MS = 6000;
+const PROFILE_FETCH_RETRIES = 2;
+
+/**
+ * Bounds the WHOLE operation, not just the HTTP request.
+ * .abortSignal() only cancels a request in flight, and the observed hang
+ * happens earlier: supabase.from() waits on an access token that never
+ * arrives, so no request is ever made and there is nothing to abort.
+ */
+const PROFILE_TIMEOUT = Symbol('profile-timeout');
+function withTimeout<T>(work: PromiseLike<T>, ms: number): Promise<T | typeof PROFILE_TIMEOUT> {
+    return Promise.race([
+        Promise.resolve(work),
+        new Promise<typeof PROFILE_TIMEOUT>(resolve => setTimeout(() => resolve(PROFILE_TIMEOUT), ms)),
+    ]);
+}
+
 const AuthContext = createContext<AuthContextType>({
     session: null,
     user: null,
@@ -64,9 +82,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         let isRetrying = false;
+        // The query had no deadline. If it stalls — a stale auth lock, a socket
+        // iOS suspended, anything — it never settles and the app sits on the
+        // gate until the watchdog gives up. Bound it and retry instead.
         try {
             console.log(`[Auth] Fetching profile for ${userId}... (Attempt ${retryCount + 1})`);
-            const { data, error: fetchError } = await supabase
+            const outcome = await withTimeout(supabase
                 .from('profiles')
                 .select(`
                     *,
@@ -82,8 +103,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     )
                 `)
                 .eq('id', userId)
-                .single();
-            
+                .single(), PROFILE_FETCH_TIMEOUT_MS);
+
+            if (outcome === PROFILE_TIMEOUT) {
+                if (retryCount < PROFILE_FETCH_RETRIES) {
+                    console.warn(`[Auth] Profile fetch stalled >${PROFILE_FETCH_TIMEOUT_MS}ms — retrying (${retryCount + 1}/${PROFILE_FETCH_RETRIES})`);
+                    isRetrying = true;
+                    setTimeout(() => fetchProfile(userId, retryCount + 1), 500);
+                    return;
+                }
+                // Retries in this page hang the same way; a reload is what
+                // actually clears it, and is what the Retry button does.
+                if (!sessionStorage.getItem(AUTH_RECOVER_KEY)) {
+                    sessionStorage.setItem(AUTH_RECOVER_KEY, '1');
+                    console.warn('[Auth] Profile fetch still stalled — reloading to recover');
+                    window.location.reload();
+                    return;
+                }
+                setError('Workshop profile synchronization timeout.');
+                return;
+            }
+
+            const { data, error: fetchError } = outcome;
+
             if (fetchError) {
                 console.error("[Auth] Profile Sync Error:", fetchError);
                 
@@ -109,6 +151,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
             if (data) {
                 console.log('[Auth] Profile cached.');
+                // Recovered (or never needed it) — let the next hang try again.
+                sessionStorage.removeItem(AUTH_RECOVER_KEY);
                 profileIdRef.current = userId;
                 setProfile(data as any);
                 setError(null);
@@ -166,18 +210,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, [session, signOut]);
 
-    // 🔄 RESTORED: Loading Watchdog
-    // Prevents the app from getting stuck on "Loading..." forever
+    // 🔄 Loading Watchdog
+    // A hung auth call leaves the app on the gate forever. Tapping "Retry
+    // connection" fixes it, and that button is just window.location.reload() —
+    // so do that automatically, once, before showing anyone a failure screen.
+    // Guarded by sessionStorage so a genuinely broken state cannot reload-loop.
     useEffect(() => {
-        if (loading) {
-            const watchdog = setTimeout(() => {
-                if (loading && !error) {
-                    console.warn('[Auth] Loading state stuck for >30s. Releasing.');
-                    setLoading(false); 
-                }
-            }, 30000); // 30 seconds timeout to handle cold starts
-            return () => clearTimeout(watchdog);
-        }
+        if (!loading) return;
+        const watchdog = setTimeout(() => {
+            if (!loading || error) return;
+            if (!sessionStorage.getItem(AUTH_RECOVER_KEY)) {
+                sessionStorage.setItem(AUTH_RECOVER_KEY, '1');
+                console.warn('[Auth] stuck >15s — reloading once to clear a stale auth lock');
+                window.location.reload();
+                return;
+            }
+            console.warn('[Auth] still stuck after a recovery reload. Releasing.');
+            setLoading(false);
+        }, 15000);
+        return () => clearTimeout(watchdog);
     }, [loading, error]);
 
     // 🔄 Unified Auth Initialization
