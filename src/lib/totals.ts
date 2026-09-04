@@ -11,3 +11,17 @@ export function calcInvoiceTotal(
         (sum, l) => sum + (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || DEFAULT_LABOR_RATE_LKR), 0);
     return partsTotal + laborTotal;
 }
+
+export type DiscountType = 'amount' | 'percent';
+
+/** Mirrors recalc_invoice_total() in update_job_discount.sql — keep the two in step. */
+export function calcDiscount(
+    subtotal: number,
+    type: DiscountType | null | undefined,
+    value: number | string | null | undefined,
+): number {
+    const v = Number(value) || 0;
+    if (v <= 0) return 0;
+    const raw = type === 'percent' ? Math.round(subtotal * v) / 100 : v;
+    return Math.min(Math.max(0, raw), subtotal);
+}

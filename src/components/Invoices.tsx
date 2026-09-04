@@ -46,9 +46,12 @@ export const Invoices = () => {
                     *,
                     job_cards!inner (
                         description,
-                        vehicles!inner (license_plate, make, model, year, customers!inner(title, name, address, phone, email)),
+                        mileage,
+                        discount_type,
+                        discount_value,
+                        vehicles!inner (license_plate, make, model, year, vin, color, customers!inner(title, name, address, phone, email)),
                         job_parts ( quantity, price_at_time_lkr, custom_name, parts(name) ),
-                        job_labor ( description, hours, hourly_rate_lkr )
+                        job_labor ( description, hours, hourly_rate_lkr, is_fixed )
                     )
                 `)
                 .order('created_at', { ascending: false })
@@ -63,7 +66,13 @@ export const Invoices = () => {
                 customerDetails: inv.job_cards?.vehicles?.customers,
                 vehicle: `${inv.job_cards?.vehicles?.make} ${inv.job_cards?.vehicles?.model} (${inv.job_cards?.vehicles?.license_plate})`,
                 vehicleDetails: inv.job_cards?.vehicles,
+                mileage: inv.job_cards?.mileage,
                 total: Number(inv.total_amount_lkr) || 0,
+                subtotal: Number(inv.subtotal_lkr) || 0,
+                discount: Number(inv.discount_lkr) || 0,
+                discountLabel: inv.job_cards?.discount_type === 'percent'
+                    ? `Discount (${Number(inv.job_cards?.discount_value) || 0}%)`
+                    : 'Discount',
                 status: inv.status || 'Unpaid',
                 date: new Date(inv.created_at).toLocaleDateString('en-GB', { 
                 day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
@@ -231,9 +240,35 @@ export const Invoices = () => {
             customerY += 5;
         }
         
-        // 5. Items Table
-        let yPos = Math.max(leftColumnY, customerY) + 15; 
-        
+        // 5. Vehicle — the customer's first check is that the bill is for their car.
+        let yPos = Math.max(leftColumnY, customerY) + 12;
+        const veh = inv.vehicleDetails;
+        if (veh) {
+            doc.setFillColor(245, 247, 250);
+            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 18, 'F');
+            doc.setFontSize(8.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0);
+            doc.text('VEHICLE', marginLeft + 5, yPos + 6);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(60);
+            doc.text(
+                `${[veh.year, veh.make, veh.model].filter(Boolean).join(' ')} — ${veh.license_plate || 'No plate'}`,
+                marginLeft + 40, yPos + 6,
+            );
+            const vehExtra = [
+                veh.color && `Colour: ${veh.color}`,
+                veh.vin && `VIN: ${veh.vin}`,
+                inv.mileage && `Mileage: ${Number(inv.mileage).toLocaleString()} km`,
+            ].filter(Boolean).join('    ');
+            if (vehExtra) doc.text(vehExtra, marginLeft + 40, yPos + 13);
+            doc.setTextColor(0);
+            yPos += 26;
+        }
+
+        // 6. Items Table
         // Labour and materials are shown as separate sections, each with its own
         // rate/quantity columns, rather than one flat list — a customer reading
         // "3 hrs" and "Qty 2" in the same column has to work out which is which.
@@ -242,8 +277,8 @@ export const Invoices = () => {
         const colUnit  = colQty - 26;                   // unit price
         const descWidth = colUnit - (marginLeft + 5) - 4;
 
-        // unitLabel/qtyLabel omitted => description + total only (labour: the
-        // customer does not need the internal hourly rate or the hours breakdown).
+        // unitLabel/qtyLabel omitted => description + total only, used for a
+        // section whose rows are all flat-priced.
         const sectionHeader = (label: string, unitLabel?: string, qtyLabel?: string) => {
             doc.setFillColor(245, 247, 250);
             doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 9, 'F');
@@ -271,16 +306,21 @@ export const Invoices = () => {
         };
 
         if (inv.labor.length) {
-            sectionHeader('Labour / Description');
+            // Hours/rate columns only appear when some labour is actually billed by
+            // the clock; a fixed-price job has no hours worth printing.
+            const anyHourly = inv.labor.some((l: any) => !l.is_fixed);
+            sectionHeader('Labour / Description', anyHourly ? 'RATE' : undefined, anyHourly ? 'HOURS' : undefined);
             inv.labor.forEach((l: any) => row(
                 l.description || 'Service',
                 (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0),
+                anyHourly && !l.is_fixed ? Number(l.hourly_rate_lkr) || 0 : undefined,
+                anyHourly && !l.is_fixed ? l.hours : undefined,
             ));
             yPos += 3;
         }
 
         if (inv.parts.length) {
-            sectionHeader('Materials', 'PRICE', 'QTY');
+            sectionHeader('Materials / Parts', 'PRICE', 'QTY');
             inv.parts.forEach((p: any) => row(
                 p.custom_name || p.parts?.name || 'Part',
                 (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0),
@@ -303,8 +343,19 @@ export const Invoices = () => {
         doc.setDrawColor(220);
         doc.line(marginLeft, yPos + 2, pageWidth - marginRight, yPos + 2);
         
-        // 6. Totals
+        // 7. Totals
         yPos += 10;
+        if (inv.discount > 0) {
+            doc.setFontSize(9.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(80);
+            doc.text('Subtotal', pageWidth - marginRight - 50, yPos);
+            doc.text(inv.subtotal.toLocaleString(), pageWidth - marginRight, yPos, { align: 'right' });
+            yPos += 6;
+            doc.text(inv.discountLabel, pageWidth - marginRight - 50, yPos);
+            doc.text(`- ${inv.discount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+            yPos += 9;
+        }
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
@@ -537,13 +588,27 @@ export const Invoices = () => {
 
                             </div>
 
+                            {/* Vehicle */}
+                            <div className="shrink-0 bg-slate-950 rounded-xl border border-slate-800 p-4 mb-4">
+                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Vehicle</div>
+                                <div className="text-white font-bold text-sm">
+                                    {[selectedInvoice.vehicleDetails?.year, selectedInvoice.vehicleDetails?.make, selectedInvoice.vehicleDetails?.model].filter(Boolean).join(' ')}
+                                    {' — '}
+                                    <span className="font-mono">{selectedInvoice.vehicleDetails?.license_plate || 'No plate'}</span>
+                                </div>
+                                <div className="text-xs text-slate-400 mt-1 flex flex-wrap gap-x-4 gap-y-0.5">
+                                    {selectedInvoice.vehicleDetails?.color && <span>Colour: {selectedInvoice.vehicleDetails.color}</span>}
+                                    {selectedInvoice.vehicleDetails?.vin && <span>VIN: {selectedInvoice.vehicleDetails.vin}</span>}
+                                    {selectedInvoice.mileage && <span>Mileage: {Number(selectedInvoice.mileage).toLocaleString()} km</span>}
+                                </div>
+                            </div>
+
                             {/* PREVIEW BREAKDOWN TABLE - Responsive */}
                             <div className="w-full shrink-0 bg-slate-950 rounded-xl border border-slate-800 mb-4 overflow-x-auto">
                                 <table className="w-full text-sm text-left">
                                     <tbody className="divide-y divide-slate-800 text-slate-300">
                                         {/* Labour, then materials — grouped, each with its own
-                                            columns, mirroring the PDF. Labour shows a total only;
-                                            the hourly rate is internal. */}
+                                            columns, mirroring the PDF. */}
                                         {selectedInvoice.labor.length > 0 && (
                                             <tr className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
                                                 <th className="px-3 py-2.5 md:px-6 text-left">Labour / Description</th>
@@ -554,6 +619,11 @@ export const Invoices = () => {
                                             <tr key={`l-${i}`} className="hover:bg-slate-900/50">
                                                 <td className="px-3 py-3 md:px-6 md:py-4">
                                                     <div className="font-medium text-white text-sm">{l.description}</div>
+                                                    {!l.is_fixed && (
+                                                        <div className="text-[10px] md:text-xs text-slate-500">
+                                                            {l.hours} hrs &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
                                                     {(l.hours * l.hourly_rate_lkr).toLocaleString()}
@@ -563,7 +633,7 @@ export const Invoices = () => {
 
                                         {selectedInvoice.parts.length > 0 && (
                                             <tr className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
-                                                <th className="px-3 py-2.5 md:px-6 text-left">Materials</th>
+                                                <th className="px-3 py-2.5 md:px-6 text-left">Materials / Parts</th>
                                                 <th className="px-3 py-2.5 md:px-6 text-right">Total</th>
                                             </tr>
                                         )}
@@ -589,6 +659,18 @@ export const Invoices = () => {
                                         )}
                                     </tbody>
                                     <tfoot className="bg-slate-900 font-bold text-white border-t border-slate-800">
+                                        {selectedInvoice.discount > 0 && (
+                                            <>
+                                                <tr className="text-slate-400 font-normal">
+                                                    <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">Subtotal</td>
+                                                    <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">{selectedInvoice.subtotal.toLocaleString()}</td>
+                                                </tr>
+                                                <tr className="text-amber-400 font-normal">
+                                                    <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">{selectedInvoice.discountLabel}</td>
+                                                    <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">- {selectedInvoice.discount.toLocaleString()}</td>
+                                                </tr>
+                                            </>
+                                        )}
                                         <tr>
                                             <td className="px-3 py-3 md:px-6 md:py-4 text-right uppercase text-[10px] md:text-xs tracking-wider text-slate-400">Total Due</td>
                                             <td className="px-3 py-3 md:px-6 md:py-4 text-right text-base md:text-lg text-emerald-400 font-mono">

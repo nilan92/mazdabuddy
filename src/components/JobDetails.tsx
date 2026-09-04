@@ -11,6 +11,7 @@ import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import { ensureInvoiceForJob } from '../lib/invoices';
+import { calcDiscount, type DiscountType } from '../lib/totals';
 import { uploadJobPhoto, deleteJobPhotoObject } from '../lib/photos';
 import { withTitle } from '../lib/textCase';
 import { waMeUrl } from '../lib/whatsapp';
@@ -52,6 +53,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const [status, setStatus] = useState<string>('');
     const [assignedTech, setAssignedTech] = useState<string>('');
     const [estimatedHours, setEstimatedHours] = useState<string>('');
+    const [discountType, setDiscountType] = useState<DiscountType>('amount');
+    const [discountValue, setDiscountValue] = useState<string>('');
 
     const [partForm, setPartForm] = useState({ 
         part_id: '', 
@@ -66,13 +69,15 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     const [laborMode, setLaborMode] = useState<'hourly' | 'fixed'>('hourly');
 
     // Dirty state tracking
-    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '' });
+    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
     const isDirty = (
         mileage !== initialState.current.mileage ||
         techNotes !== initialState.current.techNotes ||
         status !== initialState.current.status ||
         assignedTech !== initialState.current.assignedTech ||
-        estimatedHours !== initialState.current.estimatedHours
+        estimatedHours !== initialState.current.estimatedHours ||
+        discountType !== initialState.current.discountType ||
+        discountValue !== initialState.current.discountValue
     );
     const [savedSuccessfully, setSavedSuccessfully] = useState(false);
 
@@ -104,12 +109,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                     const s = jobData.status;
                     const a = jobData.assigned_staff_id || '';
                     const e = jobData.estimated_hours?.toString() || '';
+                    const dt: DiscountType = jobData.discount_type === 'percent' ? 'percent' : 'amount';
+                    const dv = Number(jobData.discount_value) ? String(jobData.discount_value) : '';
                     setMileage(m);
                     setTechNotes(n);
                     setStatus(s);
                     setAssignedTech(a);
                     setEstimatedHours(e);
-                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e };
+                    setDiscountType(dt);
+                    setDiscountValue(dv);
+                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e, discountType: dt, discountValue: dv };
                     setSavedSuccessfully(false);
                     isInitialLoad.current = false;
                 }
@@ -284,24 +293,29 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             const plate = job.vehicles?.license_plate || "N/A";
 
             doc.setFillColor(245, 245, 245);
-            doc.rect(15, 70, pageWidth - 30, 25, 'F');
-            
+            doc.rect(15, 70, pageWidth - 30, 32, 'F');
+
             doc.setFont('helvetica', 'bold');
             doc.text("Customer:", 20, 78);
             doc.text("Vehicle:", 110, 78);
-            
+
             doc.setFont('helvetica', 'normal');
             doc.text(`${customerName} (${customerPhone})`, 20, 84);
             doc.text(`${vehicleInfo} - ${plate}`, 110, 84);
             doc.text(`Mileage: ${mileage || 'N/A'} km`, 110, 90);
+            const vehicleExtra = [
+                job.vehicles?.color && `Colour: ${job.vehicles.color}`,
+                job.vehicles?.vin && `VIN: ${job.vehicles.vin}`,
+            ].filter(Boolean).join('   ');
+            if (vehicleExtra) doc.text(vehicleExtra, 110, 96);
 
             // Reported Issue
             doc.setFont('helvetica', 'bold');
-            doc.text("Reported Issue / Request:", 15, 105);
+            doc.text("Reported Issue / Request:", 15, 112);
             doc.setFont('helvetica', 'normal');
-            doc.text(job.description || "No description provided.", 15, 111);
+            doc.text(job.description || "No description provided.", 15, 118);
 
-            let yPos = 125;
+            let yPos = 132;
 
             // Technician Notes
             if (techNotes) {
@@ -343,7 +357,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                 yPos += 5;
                 jobLabor.forEach(l => {
                     doc.setFont('helvetica', 'normal');
-                    doc.text(`- ${l.description} (${l.hours} hrs)`, 20, yPos);
+                    const basis = (l as unknown as { is_fixed?: boolean }).is_fixed ? 'fixed price' : `${l.hours} hrs`;
+                    doc.text(`- ${l.description} (${basis})`, 20, yPos);
                     yPos += 5;
                 });
                 yPos += 10;
@@ -487,7 +502,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
             technician_notes: techNotes,
             status,
             assigned_staff_id: assignedTech || null,
-            estimated_hours: estimatedHours ? parseFloat(estimatedHours) : 0
+            estimated_hours: estimatedHours ? parseFloat(estimatedHours) : 0,
+            discount_type: discountType,
+            discount_value: parseFloat(discountValue) || 0
         };
 
         // --- Efficiency Tracking Logic (Start/Stop Timer) ---
@@ -585,8 +602,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                 toast("Job updated successfully.", 'success');
             }
             // Reset dirty tracking after successful save
-            initialState.current = { mileage, techNotes, status, assignedTech, estimatedHours };
+            initialState.current = { mileage, techNotes, status, assignedTech, estimatedHours, discountType, discountValue };
             setSavedSuccessfully(true);
+            // The job_cards discount trigger rewrites the invoice total.
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
         }
     };
 
@@ -769,6 +788,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
     // Calculations
     const totalParts = jobParts.reduce((sum, p) => sum + (p.price_at_time_lkr * p.quantity), 0);
     const totalLabor = jobLabor.reduce((sum, l) => sum + (l.hourly_rate_lkr * l.hours), 0);
+    const subtotal = totalParts + totalLabor;
+    const discountAmount = calcDiscount(subtotal, discountType, discountValue);
     // const totalHours = jobLabor.reduce((sum, l) => sum + l.hours, 0); // Removed unused
     // const estHours = parseFloat(estimatedHours) || 0; // Removed unused
     
@@ -1153,10 +1174,44 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
                             {/* Footer */}
                             <div className="p-4 bg-slate-950 border-t border-slate-800 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <span className="text-slate-400 text-xs font-bold uppercase flex-1">Discount</span>
+                                    <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800">
+                                        {(['amount', 'percent'] as DiscountType[]).map(t => (
+                                            <button
+                                                key={t}
+                                                type="button"
+                                                onClick={() => setDiscountType(t)}
+                                                className={`px-2.5 py-1 rounded-md text-xs font-bold transition-colors ${
+                                                    discountType === t ? 'bg-brand text-slate-950' : 'text-slate-400 hover:text-white'
+                                                }`}
+                                            >
+                                                {t === 'amount' ? 'LKR' : '%'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step={discountType === 'percent' ? '1' : '100'}
+                                        max={discountType === 'percent' ? '100' : undefined}
+                                        placeholder="0"
+                                        value={discountValue}
+                                        onFocus={e => e.target.select()}
+                                        onChange={e => setDiscountValue(e.target.value)}
+                                        className="w-24 bg-slate-900 border border-slate-800 rounded-lg p-2 text-white text-sm font-mono text-right"
+                                    />
+                                </div>
+                                {discountAmount > 0 && (
+                                    <div className="flex justify-between items-center mb-1 text-xs">
+                                        <span className="text-slate-500 uppercase font-bold">Subtotal</span>
+                                        <span className="font-mono text-slate-400 line-through">LKR {subtotal.toLocaleString()}</span>
+                                    </div>
+                                )}
                                 <div className="flex justify-between items-center mb-2">
                                     <div className="text-slate-400 text-xs font-bold uppercase">Estimated Total</div>
                                     <div className="text-xl font-black text-brand font-mono">
-                                        LKR {(totalParts + totalLabor).toLocaleString()}
+                                        LKR {(subtotal - discountAmount).toLocaleString()}
                                     </div>
                                 </div>
                                 {savedSuccessfully && !isDirty ? (
