@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { calcInvoiceTotal } from '../lib/totals';
 import { tidyName, withTitle, CUSTOMER_TITLES } from '../lib/textCase';
 import { Modal } from './Modal';
+import { JobDetails } from './JobDetails';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
@@ -40,7 +41,9 @@ export const Customers = () => {
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     
     const [customerHistory, setCustomerHistory] = useState<HistoryJob[]>([]);
-    
+    const [historySearch, setHistorySearch] = useState('');
+    const [historyJobId, setHistoryJobId] = useState<string | null>(null);
+
     // Service reminder SMS modal
     const [smsModal, setSmsModal] = useState<{ customer: Customer; vehicle: Vehicle | null } | null>(null);
     const [smsMessage, setSmsMessage] = useState('');
@@ -158,7 +161,7 @@ export const Customers = () => {
     const fetchHistory = async (customerId: string) => {
         setSelectedCustomer(customers.find(c => c.id === customerId) || null);
         setIsHistoryModalOpen(true);
-        
+
         const { data: vehicleData } = await supabase.from('vehicles').select('id').eq('customer_id', customerId);
         const vehicleIds = vehicleData?.map(v => v.id) || [];
 
@@ -177,7 +180,23 @@ export const Customers = () => {
         if (jobs) setCustomerHistory(jobs as HistoryJob[]);
     };
 
-    const filteredCustomers = customers.filter(c => 
+    /** Searches what the workshop actually remembers a job by — the complaint,
+     *  the diagnosis, the plate, the date — not just the vehicle. */
+    const visibleHistory = customerHistory.filter(job => {
+        const q = historySearch.trim().toLowerCase();
+        if (!q) return true;
+        return [
+            job.description,
+            job.technician_notes,
+            job.status.replace(/_/g, ' '),
+            job.vehicles?.make,
+            job.vehicles?.model,
+            job.vehicles?.license_plate,
+            new Date(job.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        ].some(field => (field || '').toLowerCase().includes(q));
+    });
+
+    const filteredCustomers = customers.filter(c =>
         (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (c.phone || '').includes(searchTerm) ||
         vehicles.some(v => v.customer_id === c.id && (v.license_plate || '').toLowerCase().includes(searchTerm.toLowerCase()))
@@ -277,7 +296,7 @@ export const Customers = () => {
                                         <MessageSquare size={18} />
                                     </button>
                                      <button
-                                        onClick={() => fetchHistory(customer.id)}
+                                        onClick={() => { setHistorySearch(''); fetchHistory(customer.id); }}
                                         className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-cyan-400 transition-colors"
                                         title="Service History"
                                     >
@@ -439,21 +458,29 @@ export const Customers = () => {
                         </div>
                     </div>
 
+                    {customerHistory.length > 0 && (
+                        <div className="relative">
+                            <Search className="absolute left-3 top-3 text-slate-500" size={16} />
+                            <input
+                                type="text"
+                                value={historySearch}
+                                onChange={e => setHistorySearch(e.target.value)}
+                                placeholder="Search the issue, diagnosis, plate or date..."
+                                className="w-full bg-slate-950 border border-slate-800 rounded-lg py-2.5 pl-9 pr-3 text-white text-sm focus:outline-none focus:border-cyan-500"
+                            />
+                        </div>
+                    )}
+
                     {customerHistory.length === 0 ? (
                          <div className="text-center text-slate-500 py-8">No job history found.</div>
+                    ) : visibleHistory.length === 0 ? (
+                         <div className="text-center text-slate-500 py-8">No job matches “{historySearch}”.</div>
                     ) : (
-                        customerHistory.map(job => (
-                                <div 
-                                    key={job.id} 
+                        visibleHistory.map(job => (
+                                <div
+                                    key={job.id}
                                     className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 hover:border-cyan-500/50 transition-colors cursor-pointer"
-                                    onClick={() => {
-                                        setIsHistoryModalOpen(false);
-                                        if (job.status === 'completed') {
-                                            window.location.hash = `#/invoices?job_id=${job.id}`;
-                                        } else {
-                                            window.location.hash = `#/jobs/${job.id}`;
-                                        }
-                                    }}
+                                    onClick={() => setHistoryJobId(job.id)}
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <span className={`text-xs px-2 py-1 rounded uppercase font-bold
@@ -469,7 +496,16 @@ export const Customers = () => {
                                         {job.vehicles?.make} {job.vehicles?.model} ({job.vehicles?.license_plate})
                                     </h4>
                                 <p className="text-sm text-slate-400 mt-1">{job.description}</p>
-                                <div className="mt-2 pt-2 border-t border-slate-700 flex justify-end">
+                                {job.technician_notes && (
+                                    <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 whitespace-pre-line">
+                                        <span className="text-slate-600 font-bold uppercase">Done: </span>
+                                        {job.technician_notes}
+                                    </p>
+                                )}
+                                <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between items-center">
+                                    <span className="text-[10px] text-slate-500 uppercase font-bold">
+                                        {(job.job_parts?.length ?? 0)} parts · {(job.job_labor?.length ?? 0)} labour
+                                    </span>
                                     <span className="text-cyan-400 font-mono font-bold">LKR {jobTotal(job).toLocaleString()}</span>
                                 </div>
                             </div>
@@ -535,6 +571,17 @@ export const Customers = () => {
                     </div>
                 )}
             </Modal>
+
+            {/* Renders above the history modal (z-9999 vs z-50), so closing it
+                drops the user straight back onto the list they searched. */}
+            {historyJobId && (
+                <JobDetails
+                    jobId={historyJobId}
+                    readOnly={customerHistory.find(j => j.id === historyJobId)?.status === 'completed'}
+                    onClose={() => setHistoryJobId(null)}
+                    onUpdate={() => { if (selectedCustomer) fetchHistory(selectedCustomer.id); }}
+                />
+            )}
         </div>
     );
 };

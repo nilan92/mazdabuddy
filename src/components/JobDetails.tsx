@@ -30,9 +30,13 @@ interface JobDetailsProps {
     jobId: string;
     onClose: () => void;
     onUpdate: () => void;
+    /** Opened as a record of past work — everything reads, nothing edits. Not
+     *  derived from status: the board deliberately allows adding parts to a
+     *  completed job, which is how invoices get their line items. */
+    readOnly?: boolean;
 }
 
-export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
+export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDetailsProps) => {
     const { profile } = useAuth();
     const { toast } = useToast();
     const confirm = useConfirm();
@@ -848,7 +852,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <span className="text-[9px] font-bold uppercase leading-none">Link</span>
                                      </button>
 
-                                     {/* SMS */}
+                                     {/* SMS. Hidden on a past job: it sends with no confirm step,
+                                         and "your vehicle is ready" about last year's repair is
+                                         worse than no button at all. WhatsApp stays — it opens a
+                                         draft the user still has to send. */}
+                                     {!readOnly && (
                                      <button
                                         onClick={() => handleSendSMS(status === 'completed' ? 'completed' : 'status')}
                                         className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
@@ -857,6 +865,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <Smartphone size={18} />
                                         <span className="text-[9px] font-bold uppercase leading-none">SMS</span>
                                      </button>
+                                     )}
 
                                      {/* Job Card PDF */}
                                      <button
@@ -868,7 +877,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <span className="text-[9px] font-bold uppercase leading-none">PDF</span>
                                      </button>
 
-                                     {job.status === 'completed' && !job.archived && (
+                                     {job.status === 'completed' && !job.archived && !readOnly && (
                                          <button onClick={handleArchive} className="p-2 text-slate-400 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg transition-colors" title="Archive Job">
                                              <Archive size={18} />
                                          </button>
@@ -884,12 +893,19 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                             {/* Single-scroll content — no tabs */}
                             <div className="flex-1 overflow-y-auto bg-slate-900 pb-40">
 
+                                {readOnly && (
+                                    <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+                                        <Archive size={14} className="flex-shrink-0" />
+                                        Past job — read-only record. Open it from the Jobs board to make changes.
+                                    </div>
+                                )}
+
                                 {/* ── JOB DETAILS ───────────────────────── */}
                                 <div className="p-4 space-y-4">
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Status</label>
-                                            <select value={status} onChange={e => setStatus(e.target.value)} className="w-full bg-slate-800 text-white p-2 text-sm rounded border border-slate-700">
+                                            <select value={status} disabled={readOnly} onChange={e => setStatus(e.target.value)} className="w-full bg-slate-800 text-white p-2 text-sm rounded border border-slate-700 disabled:opacity-60">
                                                 <option value="pending">Pending</option>
                                                 <option value="in_progress">In Progress</option>
                                                 <option value="waiting_parts">Waiting for Parts</option>
@@ -900,7 +916,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Technician</label>
                                             <div className="relative">
-                                                <select value={assignedTech} onChange={e => setAssignedTech(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700">
+                                                <select value={assignedTech} disabled={readOnly} onChange={e => setAssignedTech(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60">
                                                     <option value="">Unassigned</option>
                                                     {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                                 </select>
@@ -913,14 +929,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Mileage</label>
                                             <div className="relative">
-                                                <input type="number" onFocus={(e) => e.target.select()} value={mileage} onChange={e => setMileage(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700" placeholder="0" />
+                                                <input type="number" disabled={readOnly} onFocus={(e) => e.target.select()} value={mileage} onChange={e => setMileage(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60" placeholder="0" />
                                                 <Hash size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                             </div>
                                         </div>
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Est. Hours</label>
                                             <div className="relative">
-                                                <input type="number" onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700" placeholder="0" />
+                                                <input type="number" disabled={readOnly} onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60" placeholder="0" />
                                                 <Clock size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                             </div>
                                         </div>
@@ -962,14 +978,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                     <div>
                                         <div className="flex justify-between items-center mb-1">
                                             <label className="text-[10px] font-bold text-slate-500 uppercase">Technician Notes</label>
-                                            {aiKey && (
+                                            {aiKey && !readOnly && (
                                                 <button onClick={handleAiAssist} disabled={isAiLoading}
                                                     className="text-[10px] bg-purple-500/10 text-purple-400 px-2 py-1 rounded hover:bg-purple-500/20 disabled:opacity-50 flex items-center gap-1 transition-colors">
                                                     {isAiLoading ? 'Thinking...' : '✨ AI Assist'}
                                                 </button>
                                             )}
                                         </div>
-                                        <textarea rows={4} value={techNotes} onChange={e => setTechNotes(e.target.value)} className="w-full bg-slate-800 text-white p-3 text-sm rounded border border-slate-700 focus:border-brand focus:outline-none" placeholder="Add diagnosis and repair notes..." />
+                                        <textarea rows={4} readOnly={readOnly} value={techNotes} onChange={e => setTechNotes(e.target.value)} className={`w-full p-3 text-sm rounded border focus:outline-none ${readOnly ? 'bg-slate-900 text-slate-400 border-slate-800' : 'bg-slate-800 text-white border-slate-700 focus:border-brand'}`} placeholder={readOnly ? 'No notes were recorded.' : 'Add diagnosis and repair notes...'} />
                                     </div>
                                 </div>
 
@@ -980,14 +996,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             <Package size={14} className="text-brand" /> Parts
                                             {jobParts.length > 0 && <span className="bg-brand-soft text-brand text-[10px] px-1.5 py-0.5 rounded font-bold">{jobParts.length}</span>}
                                         </h3>
+                                        {!readOnly && (
                                         <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-700">
                                             <button onClick={() => setPartForm({...partForm, is_custom: false})}
                                                 className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${!partForm.is_custom ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}>Inventory</button>
                                             <button onClick={() => setPartForm({...partForm, is_custom: true})}
                                                 className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${partForm.is_custom ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}>Custom</button>
                                         </div>
+                                        )}
                                     </div>
-                                    <div className="px-4 pb-3">
+                                    <div className={`px-4 pb-3 ${readOnly ? 'hidden' : ''}`}>
                                         <form onSubmit={handleAddPart} className="space-y-2">
                                             {!partForm.is_custom ? (
                                                 <div className="flex gap-2 items-center">
@@ -1034,7 +1052,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                                                     <span className="font-mono text-white text-sm">{(part.price_at_time_lkr * part.quantity).toLocaleString()}</span>
-                                                    <button onClick={() => handleRemovePart(part.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>
+                                                    {!readOnly && <button onClick={() => handleRemovePart(part.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>}
                                                 </div>
                                             </div>
                                         ))}
@@ -1050,7 +1068,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                             {jobLabor.length > 0 && <span className="bg-brand-soft text-brand text-[10px] px-1.5 py-0.5 rounded font-bold">{jobLabor.length}</span>}
                                         </h3>
                                     </div>
-                                    <div className="px-4 pb-3">
+                                    <div className={`px-4 pb-3 ${readOnly ? 'hidden' : ''}`}>
                                         <form onSubmit={handleAddLabor} className="space-y-2">
                                             <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
                                                 {(['hourly', 'fixed'] as const).map(mode => (
@@ -1102,7 +1120,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                                                     <span className="font-mono text-white text-sm">{(labor.hourly_rate_lkr * labor.hours).toLocaleString()}</span>
-                                                    <button onClick={() => handleRemoveLabor(labor.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>
+                                                    {!readOnly && <button onClick={() => handleRemoveLabor(labor.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>}
                                                 </div>
                                             </div>
                                         ))}
@@ -1116,6 +1134,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                         <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
                                             <Camera size={16} className="text-brand" /> Photos
                                         </h3>
+                                        {!readOnly && (
                                         <label className={`text-xs font-bold px-3 py-2 rounded-lg cursor-pointer transition-colors ${uploadingPhotos ? 'bg-slate-800 text-slate-500' : 'bg-slate-800 text-white hover:bg-slate-700'}`}>
                                             {uploadingPhotos ? 'Uploading…' : '+ Add'}
                                             <input
@@ -1128,11 +1147,19 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                 className="hidden"
                                             />
                                         </label>
+                                        )}
                                     </div>
                                     <div className="px-4 pb-6">
+                                        {photos.length > 0 && (
+                                            <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+                                                Visible to the customer on their status link, where they can
+                                                view and save them. Stored indefinitely — archiving the job is
+                                                what ends the customer's access.
+                                            </p>
+                                        )}
                                         {photos.length === 0 ? (
                                             <p className="text-center text-slate-600 py-2 text-sm italic">
-                                                No photos yet. Snap before/after shots to settle disputes later.
+                                                {readOnly ? 'No photos were taken on this job.' : 'No photos yet. Snap before/after shots to settle disputes later.'}
                                             </p>
                                         ) : (
                                             <div className="grid grid-cols-3 gap-2">
@@ -1146,6 +1173,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                                 className="w-full h-full object-cover"
                                                             />
                                                         </a>
+                                                        {!readOnly && (
                                                         <button
                                                             onClick={() => handleDeletePhoto(photo)}
                                                             title="Delete photo"
@@ -1153,6 +1181,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                                         >
                                                             <Trash2 size={13} />
                                                         </button>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
@@ -1174,7 +1203,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
 
                             {/* Footer */}
                             <div className="p-4 bg-slate-950 border-t border-slate-800 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
-                                <div className="flex items-center gap-2 mb-3">
+                                <div className={`items-center gap-2 mb-3 ${readOnly ? 'hidden' : 'flex'}`}>
                                     <span className="text-slate-400 text-xs font-bold uppercase flex-1">Discount</span>
                                     <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800">
                                         {(['amount', 'percent'] as DiscountType[]).map(t => (
@@ -1203,18 +1232,28 @@ export const JobDetails = ({ jobId, onClose, onUpdate }: JobDetailsProps) => {
                                     />
                                 </div>
                                 {discountAmount > 0 && (
-                                    <div className="flex justify-between items-center mb-1 text-xs">
-                                        <span className="text-slate-500 uppercase font-bold">Subtotal</span>
-                                        <span className="font-mono text-slate-400 line-through">LKR {subtotal.toLocaleString()}</span>
-                                    </div>
+                                    <>
+                                        <div className="flex justify-between items-center mb-1 text-xs">
+                                            <span className="text-slate-500 uppercase font-bold">Subtotal</span>
+                                            <span className="font-mono text-slate-400 line-through">LKR {subtotal.toLocaleString()}</span>
+                                        </div>
+                                        {readOnly && (
+                                            <div className="flex justify-between items-center mb-1 text-xs">
+                                                <span className="text-slate-500 uppercase font-bold">
+                                                    Discount{discountType === 'percent' ? ` (${discountValue}%)` : ''}
+                                                </span>
+                                                <span className="font-mono text-amber-400">- {discountAmount.toLocaleString()}</span>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                                 <div className="flex justify-between items-center mb-2">
-                                    <div className="text-slate-400 text-xs font-bold uppercase">Estimated Total</div>
+                                    <div className="text-slate-400 text-xs font-bold uppercase">{readOnly ? 'Job Total' : 'Estimated Total'}</div>
                                     <div className="text-xl font-black text-brand font-mono">
                                         LKR {(subtotal - discountAmount).toLocaleString()}
                                     </div>
                                 </div>
-                                {savedSuccessfully && !isDirty ? (
+                                {readOnly || (savedSuccessfully && !isDirty) ? (
                                     <button
                                         onClick={generateJobCardPDF}
                                         className="w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-sm bg-emerald-600 hover:bg-emerald-500 text-white"
