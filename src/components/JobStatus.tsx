@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, Clock, Package, Wrench, Phone, AlertCircle } from 'lucide-react';
+import { CheckCircle, Clock, Package, Wrench, Phone, AlertCircle, Download, Camera } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { withTitle } from '../lib/textCase';
 
@@ -26,6 +26,35 @@ interface StatusRow {
     shop_logo_url: string | null;
 }
 
+interface StatusPhoto {
+    url: string;
+    taken_at: string;
+}
+
+/**
+ * `<a download>` is ignored cross-origin — the browser navigates to the image
+ * instead of saving it — so the bytes have to come back as a blob first. That
+ * needs CORS on the bucket, which may not be set, hence the fallback: open the
+ * image so the customer can save it by long-press.
+ */
+async function savePhoto(url: string, index: number) {
+    try {
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `photo-${index + 1}.${(blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objectUrl);
+    } catch {
+        window.open(url, '_blank', 'noopener');
+    }
+}
+
 const STEPS = [
     { key: 'pending', label: 'Received', icon: Clock },
     { key: 'waiting_parts', label: 'Waiting for Parts', icon: Package },
@@ -43,16 +72,23 @@ const HEADLINE: Record<string, string> = {
 export const JobStatus = () => {
     const { token } = useParams<{ token: string }>();
     const [row, setRow] = useState<StatusRow | null>(null);
+    const [photos, setPhotos] = useState<StatusPhoto[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             if (!token) { setLoading(false); return; }
-            const { data, error } = await supabase.rpc('get_job_status', { p_token: token });
+            const [status, pics] = await Promise.all([
+                supabase.rpc('get_job_status', { p_token: token }),
+                supabase.rpc('get_job_photos', { p_token: token }),
+            ]);
             if (cancelled) return;
-            if (error) console.warn('status lookup failed', error.message);
-            setRow((data as StatusRow[] | null)?.[0] ?? null);
+            if (status.error) console.warn('status lookup failed', status.error.message);
+            // Photos are a bonus — a failure here must not blank the status page.
+            if (pics.error) console.warn('photo lookup failed', pics.error.message);
+            setRow((status.data as StatusRow[] | null)?.[0] ?? null);
+            setPhotos((pics.data as StatusPhoto[] | null) ?? []);
             setLoading(false);
         })();
         return () => { cancelled = true; };
@@ -133,6 +169,42 @@ export const JobStatus = () => {
                         );
                     })}
                 </ol>
+
+                {photos.length > 0 && (
+                    <section className="mb-10">
+                        <h2 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+                            <Camera size={15} className="text-cyan-400" />
+                            Photos from the workshop
+                        </h2>
+                        <div className="grid grid-cols-2 gap-2">
+                            {photos.map((photo, i) => (
+                                <div key={photo.url} className="relative aspect-square rounded-xl overflow-hidden border border-slate-800 bg-slate-900">
+                                    <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                                        <img
+                                            src={photo.url}
+                                            alt={`Workshop photo ${i + 1}`}
+                                            loading="lazy"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </a>
+                                    <button
+                                        onClick={() => savePhoto(photo.url, i)}
+                                        title="Save this photo"
+                                        aria-label={`Save photo ${i + 1}`}
+                                        className="absolute bottom-1.5 right-1.5 p-2 rounded-lg bg-black/70 text-white hover:bg-black active:scale-95 transition-all"
+                                    >
+                                        <Download size={15} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-3">
+                            Tap a photo to view it full size, or the arrow to save it. These stay
+                            here while the workshop keeps this job open — save anything you want
+                            to keep.
+                        </p>
+                    </section>
+                )}
 
                 {row.shop_phone && (
                     <a
