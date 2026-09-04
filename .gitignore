@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Output of scripts/record-walkthrough.mjs — screenshots and rendered video
+walkthrough
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
