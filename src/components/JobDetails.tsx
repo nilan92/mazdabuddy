@@ -321,14 +321,25 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
             let yPos = 132;
 
+            // jsPDF silently discards anything drawn past the page height, so a
+            // job with a long diagnosis or many parts lost everything below the
+            // fold. Each block reserves its space before drawing.
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const ensureSpace = (needed: number) => {
+                if (yPos + needed <= pageHeight - 25) return;
+                doc.addPage();
+                yPos = 20;
+            };
+
             // Technician Notes
             if (techNotes) {
+                doc.setFont('helvetica', 'normal');
+                const splitNotes = doc.splitTextToSize(techNotes, pageWidth - 30);
+                ensureSpace(6 + splitNotes.length * 5);
                 doc.setFont('helvetica', 'bold');
                 doc.text("Technician Diagnosis / Diagnosis:", 15, yPos);
                 yPos += 6;
                 doc.setFont('helvetica', 'normal');
-                // Split text to fit width
-                const splitNotes = doc.splitTextToSize(techNotes, pageWidth - 30);
                 doc.text(splitNotes, 15, yPos);
                 yPos += (splitNotes.length * 5) + 10;
             }
@@ -336,19 +347,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             // Tables (Simplified)
             // Parts
             if (jobParts.length > 0) {
+                ensureSpace(10); // no heading orphaned at the foot of a page
                 doc.setFont('helvetica', 'bold');
                 doc.text("Parts & Materials", 15, yPos);
                 yPos += 5;
                 jobParts.forEach(p => {
                     const name = p.is_custom ? p.custom_name : p.parts?.name;
+                    ensureSpace(5);
                     doc.setFont('helvetica', 'normal');
                     doc.text(`- ${name} (x${p.quantity})`, 20, yPos);
-                    // Minimal/Rugged: No prices on Job Card usually, unless requested? 
-                    // User said "summary... statement... accepted". 
-                    // Usually Job Card for workshop doesn't need prices, but "give to customer" might imply estimate.
-                    // I will leave prices out for "Job Card" (Work Order) style to be rugged/legal, 
-                    // but maybe add them if it's an "Invoice". 
-                    // User said "Job Card... summarizing what they will do".
+                    // Prices stay off the job card: it is a work authorisation,
+                    // not the bill. The invoice carries the money.
                     yPos += 5;
                 });
                 yPos += 5;
@@ -356,10 +365,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
              // Labor
              if (jobLabor.length > 0) {
+                ensureSpace(10);
                 doc.setFont('helvetica', 'bold');
                 doc.text("Authorized Labor / Services", 15, yPos);
                 yPos += 5;
                 jobLabor.forEach(l => {
+                    ensureSpace(5);
                     doc.setFont('helvetica', 'normal');
                     const basis = (l as unknown as { is_fixed?: boolean }).is_fixed ? 'fixed price' : `${l.hours} hrs`;
                     doc.text(`- ${l.description} (${basis})`, 20, yPos);
@@ -370,8 +381,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
             // Terms
             if (tenantDetails.terms_and_conditions) {
-                if (yPos > 240) { doc.addPage(); yPos = 20; }
-                
+                ensureSpace(20);
+
                 doc.setFontSize(8);
                 doc.setTextColor(150);
                 doc.text("Terms & Conditions:", 15, yPos);
@@ -383,9 +394,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                  yPos += 20;
             }
 
-            // Signatures
-            if (yPos > 250) { doc.addPage(); yPos = 20; }
-            
+            // Signatures. 35mm covers both rules and all three caption lines —
+            // a signature block split across a page break is not signable.
+            ensureSpace(35);
+
             doc.setTextColor(0);
             doc.setDrawColor(0);
             doc.setLineWidth(0.1);

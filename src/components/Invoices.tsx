@@ -277,9 +277,23 @@ export const Invoices = () => {
         const colUnit  = colQty - 26;                   // unit price
         const descWidth = colUnit - (marginLeft + 5) - 4;
 
-        // unitLabel/qtyLabel omitted => description + total only, used for a
-        // section whose rows are all flat-priced.
-        const sectionHeader = (label: string, unitLabel?: string, qtyLabel?: string) => {
+        // jsPDF does not paginate: anything drawn past the page height is silently
+        // discarded, which is how a long invoice came out as a single page with
+        // its later items missing. Every block that advances yPos asks for its
+        // space first, and a section that spills repeats its column header so
+        // page two is not a grid of unlabelled numbers.
+        const pageHeight = doc.internal.pageSize.getHeight();
+        const bottomLimit = pageHeight - 25; // clear of the footer line
+        let repeatHeader: (() => void) | null = null;
+
+        const ensureSpace = (needed: number) => {
+            if (yPos + needed <= bottomLimit) return;
+            doc.addPage();
+            yPos = 20;
+            if (repeatHeader) repeatHeader();
+        };
+
+        const drawSectionHeader = (label: string, unitLabel?: string, qtyLabel?: string) => {
             doc.setFillColor(245, 247, 250);
             doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 9, 'F');
             doc.setFontSize(8.5);
@@ -295,14 +309,25 @@ export const Invoices = () => {
             doc.setTextColor(50);
         };
 
+        // unitLabel/qtyLabel omitted => description + total only, used for a
+        // section whose rows are all flat-priced.
+        const sectionHeader = (label: string, unitLabel?: string, qtyLabel?: string) => {
+            repeatHeader = null; // a header must never start a page it also filled
+            ensureSpace(22);     // no orphan header: room for the header and a row
+            repeatHeader = () => drawSectionHeader(`${label} (continued)`, unitLabel, qtyLabel);
+            drawSectionHeader(label, unitLabel, qtyLabel);
+        };
+
         const row = (desc: string, total: number, unit?: number, qty?: number | string) => {
             const width = unit === undefined ? colTotal - (marginLeft + 5) - 6 : descWidth;
             const lines = doc.splitTextToSize(desc, width);
+            const height = Math.max(8, lines.length * 5 + 3);
+            ensureSpace(height);
             doc.text(lines, marginLeft + 5, yPos);
             if (unit !== undefined) doc.text(Number(unit).toLocaleString(), colUnit, yPos, { align: 'right' });
             if (qty !== undefined) doc.text(String(qty), colQty, yPos, { align: 'right' });
             doc.text(total.toLocaleString(), colTotal, yPos, { align: 'right' });
-            yPos += Math.max(8, lines.length * 5 + 3);
+            yPos += height;
         };
 
         if (inv.labor.length) {
@@ -339,10 +364,15 @@ export const Invoices = () => {
             yPos += 8;
         }
         
+        // Totals must not be separated from the rule above them, so the whole
+        // block is placed as one unit.
+        repeatHeader = null;
+        ensureSpace(inv.discount > 0 ? 32 : 17);
+
         // Draw Line
         doc.setDrawColor(220);
         doc.line(marginLeft, yPos + 2, pageWidth - marginRight, yPos + 2);
-        
+
         // 7. Totals
         yPos += 10;
         if (inv.discount > 0) {
@@ -368,6 +398,7 @@ export const Invoices = () => {
         // Payment QR / link — above Terms, since it's what the customer acts on
         if (tenant?.payment_qr_url || tenant?.payment_link) {
             yPos += 16;
+            ensureSpace(45); // label + a 34mm QR
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
@@ -399,27 +430,40 @@ export const Invoices = () => {
         // Terms & Conditions
         if (tenant?.terms_and_conditions) {
             yPos += 20;
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            const splitTerms = doc.splitTextToSize(tenant.terms_and_conditions, pageWidth - marginLeft - marginRight);
+            ensureSpace(6 + splitTerms.length * 4);
+
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
             doc.text('Terms & Conditions:', marginLeft, yPos);
             yPos += 6;
-            
+
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(8);
             doc.setTextColor(80);
-            
-            const splitTerms = doc.splitTextToSize(tenant.terms_and_conditions, pageWidth - marginLeft - marginRight);
             doc.text(splitTerms, marginLeft, yPos);
         }
 
-        // Footer
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.setFont('helvetica', 'italic');
-        const pageHeight = doc.internal.pageSize.getHeight();
-        doc.text('Thank you for your business!', pageWidth / 2, pageHeight - 15, { align: 'center' });
-        
+        // Footer on every page. Page numbers only earn their place once the
+        // invoice actually spans more than one.
+        const pageCount = doc.getNumberOfPages();
+        for (let page = 1; page <= pageCount; page++) {
+            doc.setPage(page);
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.setFont('helvetica', 'italic');
+            if (page === pageCount) {
+                doc.text('Thank you for your business!', pageWidth / 2, pageHeight - 15, { align: 'center' });
+            }
+            if (pageCount > 1) {
+                doc.text(`Page ${page} of ${pageCount}`, pageWidth - marginRight, pageHeight - 15, { align: 'right' });
+                doc.text(`Invoice #${inv.invoiceNumber}`, marginLeft, pageHeight - 15);
+            }
+        }
+
         const firstName = (inv.customerDetails?.name || 'Customer').split(' ')[0].replace(/[^a-z0-9]/gi, '_');
         
         const dateObj = inv.rawDate || new Date(); 
