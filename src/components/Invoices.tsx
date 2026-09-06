@@ -181,8 +181,11 @@ export const Invoices = () => {
         doc.text(`#${inv.invoiceNumber}`, pageWidth - marginRight, 32, { align: 'right' });
         doc.text(`Date: ${inv.date}`, pageWidth - marginRight, 37, { align: 'right' });
         
+        // Status is stored capitalised ('Paid'), so a lowercase comparison never
+        // matched and every paid invoice printed in the unpaid red.
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(inv.status === 'paid' ? 34 : 239, inv.status === 'paid' ? 197 : 68, inv.status === 'paid' ? 94 : 68);
+        if (inv.status?.toLowerCase() === 'paid') doc.setTextColor(34, 197, 94);
+        else doc.setTextColor(239, 68, 68);
         doc.text(`STATUS: ${inv.status.toUpperCase()}`, pageWidth - marginRight, 42, { align: 'right' });
         
         doc.setTextColor(0); // Reset
