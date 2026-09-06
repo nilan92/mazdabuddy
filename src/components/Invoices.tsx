@@ -90,7 +90,7 @@ export const Invoices = () => {
             if (!profile?.tenant_id) return null;
             const { data } = await supabase
                 .from('tenants')
-                .select('name, address, phone, email, brand_color, logo_url, terms_and_conditions, payment_qr_url, payment_link')
+                .select('name, address, phone, email, brand_color, logo_url, terms_and_conditions, payment_qr_url, payment_link, bank_details')
                 .eq('id', profile.tenant_id)
                 .single();
             return data;
@@ -428,6 +428,41 @@ export const Invoices = () => {
 
             doc.setTextColor(0);
             yPos = Math.max(qrBottom, yPos + 8);
+        }
+
+        // Bank details — boxed and tinted, because this is the block the customer
+        // has to copy accurately to pay, and a mistyped account number costs the
+        // workshop a reconciliation.
+        if (tenant?.bank_details?.trim()) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            const bankLines = doc.splitTextToSize(tenant.bank_details.trim(), pageWidth - (marginLeft * 2) - 12);
+            const boxHeight = 9 + (bankLines.length * 4.6) + 5;
+
+            yPos += 10;
+            ensureSpace(boxHeight + 4);
+
+            doc.setFillColor(232, 246, 249);
+            doc.setDrawColor(6, 182, 212);
+            doc.setLineWidth(0.5);
+            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), boxHeight, 'FD');
+            // Accent bar: the eye finds the box before it reads the page.
+            doc.setFillColor(6, 182, 212);
+            doc.rect(marginLeft, yPos, 1.6, boxHeight, 'F');
+
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(8.5);
+            doc.setTextColor(8, 108, 125);
+            doc.text('BANK TRANSFER DETAILS', marginLeft + 6, yPos + 6);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(20);
+            doc.text(bankLines, marginLeft + 6, yPos + 12);
+
+            doc.setTextColor(0);
+            doc.setLineWidth(0.2);
+            yPos += boxHeight;
         }
 
         // Terms & Conditions

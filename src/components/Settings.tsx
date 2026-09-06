@@ -48,6 +48,7 @@ export const Settings = () => {
   const [uploading, setUploading] = useState(false);
   const [paymentQrUrl, setPaymentQrUrl] = useState("");
   const [paymentLink, setPaymentLink] = useState("");
+  const [bankDetails, setBankDetails] = useState("");
   const [uploadingQr, setUploadingQr] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -81,6 +82,7 @@ export const Settings = () => {
         setDefaultLaborRate(data.default_labor_rate?.toString() || "2500");
         setPaymentQrUrl(data.payment_qr_url || "");
         setPaymentLink(data.payment_link || "");
+        setBankDetails(data.bank_details || "");
         setSmsApiKey(data.sms_api_key || "");
         setSmsSenderId(data.sms_sender_id || "");
         setSmsAutoEnabled(data.sms_auto_enabled !== false); // default true
@@ -276,7 +278,8 @@ export const Settings = () => {
                     terms_and_conditions: terms,
                     brand_color: brandColor,
                     default_labor_rate: parseFloat(defaultLaborRate),
-                    payment_link: paymentLink || null
+                    payment_link: paymentLink || null,
+                    bank_details: bankDetails || null
                 })
                 .eq('id', profile.tenant_id)
                 .select();
@@ -558,6 +561,21 @@ export const Settings = () => {
                     />
                     <p className="text-[10px] text-slate-500 leading-relaxed">
                       Included in the WhatsApp message. Saved with Save Settings.
+                    </p>
+
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest pt-1">
+                      Bank Account Details
+                    </label>
+                    <textarea
+                      rows={5}
+                      placeholder={"Bank of Ceylon\nAccount name: ABC Motors (Pvt) Ltd\nAccount no: 1234567890\nBranch: Kandy"}
+                      value={bankDetails}
+                      onChange={(e) => setBankDetails(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand resize-y"
+                    />
+                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                      Printed on the invoice PDF in a highlighted box. Type it exactly as you
+                      want it to appear — each line is reproduced as entered.
                     </p>
                   </div>
 
