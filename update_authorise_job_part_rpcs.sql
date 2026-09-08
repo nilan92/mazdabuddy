@@ -121,3 +121,30 @@ revoke execute on function public.remove_job_part_transaction(uuid) from public;
 
 grant execute on function public.add_job_part_transaction(uuid, uuid, integer, uuid) to authenticated, service_role;
 grant execute on function public.remove_job_part_transaction(uuid) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Follow-up, same day: two more SECURITY DEFINER functions reachable by anon.
+--
+-- clean_rate_limits() let an unauthenticated caller clear the edge-function
+-- rate-limit table, defeating the rate limiting. recalc_invoice_total(uuid) let
+-- one force a recalculation against any job id — harmless in effect, since it
+-- recomputes from the line items and cannot produce a wrong number, but there
+-- is no reason to expose it. Neither is called from application code.
+--
+-- Note the trap, which bit twice in opposite directions: the job-part RPCs above
+-- held EXECUTE through the default PUBLIC grant, so revoking from `anon` was a
+-- silent no-op. These two carry explicit `anon=X/postgres` grants instead, so
+-- revoking from PUBLIC was the no-op and anon could still call them (REST
+-- returned 204). Read proacl first, then revoke from every holder.
+--
+-- The invoice triggers are unaffected: trg_recalc_invoice_total() and
+-- trg_job_card_recalc_invoice() are SECURITY DEFINER owned by postgres, so they
+-- call recalc_invoice_total() as the owner, which retains EXECUTE. Verified by
+-- inserting a job_parts row directly and watching the invoice total move
+-- 30,600 -> 35,600, inside a transaction that was rolled back.
+
+revoke execute on function public.clean_rate_limits() from public, anon, authenticated;
+revoke execute on function public.recalc_invoice_total(uuid) from public, anon, authenticated;
+
+grant execute on function public.clean_rate_limits() to service_role;
+grant execute on function public.recalc_invoice_total(uuid) to service_role;
