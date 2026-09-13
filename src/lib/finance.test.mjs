@@ -1,6 +1,6 @@
 // node src/lib/finance.test.mjs
 import assert from 'node:assert/strict';
-import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2 } from './finance.ts';
+import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf } from './finance.ts';
 
 const FY_START = new Date(2026, 3, 1);   // 1 Apr 2026
 const FY_END = new Date(2027, 2, 31, 23, 59, 59);
@@ -109,5 +109,29 @@ assert.equal(off.difference, -50000);
 assert.equal(off.balances, false, 'does not pretend to balance');
 
 assert.equal(round2(0.1 + 0.2), 0.3, 'cents are rounded at the boundary');
+
+// ---- ageing ----------------------------------------------------------------
+const asOf = new Date('2026-09-13T00:00:00Z');
+assert.equal(ageOf('2026-09-13T00:00:00Z', asOf), 0);
+assert.equal(ageOf('2026-08-14T00:00:00Z', asOf), 30);
+assert.equal(ageOf('2099-01-01T00:00:00Z', asOf), 0, 'future dates are not negative');
+assert.equal(ageOf('not a date', asOf), 0, 'garbage does not produce NaN');
+
+assert.equal(bucketFor(0), 'current');
+assert.equal(bucketFor(30), '1-30');
+assert.equal(bucketFor(31), '31-60');
+assert.equal(bucketFor(91), '90+');
+
+const aged = ageItems([
+  { id: 'i1', reference: 'INV-1', counterparty: 'Mr Perera', date: '2026-09-13T00:00:00Z', amount: 1000 },
+  { id: 'i2', reference: 'INV-2', counterparty: 'Mrs Silva', date: '2026-08-20T00:00:00Z', amount: 2000 },
+  { id: 'i3', reference: 'INV-3', counterparty: 'Fleet Ltd', date: '2026-05-01T00:00:00Z', amount: 5000 },
+], asOf);
+assert.equal(aged.total, 8000);
+assert.equal(aged.byBucket['current'], 1000);
+assert.equal(aged.byBucket['1-30'], 2000);
+assert.equal(aged.byBucket['90+'], 5000);
+assert.equal(aged.overdue, 5000, 'only past 30 days counts as worth chasing');
+assert.equal(aged.items[0].reference, 'INV-3', 'oldest first — that is what gets chased');
 
 console.log('ok');

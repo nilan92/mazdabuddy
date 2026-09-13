@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     DollarSign, TrendingUp, TrendingDown, Search, Plus, Trash2, FileText, Download,
     Wallet, Package, Wrench, Building2, Scale, AlertTriangle, Check, Layers,
+    MessageCircle, Smartphone, Banknote, HandCoins, ArrowRight,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
@@ -11,9 +12,12 @@ import { useConfirm } from '../context/ConfirmContext';
 import { downloadCSV } from '../lib/csv';
 import { fyStart, fyEnd, fyLabel, toISODate, describePeriod } from '../lib/fiscal';
 import {
-    buildLedger, profitAndLoss, depreciate, balanceSheet, round2,
-    type LedgerEntry, type Asset,
+    buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
+    type LedgerEntry, type Asset, type AgedItem,
 } from '../lib/finance';
+import { waMeUrl } from '../lib/whatsapp';
+import { sendSMS } from '../lib/sms';
+import { withTitle } from '../lib/textCase';
 import { buildAuditPack } from '../lib/financePdf';
 
 /* Built-in categories. Tenants add their own alongside these, stored in
@@ -31,7 +35,6 @@ const BUILTIN = {
 const POSITION_FIELDS = [
     { key: 'bank', label: 'Bank balance', hint: 'Closing balance per the bank statement at period end' },
     { key: 'cash', label: 'Cash in hand', hint: 'Physical cash held at period end' },
-    { key: 'payables', label: 'Trade payables', hint: 'Owed to parts suppliers and others' },
     { key: 'loans', label: 'Loans and borrowings', hint: 'Outstanding loan balances' },
     { key: 'share_capital', label: 'Stated capital', hint: 'Capital introduced by the shareholders' },
     { key: 'retained_earnings_bf', label: 'Retained earnings b/f', hint: "Accumulated profit at the start of this year" },
@@ -43,7 +46,7 @@ const short = (v: number) =>
     : Math.abs(v) >= 1_000 ? `${Math.round(v / 1_000)}k` : String(Math.round(v));
 
 type PeriodKind = 'month' | 'fy' | 'all' | 'custom';
-type Tab = 'all' | 'income' | 'expenses' | 'assets';
+type Tab = 'all' | 'income' | 'expenses' | 'owed' | 'assets';
 
 export const Finances = () => {
     const { profile } = useAuth();
@@ -71,7 +74,10 @@ export const Finances = () => {
     const [submitting, setSubmitting] = useState(false);
     const [generating, setGenerating] = useState(false);
 
-    const [entryForm, setEntryForm] = useState({ amount: '', description: '', category: '', date: toISODate(new Date()) });
+    const [entryForm, setEntryForm] = useState({
+        amount: '', description: '', category: '', date: toISODate(new Date()),
+        paid: true, supplier: '', due_date: '',
+    });
     const [assetForm, setAssetForm] = useState({
         name: '', category: 'Equipment', purchase_date: toISODate(new Date()),
         cost_lkr: '', useful_life_years: '5', residual_lkr: '0', notes: '',
@@ -101,7 +107,7 @@ export const Finances = () => {
         setLoading(true);
         try {
             const [inv, lab, prt, man, ast, cat, pos, stk, ten] = await Promise.all([
-                supabase.from('invoices').select('id, total_amount_lkr, discount_lkr, created_at, status, job_id'),
+                supabase.from('invoices').select('id, total_amount_lkr, discount_lkr, created_at, status, job_id, job_cards(vehicles(license_plate, customers(title, name, phone)))'),
                 supabase.from('job_labor').select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, mechanic_name, job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
                 supabase.from('job_parts').select('id, created_at, quantity, price_at_time_lkr, cost_at_time_lkr, is_custom, custom_name, parts(name, cost_lkr), job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
                 supabase.from('user_expenses').select('*, profiles!user_id(full_name)').order('date', { ascending: false }),
@@ -163,6 +169,36 @@ export const Finances = () => {
         () => profitAndLoss(ledger, raw.invoices, period.start, period.end, depreciationForPeriod),
         [ledger, raw.invoices, period, depreciationForPeriod]);
 
+    /* Trade receivables come straight off the invoices — unpaid means owed.
+       Nothing to key in, and it cannot drift from what the Invoices tab shows. */
+    const receivables = useMemo(() => ageItems(
+        raw.debtors
+            // A zero-value unpaid invoice is not money owed; it would only pad
+            // the chase list and the balance sheet with nothing.
+            .filter((d: any) => (Number(d.total_amount_lkr) || 0) > 0)
+            .map((d: any) => {
+            const c = d.job_cards?.vehicles?.customers;
+            return {
+                id: d.id,
+                reference: `INV-${String(d.id).slice(0, 8).toUpperCase()}`,
+                counterparty: withTitle(c?.title, c?.name) || 'Unknown customer',
+                date: d.created_at,
+                amount: Number(d.total_amount_lkr) || 0,
+                phone: c?.phone ?? null,
+            };
+        })), [raw.debtors]);
+
+    /* Trade payables are simply the expenses not yet settled — no separate
+       supplier ledger to keep, and the balance sheet figure maintains itself. */
+    const payables = useMemo(() => ageItems(
+        raw.manual.filter((m: any) => !m.is_income && m.paid === false).map((m: any) => ({
+            id: m.id,
+            reference: m.supplier || m.category || 'Bill',
+            counterparty: m.description || m.category || '—',
+            date: m.due_date || m.date,
+            amount: Number(m.amount_lkr) || 0,
+        }))), [raw.manual]);
+
     const positionsMap = useMemo(() => {
         const m: Record<string, number> = {};
         for (const p of raw.positions) m[p.key] = Number(p.amount_lkr) || 0;
@@ -172,15 +208,18 @@ export const Finances = () => {
     const balance = useMemo(() => balanceSheet({
         fixedAssetsNbv: round2(schedules.reduce((t, s) => t + s.netBookValue, 0)),
         stock: raw.stock,
-        debtors: round2(raw.debtors.reduce((t: number, d: any) => t + (Number(d.total_amount_lkr) || 0), 0)),
+        debtors: receivables.total,
         bank: positionsMap.bank || 0,
         cash: positionsMap.cash || 0,
-        payables: positionsMap.payables || 0,
+        payables: payables.total,
         loans: positionsMap.loans || 0,
         shareCapital: positionsMap.share_capital || 0,
         retainedEarningsBf: positionsMap.retained_earnings_bf || 0,
         profitForYear: pl.netProfit,
-    }), [schedules, raw.stock, raw.debtors, positionsMap, pl.netProfit]);
+    }), [schedules, raw.stock, receivables.total, payables.total, positionsMap, pl.netProfit]);
+
+    const cashEntered = raw.positions.some(p => ['bank', 'cash'].includes(p.key));
+    const availableCash = round2((positionsMap.bank || 0) + (positionsMap.cash || 0));
 
     const inPeriod = useMemo(
         () => ledger.filter(e => { const d = new Date(e.date); return d >= period.start && d <= period.end; }),
@@ -261,18 +300,26 @@ export const Finances = () => {
         if (!(amount > 0)) return toast('Enter an amount greater than zero.', 'warning');
         if (!entryForm.category) return toast('Pick a category.', 'warning');
         setSubmitting(true);
+        const unpaidBill = entryModal === 'expense' && !entryForm.paid;
         const { error } = await supabase.from('user_expenses').insert({
             user_id: profile?.id, tenant_id: profile?.tenant_id,
             amount_lkr: amount, description: entryForm.description || entryForm.category,
             category: entryForm.category, date: entryForm.date,
             is_income: entryModal === 'income',
+            // Income is never a payable, so it is always recorded as settled.
+            paid: entryModal === 'income' ? true : entryForm.paid,
+            paid_on: entryModal === 'income' || entryForm.paid ? entryForm.date : null,
+            supplier: unpaidBill ? (entryForm.supplier || null) : null,
+            due_date: unpaidBill ? (entryForm.due_date || null) : null,
         });
         setSubmitting(false);
         if (error) return toast(error.message, 'error');
         setEntryModal(null);
-        setEntryForm({ amount: '', description: '', category: '', date: toISODate(new Date()) });
+        setEntryForm({ amount: '', description: '', category: '', date: toISODate(new Date()),
+            paid: true, supplier: '', due_date: '' });
         fetchAll();
-        toast(entryModal === 'income' ? 'Income recorded.' : 'Expense recorded.', 'success');
+        toast(unpaidBill ? 'Bill recorded — it now shows under what you owe.'
+            : entryModal === 'income' ? 'Income recorded.' : 'Expense recorded.', 'success');
     };
 
     const saveAsset = async (e: React.FormEvent) => {
@@ -334,6 +381,45 @@ export const Finances = () => {
         if (error) return toast(error.message, 'error');
         fetchAll();
         toast('Asset removed.', 'info');
+    };
+
+    /* Reminders. WhatsApp first — it opens a draft the user reviews and sends
+       themselves, so nothing leaves without a human deciding. SMS is the
+       fallback for a customer without WhatsApp, and it does send immediately,
+       so it asks first. */
+    const reminderText = (item: AgedItem) =>
+        `Hello ${item.counterparty},\n\n`
+        + `This is a friendly reminder from ${tenant?.name || 'our workshop'} about invoice `
+        + `${item.reference} for LKR ${Math.round(item.amount).toLocaleString()}, `
+        + `raised on ${new Date(item.date).toLocaleDateString('en-GB')}`
+        + `${item.daysOld > 0 ? ` (${item.daysOld} days ago)` : ''}.\n\n`
+        + `Please let us know if you have already settled it. Thank you.`;
+
+    const remindWhatsApp = (item: AgedItem) => {
+        window.open(waMeUrl(item.phone, reminderText(item)), '_blank', 'noopener');
+    };
+
+    const remindSMS = async (item: AgedItem) => {
+        if (!item.phone) return toast('No phone number on this customer.', 'warning');
+        if (!await confirm({
+            title: 'Send SMS reminder',
+            message: `Send a payment reminder to ${item.counterparty} at ${item.phone}? This sends straight away.`,
+            confirmLabel: 'Send',
+        })) return;
+        try {
+            await sendSMS(item.phone, reminderText(item), profile!.tenant_id!);
+            toast('Reminder sent.', 'success');
+        } catch (e: any) {
+            toast('SMS failed: ' + e.message, 'error');
+        }
+    };
+
+    const markBillPaid = async (item: AgedItem) => {
+        const { error } = await supabase.from('user_expenses')
+            .update({ paid: true, paid_on: toISODate(new Date()) }).eq('id', item.id);
+        if (error) return toast(error.message, 'error');
+        fetchAll();
+        toast('Marked as paid.', 'success');
     };
 
     const positionsIncomplete = raw.positions.length === 0;
@@ -427,8 +513,8 @@ export const Finances = () => {
                     {monthly.map((m, i) => <span key={i}>{m.label}</span>)}
                 </div>
                 <div className="flex gap-4 mt-3 text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> <span className="text-slate-400">Money in</span></span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> <span className="text-slate-400">Money out</span></span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> <span className="text-slate-400">Income</span></span>
+                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> <span className="text-slate-400">Expenses</span></span>
                     <span className="ml-auto text-slate-500">peak {short(max)}</span>
                 </div>
             </div>
@@ -542,6 +628,71 @@ export const Finances = () => {
                 ))}
             </div>
 
+            {/* Cash and who owes whom. Separated from the four profit cards above
+                because profit and cash are different questions — a workshop can be
+                profitable and still unable to pay its bills this week. */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <button
+                    onClick={() => {
+                        setPositionsForm(Object.fromEntries(POSITION_FIELDS.map(f => [f.key, String(positionsMap[f.key] ?? '')])));
+                        setPositionsModal(true);
+                    }}
+                    className={`${card} p-4 text-left hover:border-slate-700 transition-colors`}>
+                    <div className="flex items-center gap-2 text-slate-400 mb-2">
+                        <Banknote size={15} className="text-emerald-400" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider">Cash available</span>
+                    </div>
+                    {cashEntered ? (
+                        <>
+                            <div className="text-2xl font-black font-mono text-emerald-400">{lkr(availableCash)}</div>
+                            <div className="text-[10px] text-slate-500 mt-1.5">
+                                Bank {lkr(positionsMap.bank || 0)} · cash {lkr(positionsMap.cash || 0)} — tap to update
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-lg font-bold text-amber-400 flex items-center gap-2">
+                                <AlertTriangle size={16} /> Not entered
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-1.5">
+                                Add your bank and cash balance so this shows what you can actually spend. Tap to enter.
+                            </div>
+                        </>
+                    )}
+                </button>
+
+                <button onClick={() => setTab('owed')}
+                    className={`${card} p-4 text-left hover:border-slate-700 transition-colors`}>
+                    <div className="flex items-center gap-2 text-slate-400 mb-2">
+                        <HandCoins size={15} className="text-cyan-400" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider">Owed to you</span>
+                        <ArrowRight size={12} className="ml-auto text-slate-600" />
+                    </div>
+                    <div className="text-2xl font-black font-mono text-cyan-400">{lkr(receivables.total)}</div>
+                    <div className="text-[10px] text-slate-500 mt-1.5">
+                        {receivables.items.length} unpaid invoice{receivables.items.length === 1 ? '' : 's'}
+                        {receivables.overdue > 0 && (
+                            <span className="text-amber-400"> · {lkr(receivables.overdue)} over 30 days</span>
+                        )}
+                    </div>
+                </button>
+
+                <button onClick={() => setTab('owed')}
+                    className={`${card} p-4 text-left hover:border-slate-700 transition-colors`}>
+                    <div className="flex items-center gap-2 text-slate-400 mb-2">
+                        <Scale size={15} className="text-rose-400" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider">You owe</span>
+                        <ArrowRight size={12} className="ml-auto text-slate-600" />
+                    </div>
+                    <div className="text-2xl font-black font-mono text-rose-400">{lkr(payables.total)}</div>
+                    <div className="text-[10px] text-slate-500 mt-1.5">
+                        {payables.items.length === 0
+                            ? 'Mark an expense unpaid to track a bill here'
+                            : `${payables.items.length} unpaid bill${payables.items.length === 1 ? '' : 's'}`}
+                    </div>
+                </button>
+            </div>
+
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className={`${card} p-5`}>
@@ -552,7 +703,7 @@ export const Finances = () => {
                 </div>
                 <div className={`${card} p-5`}>
                     <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
-                        <TrendingUp size={14} className="text-emerald-400" /> In vs out by month
+                        <TrendingUp size={14} className="text-emerald-400" /> Income vs expenses by month
                     </h3>
                     <TrendChart />
                 </div>
@@ -580,7 +731,7 @@ export const Finances = () => {
             <div className={card}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border-b border-slate-800">
                     <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
-                        {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'], ['assets', 'Assets']] as [Tab, string][])
+                        {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'], ['owed', 'Owed'], ['assets', 'Assets']] as [Tab, string][])
                             .map(([k, label]) => (
                                 <button key={k} onClick={() => { setTab(k); setCatFilter('all'); }}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
@@ -589,7 +740,7 @@ export const Finances = () => {
                                 </button>
                             ))}
                     </div>
-                    {tab !== 'assets' ? (
+                    {tab !== 'assets' && tab !== 'owed' ? (
                         <div className="flex items-center gap-2">
                             <div className="relative">
                                 <Search className="absolute left-3 top-2.5 text-slate-500" size={15} />
@@ -621,7 +772,130 @@ export const Finances = () => {
                     )}
                 </div>
 
-                {tab === 'assets' ? (
+                {tab === 'owed' ? (
+                    <div className="p-4 space-y-8">
+                        {/* ---- receivables ------------------------------------ */}
+                        <section>
+                            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+                                <h4 className="text-sm font-black text-white flex items-center gap-2">
+                                    <HandCoins size={15} className="text-cyan-400" /> Owed to you
+                                </h4>
+                                <span className="font-mono text-cyan-400 font-bold">{lkr(receivables.total)}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mb-3">
+                                Every unpaid invoice, oldest first. Marking one paid happens on the invoice itself.
+                            </p>
+
+                            {receivables.items.length === 0 ? (
+                                <p className="text-slate-600 text-sm italic py-6 text-center">
+                                    Nothing outstanding. Every invoice has been settled.
+                                </p>
+                            ) : (
+                                <>
+                                    {/* ageing summary */}
+                                    <div className="grid grid-cols-5 gap-1.5 mb-4">
+                                        {AGE_BUCKETS.map(b => {
+                                            const v = receivables.byBucket[b];
+                                            const pct = receivables.total > 0 ? (v / receivables.total) * 100 : 0;
+                                            const hot = b === '61-90' || b === '90+';
+                                            return (
+                                                <div key={b} className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
+                                                    <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-1">
+                                                        {b === 'current' ? 'Current' : `${b} days`}
+                                                    </div>
+                                                    <div className={`font-mono text-xs font-bold ${hot && v > 0 ? 'text-rose-400' : 'text-slate-200'}`}>
+                                                        {short(v)}
+                                                    </div>
+                                                    <div className="h-1 bg-slate-800 rounded-full mt-1.5 overflow-hidden">
+                                                        <div className={`h-full rounded-full ${hot ? 'bg-rose-500' : 'bg-cyan-500'}`}
+                                                            style={{ width: `${pct}%` }} />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        {receivables.items.map(item => (
+                                            <div key={item.id}
+                                                className="flex flex-wrap items-center gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="text-sm text-white font-medium truncate">{item.counterparty}</div>
+                                                    <div className="text-[11px] text-slate-500 font-mono">
+                                                        {item.reference} · {new Date(item.date).toLocaleDateString('en-GB')}
+                                                    </div>
+                                                </div>
+                                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
+                                                    item.bucket === 'current' ? 'bg-slate-700/60 text-slate-300'
+                                                    : item.bucket === '1-30' ? 'bg-cyan-500/10 text-cyan-400'
+                                                    : item.bucket === '31-60' ? 'bg-amber-500/10 text-amber-400'
+                                                    : 'bg-rose-500/10 text-rose-400'}`}>
+                                                    {item.daysOld}d
+                                                </span>
+                                                <span className="font-mono text-sm text-white font-bold w-28 text-right">{lkr(item.amount)}</span>
+                                                <div className="flex items-center gap-1">
+                                                    <button onClick={() => remindWhatsApp(item)} title="Remind on WhatsApp — opens a draft you send"
+                                                        className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                                                        <MessageCircle size={16} />
+                                                    </button>
+                                                    <button onClick={() => remindSMS(item)} title="Remind by SMS — sends immediately"
+                                                        disabled={!item.phone}
+                                                        className="p-2 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+                                                        <Smartphone size={16} />
+                                                    </button>
+                                                    <a href={`#/invoices?invoice=${item.id}`} title="Open the invoice to update its status"
+                                                        className="p-2 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                                                        <ArrowRight size={16} />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </section>
+
+                        {/* ---- payables --------------------------------------- */}
+                        <section>
+                            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-1">
+                                <h4 className="text-sm font-black text-white flex items-center gap-2">
+                                    <Scale size={15} className="text-rose-400" /> You owe
+                                </h4>
+                                <span className="font-mono text-rose-400 font-bold">{lkr(payables.total)}</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mb-3">
+                                Bills you have recorded but not settled. Add one by recording an expense and
+                                marking it unpaid — there is no separate supplier ledger to keep.
+                            </p>
+                            {payables.items.length === 0 ? (
+                                <p className="text-slate-600 text-sm italic py-6 text-center">
+                                    Nothing outstanding. Every bill you have recorded is paid.
+                                </p>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    {payables.items.map(item => (
+                                        <div key={item.id}
+                                            className="flex flex-wrap items-center gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm text-white font-medium truncate">{item.reference}</div>
+                                                <div className="text-[11px] text-slate-500 truncate">{item.counterparty}</div>
+                                            </div>
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
+                                                item.bucket === 'current' ? 'bg-slate-700/60 text-slate-300' : 'bg-amber-500/10 text-amber-400'}`}>
+                                                {item.daysOld === 0 ? 'due' : `${item.daysOld}d`}
+                                            </span>
+                                            <span className="font-mono text-sm text-white font-bold w-28 text-right">{lkr(item.amount)}</span>
+                                            <button onClick={() => markBillPaid(item)}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-xs font-bold transition-colors">
+                                                <Check size={13} /> Paid
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </section>
+                    </div>
+                ) : tab === 'assets' ? (
                     <div className="p-4">
                         {schedules.length === 0 ? (
                             <div className="text-center py-10">
@@ -764,9 +1038,45 @@ export const Finances = () => {
                             onChange={e => setEntryForm(f => ({ ...f, date: e.target.value }))}
                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm" />
                     </div>
+                    {entryModal === 'expense' && (
+                        <div className="border-t border-slate-800 pt-3">
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1.5">Have you paid it?</label>
+                            <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 w-fit">
+                                {([[true, 'Paid'], [false, 'Not yet']] as [boolean, string][]).map(([v, label]) => (
+                                    <button key={label} type="button" onClick={() => setEntryForm(f => ({ ...f, paid: v }))}
+                                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                            entryForm.paid === v ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                            {!entryForm.paid && (
+                                <div className="mt-3 space-y-3 bg-slate-950/40 border border-slate-800 rounded-xl p-3">
+                                    <p className="text-[11px] text-slate-500">
+                                        This becomes a trade payable — it shows under <span className="text-slate-300 font-bold">You owe</span>{' '}
+                                        and carries into the balance sheet automatically.
+                                    </p>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier</label>
+                                        <input value={entryForm.supplier} onChange={e => setEntryForm(f => ({ ...f, supplier: e.target.value }))}
+                                            placeholder="Lanka Auto Parts"
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Due date</label>
+                                        <input type="date" value={entryForm.due_date}
+                                            onChange={e => setEntryForm(f => ({ ...f, due_date: e.target.value }))}
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm" />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <button type="submit" disabled={submitting}
                         className="w-full btn-brand py-3 rounded-xl font-bold disabled:opacity-60">
-                        {submitting ? 'Saving…' : entryModal === 'income' ? 'Record income' : 'Record expense'}
+                        {submitting ? 'Saving…'
+                            : entryModal === 'income' ? 'Record income'
+                            : entryForm.paid ? 'Record expense' : 'Record bill'}
                     </button>
                 </form>
             </Modal>
@@ -871,6 +1181,8 @@ export const Finances = () => {
                             <span className="font-mono text-slate-300">{lkr(balance.stock)}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Trade debtors (unpaid invoices)</span>
                             <span className="font-mono text-slate-300">{lkr(balance.debtors)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Trade payables (unpaid bills)</span>
+                            <span className="font-mono text-slate-300">{lkr(balance.payables)}</span></div>
                     </div>
                     <button onClick={savePositions} disabled={submitting}
                         className="w-full btn-brand py-3 rounded-xl font-bold disabled:opacity-60">

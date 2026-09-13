@@ -268,3 +268,61 @@ export function balanceSheet(input: {
         balances: Math.abs(difference) < 1,
     };
 }
+
+/* ------------------------------------------------------------------ ageing */
+
+export interface AgedItem {
+    id: string;
+    /** Invoice number, or supplier/description for a bill. */
+    reference: string;
+    counterparty: string;
+    date: string;
+    amount: number;
+    daysOld: number;
+    bucket: AgeBucket;
+    phone?: string | null;
+}
+
+export type AgeBucket = 'current' | '1-30' | '31-60' | '61-90' | '90+';
+
+export const AGE_BUCKETS: AgeBucket[] = ['current', '1-30', '31-60', '61-90', '90+'];
+
+/** Days outstanding, counted from the document date. */
+export function ageOf(dateISO: string, asOf: Date = new Date()): number {
+    const d = new Date(dateISO);
+    if (isNaN(d.getTime())) return 0;
+    return Math.max(0, Math.floor((asOf.getTime() - d.getTime()) / 86400000));
+}
+
+export function bucketFor(days: number): AgeBucket {
+    if (days <= 0) return 'current';
+    if (days <= 30) return '1-30';
+    if (days <= 60) return '31-60';
+    if (days <= 90) return '61-90';
+    return '90+';
+}
+
+/**
+ * Ages a set of open documents. Used for both sides of the ledger: unpaid
+ * invoices owed to the workshop, and unpaid bills the workshop owes.
+ */
+export function ageItems(
+    items: { id: string; reference: string; counterparty: string; date: string; amount: number; phone?: string | null }[],
+    asOf: Date = new Date(),
+): { items: AgedItem[]; byBucket: Record<AgeBucket, number>; total: number; overdue: number } {
+    const byBucket = Object.fromEntries(AGE_BUCKETS.map(b => [b, 0])) as Record<AgeBucket, number>;
+    const aged = items.map(i => {
+        const daysOld = ageOf(i.date, asOf);
+        const bucket = bucketFor(daysOld);
+        byBucket[bucket] = round2(byBucket[bucket] + i.amount);
+        return { ...i, daysOld, bucket };
+    }).sort((a, b) => b.daysOld - a.daysOld);
+
+    return {
+        items: aged,
+        byBucket,
+        total: round2(aged.reduce((t, i) => t + i.amount, 0)),
+        // Anything past 30 days is the money actually worth chasing.
+        overdue: round2(byBucket['31-60'] + byBucket['61-90'] + byBucket['90+']),
+    };
+}

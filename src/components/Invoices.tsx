@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
     Printer, 
     Download, 
@@ -82,6 +82,19 @@ export const Invoices = () => {
             })) || [];
         }
     });
+
+    // Deep link from the Finances receivables list: #/invoices?invoice=<id>
+    // selects that invoice so its status can be updated straight away. Runs once
+    // the list has loaded, then clears the parameter so a later refresh does not
+    // yank the user back to the same row.
+    useEffect(() => {
+        if (invoices.length === 0) return;
+        const wanted = new URLSearchParams(window.location.hash.split('?')[1] || '').get('invoice');
+        if (!wanted) return;
+        const match = invoices.find((i: any) => i.id === wanted);
+        if (match) setSelectedInvoice(match);
+        window.history.replaceState(null, '', window.location.hash.split('?')[0]);
+    }, [invoices]);
 
     // 2. Fetch Tenant Details (Replaces generic Shop Settings)
     const { data: tenant } = useQuery({
