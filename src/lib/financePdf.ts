@@ -13,7 +13,7 @@ import { describePeriod } from './fiscal';
 
 /** The statements a user can pick from. Order here is the order they print. */
 export const STATEMENTS = [
-    { key: 'income', title: 'Statement of Comprehensive Income', blurb: 'Revenue, cost of sales, expenses and profit' },
+    { key: 'income', title: 'Statement of Financial Performance', blurb: 'Revenue, cost of sales, expenses and profit' },
     { key: 'expenses', title: 'Schedule of Operating Expenses', blurb: 'Every cost category, reconciled to the income statement' },
     { key: 'assets', title: 'Fixed Asset Register', blurb: 'What you own and its depreciation' },
     { key: 'position', title: 'Statement of Financial Position', blurb: 'The balance sheet — assets, liabilities and equity' },
@@ -172,7 +172,7 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
 
     // ---- profit and loss ----------------------------------------------------
     if (show('income')) {
-    heading('Statement of Comprehensive Income', 'income');
+    heading('Statement of Financial Performance', 'income');
     line('Revenue', undefined, { bold: true });
     line('Labour', pl.revenueLabour, { indent: 6, col: AMT2 });
     line('Parts and materials', pl.revenueParts, { indent: 6, col: AMT2 });
