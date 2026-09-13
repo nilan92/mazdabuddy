@@ -538,9 +538,9 @@ export const Finances = () => {
                     {segs.map(s => (
                         <div key={s.label} className="flex items-center gap-2 text-sm">
                             <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
-                            <span className="text-slate-300 flex-1">{s.label}</span>
-                            <span className="text-slate-500 text-xs">{((s.value / total) * 100).toFixed(0)}%</span>
-                            <span className="font-mono text-white w-28 text-right">{lkr(s.value)}</span>
+                            <span className="text-slate-300 flex-1 min-w-0 truncate">{s.label}</span>
+                            <span className="text-slate-500 text-xs shrink-0">{((s.value / total) * 100).toFixed(0)}%</span>
+                            <span className="font-mono text-white text-xs sm:text-sm shrink-0 tabular-nums">{lkr(s.value)}</span>
                         </div>
                     ))}
                 </div>
@@ -572,8 +572,14 @@ export const Finances = () => {
                         );
                     })}
                 </svg>
-                <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-                    {monthly.map((m, i) => <span key={i}>{m.label}</span>)}
+                <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 mt-1">
+                    {/* Past eight months the labels collide on a phone, so show
+                        every other one — the bars still carry the shape. */}
+                    {monthly.map((m, i) => (
+                        <span key={i} className={monthly.length > 8 && i % 2 === 1 ? 'hidden sm:inline' : ''}>
+                            {m.label}
+                        </span>
+                    ))}
                 </div>
                 <div className="flex gap-4 mt-3 text-xs">
                     <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> <span className="text-slate-400">Income</span></span>
@@ -623,16 +629,16 @@ export const Finances = () => {
                     <h1 className="text-3xl font-bold text-white mb-1">Finances</h1>
                     <p className="text-slate-400 text-sm">{periodLabel}</p>
                 </div>
-                <div className="flex gap-2 flex-wrap">
+                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                     <button onClick={() => { setEntryModal('income'); setEntryForm(f => ({ ...f, category: '' })); }}
                         title="Income that did not come from a job"
-                        className="flex items-center gap-2 bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-300 border border-emerald-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
-                        <Plus size={15} /> Other Income
+                        className="flex items-center justify-center gap-2 bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-300 border border-emerald-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                        <Plus size={15} className="shrink-0" /> Other Income
                     </button>
                     <button onClick={() => { setEntryModal('expense'); setEntryForm(f => ({ ...f, category: '' })); }}
                         title="Money the workshop spent, paid or on credit"
-                        className="flex items-center gap-2 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
-                        <Plus size={15} /> Expense
+                        className="flex items-center justify-center gap-2 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                        <Plus size={15} className="shrink-0" /> Expense
                     </button>
                     <button onClick={() => {
                         setPositionsForm(Object.fromEntries(POSITION_FIELDS.map(f =>
@@ -640,28 +646,28 @@ export const Finances = () => {
                         setPositionsModal(true);
                     }}
                         title="Bank, cash, loans and capital — the figures only you know"
-                        className="flex items-center gap-2 bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border border-violet-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
-                        <Scale size={15} /> Balance Sheet
+                        className="flex items-center justify-center gap-2 bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border border-violet-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                        <Scale size={15} className="shrink-0" /> <span className="truncate">Balance Sheet</span>
                     </button>
                     <button onClick={() => setStatementModal(true)} disabled={generating}
-                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-cyan-500/20">
-                        <FileText size={15} /> {generating ? 'Preparing…' : 'Statements'}
+                        className="flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-cyan-500/20">
+                        <FileText size={15} className="shrink-0" /> {generating ? 'Preparing…' : 'Statements'}
                     </button>
                 </div>
             </div>
 
             {/* Period selector */}
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {([['month', 'This month'], ['fy', fyLabel()], ['all', 'All time'], ['custom', 'Custom']] as [PeriodKind, string][])
                     .map(([k, label]) => (
                         <button key={k} onClick={() => setPeriodKind(k)}
-                            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors ${
+                            className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                                 periodKind === k ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'}`}>
                             {label}
                         </button>
                     ))}
                 {periodKind === 'custom' && (
-                    <div className="flex items-center gap-2 ml-1">
+                    <div className="flex items-center gap-2 shrink-0">
                         <input type="date" value={customRange.start} onChange={e => setCustomRange(r => ({ ...r, start: e.target.value }))}
                             className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-white" />
                         <span className="text-slate-600 text-xs">to</span>
@@ -688,7 +694,7 @@ export const Finances = () => {
                             <s.icon size={15} className={s.tone} />
                             <span className="text-[11px] font-bold uppercase tracking-wider">{s.label}</span>
                         </div>
-                        <div className={`text-xl lg:text-2xl font-black font-mono ${s.tone}`}>{lkr(s.value)}</div>
+                        <div className={`text-base sm:text-xl lg:text-2xl font-black font-mono tabular-nums break-all ${s.tone}`}>{lkr(s.value)}</div>
                         <div className="text-[10px] text-slate-500 mt-1.5 leading-snug">{s.note}</div>
                     </div>
                 ))}
@@ -710,7 +716,7 @@ export const Finances = () => {
                     </div>
                     {cashEntered ? (
                         <>
-                            <div className={`text-2xl font-black font-mono ${availableCash < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            <div className={`text-xl sm:text-2xl font-black font-mono tabular-nums break-all ${availableCash < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                                 {lkr(availableCash)}
                             </div>
                             <div className="text-[10px] text-slate-500 mt-1.5">
@@ -736,7 +742,7 @@ export const Finances = () => {
                         <span className="text-[11px] font-bold uppercase tracking-wider">Owed to you</span>
                         <ArrowRight size={12} className="ml-auto text-slate-600" />
                     </div>
-                    <div className="text-2xl font-black font-mono text-cyan-400">{lkr(receivables.total)}</div>
+                    <div className="text-xl sm:text-2xl font-black font-mono tabular-nums break-all text-cyan-400">{lkr(receivables.total)}</div>
                     <div className="text-[10px] text-slate-500 mt-1.5">
                         {receivables.items.length} unpaid invoice{receivables.items.length === 1 ? '' : 's'}
                         {receivables.overdue > 0 && (
@@ -752,7 +758,7 @@ export const Finances = () => {
                         <span className="text-[11px] font-bold uppercase tracking-wider">You owe</span>
                         <ArrowRight size={12} className="ml-auto text-slate-600" />
                     </div>
-                    <div className="text-2xl font-black font-mono text-rose-400">{lkr(payables.total)}</div>
+                    <div className="text-xl sm:text-2xl font-black font-mono tabular-nums break-all text-rose-400">{lkr(payables.total)}</div>
                     <div className="text-[10px] text-slate-500 mt-1.5">
                         {payables.items.length === 0
                             ? 'Mark an expense unpaid to track a bill here'
@@ -798,26 +804,26 @@ export const Finances = () => {
             {/* Ledger */}
             <div className={card}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border-b border-slate-800">
-                    <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
+                    <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'], ['owed', 'Owed'], ['assets', 'Assets']] as [Tab, string][])
                             .map(([k, label]) => (
                                 <button key={k} onClick={() => { setTab(k); setCatFilter('all'); }}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                                         tab === k ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                                     {label}
                                 </button>
                             ))}
                     </div>
                     {tab !== 'assets' && tab !== 'owed' ? (
-                        <div className="flex items-center gap-2">
-                            <div className="relative">
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <div className="relative flex-1 md:flex-none">
                                 <Search className="absolute left-3 top-2.5 text-slate-500" size={15} />
                                 <input value={search} onChange={e => setSearch(e.target.value)}
                                     placeholder="Search description, job, category…"
                                     className="bg-slate-800 border border-slate-700 rounded-lg py-2 pl-9 pr-3 text-xs text-white focus:outline-none focus:border-cyan-500 w-full md:w-60" />
                             </div>
                             <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-                                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-cyan-500">
+                                className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-2 text-xs text-white focus:outline-none focus:border-cyan-500 max-w-[8rem] md:max-w-none shrink-0">
                                 <option value="all">All categories</option>
                                 {visibleCategories.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
@@ -828,7 +834,7 @@ export const Finances = () => {
                                     amount_lkr: e.amount, job: e.jobRef ?? '', logged_by: e.loggedBy ?? '',
                                 })))}
                                 title="Export what is shown"
-                                className="p-2 bg-slate-800 text-slate-400 rounded-lg hover:text-white border border-slate-700 transition-colors">
+                                className="p-2 shrink-0 bg-slate-800 text-slate-400 rounded-lg hover:text-white border border-slate-700 transition-colors">
                                 <Download size={15} />
                             </button>
                         </div>
@@ -861,15 +867,15 @@ export const Finances = () => {
                             ) : (
                                 <>
                                     {/* ageing summary */}
-                                    <div className="grid grid-cols-5 gap-1.5 mb-4">
+                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-4">
                                         {AGE_BUCKETS.map(b => {
                                             const v = receivables.byBucket[b];
                                             const pct = receivables.total > 0 ? (v / receivables.total) * 100 : 0;
                                             const hot = b === '61-90' || b === '90+';
                                             return (
                                                 <div key={b} className="bg-slate-950/60 border border-slate-800 rounded-lg p-2">
-                                                    <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-1">
-                                                        {b === 'current' ? 'Current' : `${b} days`}
+                                                    <div className="text-[9px] uppercase tracking-wide text-slate-500 mb-1 truncate">
+                                                        {b === 'current' ? 'Current' : `${b}d`}
                                                     </div>
                                                     <div className={`font-mono text-xs font-bold ${hot && v > 0 ? 'text-rose-400' : 'text-slate-200'}`}>
                                                         {short(v)}
@@ -886,34 +892,56 @@ export const Finances = () => {
                                     <div className="space-y-1.5">
                                         {receivables.items.map(item => (
                                             <div key={item.id}
-                                                className="flex flex-wrap items-center gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-sm text-white font-medium truncate">{item.counterparty}</div>
-                                                    <div className="text-[11px] text-slate-500 font-mono">
-                                                        {item.reference} · {new Date(item.date).toLocaleDateString('en-GB')}
+                                                className="bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
+                                                {/* Two rows on a phone, one on a wider screen. Flex-wrap
+                                                    alone left the amount and the buttons on ragged lines. */}
+                                                <div className="flex items-start gap-3 sm:items-center">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="text-sm text-white font-medium truncate">{item.counterparty}</div>
+                                                        <div className="text-[11px] text-slate-500 font-mono truncate">
+                                                            {item.reference} · {new Date(item.date).toLocaleDateString('en-GB')}
+                                                        </div>
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 ${
+                                                        item.bucket === 'current' ? 'bg-slate-700/60 text-slate-300'
+                                                        : item.bucket === '1-30' ? 'bg-cyan-500/10 text-cyan-400'
+                                                        : item.bucket === '31-60' ? 'bg-amber-500/10 text-amber-400'
+                                                        : 'bg-rose-500/10 text-rose-400'}`}>
+                                                        {item.daysOld}d
+                                                    </span>
+                                                    <span className="font-mono text-sm text-white font-bold shrink-0 tabular-nums sm:w-28 sm:text-right">
+                                                        {lkr(item.amount)}
+                                                    </span>
+                                                    <div className="hidden sm:flex items-center gap-1 shrink-0">
+                                                        <button onClick={() => remindWhatsApp(item)} title="Remind on WhatsApp — opens a draft you send"
+                                                            className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors">
+                                                            <MessageCircle size={16} />
+                                                        </button>
+                                                        <button onClick={() => remindSMS(item)} title="Remind by SMS — sends immediately"
+                                                            disabled={!item.phone}
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
+                                                            <Smartphone size={16} />
+                                                        </button>
+                                                        <a href={`#/invoices?invoice=${item.id}`} title="Open the invoice to update its status"
+                                                            className="p-2 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
+                                                            <ArrowRight size={16} />
+                                                        </a>
                                                     </div>
                                                 </div>
-                                                <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
-                                                    item.bucket === 'current' ? 'bg-slate-700/60 text-slate-300'
-                                                    : item.bucket === '1-30' ? 'bg-cyan-500/10 text-cyan-400'
-                                                    : item.bucket === '31-60' ? 'bg-amber-500/10 text-amber-400'
-                                                    : 'bg-rose-500/10 text-rose-400'}`}>
-                                                    {item.daysOld}d
-                                                </span>
-                                                <span className="font-mono text-sm text-white font-bold w-28 text-right">{lkr(item.amount)}</span>
-                                                <div className="flex items-center gap-1">
-                                                    <button onClick={() => remindWhatsApp(item)} title="Remind on WhatsApp — opens a draft you send"
-                                                        className="p-2 rounded-lg text-emerald-400 hover:bg-emerald-500/10 transition-colors">
-                                                        <MessageCircle size={16} />
+                                                {/* Full-width targets on a phone — these are the actions
+                                                    the page exists for, so they get real tap area. */}
+                                                <div className="grid grid-cols-3 gap-1.5 mt-2.5 sm:hidden">
+                                                    <button onClick={() => remindWhatsApp(item)}
+                                                        className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-emerald-600/15 text-emerald-300 text-xs font-bold active:scale-95 transition-transform">
+                                                        <MessageCircle size={14} /> WhatsApp
                                                     </button>
-                                                    <button onClick={() => remindSMS(item)} title="Remind by SMS — sends immediately"
-                                                        disabled={!item.phone}
-                                                        className="p-2 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 disabled:opacity-30 disabled:hover:bg-transparent transition-colors">
-                                                        <Smartphone size={16} />
+                                                    <button onClick={() => remindSMS(item)} disabled={!item.phone}
+                                                        className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold disabled:opacity-40 active:scale-95 transition-transform">
+                                                        <Smartphone size={14} /> SMS
                                                     </button>
-                                                    <a href={`#/invoices?invoice=${item.id}`} title="Open the invoice to update its status"
-                                                        className="p-2 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors">
-                                                        <ArrowRight size={16} />
+                                                    <a href={`#/invoices?invoice=${item.id}`}
+                                                        className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold active:scale-95 transition-transform">
+                                                        Invoice <ArrowRight size={14} />
                                                     </a>
                                                 </div>
                                             </div>
@@ -943,19 +971,19 @@ export const Finances = () => {
                                 <div className="space-y-1.5">
                                     {payables.items.map(item => (
                                         <div key={item.id}
-                                            className="flex flex-wrap items-center gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
+                                            className="flex items-center gap-2 sm:gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
                                             <div className="min-w-0 flex-1">
                                                 <div className="text-sm text-white font-medium truncate">{item.reference}</div>
                                                 <div className="text-[11px] text-slate-500 truncate">{item.counterparty}</div>
                                             </div>
-                                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${
+                                            <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 hidden sm:inline ${
                                                 item.bucket === 'current' ? 'bg-slate-700/60 text-slate-300' : 'bg-amber-500/10 text-amber-400'}`}>
                                                 {item.daysOld === 0 ? 'due' : `${item.daysOld}d`}
                                             </span>
-                                            <span className="font-mono text-sm text-white font-bold w-28 text-right">{lkr(item.amount)}</span>
-                                            <button onClick={() => markBillPaid(item)}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-xs font-bold transition-colors">
-                                                <Check size={13} /> Paid
+                                            <span className="font-mono text-sm text-white font-bold shrink-0 tabular-nums sm:w-28 sm:text-right">{lkr(item.amount)}</span>
+                                            <button onClick={() => markBillPaid(item)} title="Mark this bill as paid"
+                                                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-xs font-bold transition-colors shrink-0">
+                                                <Check size={13} /> <span className="hidden sm:inline">Paid</span>
                                             </button>
                                         </div>
                                     ))}
@@ -978,28 +1006,36 @@ export const Finances = () => {
                         ) : (
                             <div className="space-y-2">
                                 {schedules.map(s => (
-                                    <div key={s.asset.id} className="flex flex-wrap items-center gap-3 bg-slate-800/40 border border-slate-800 rounded-xl p-3">
-                                        <div className="min-w-0 flex-1">
-                                            <div className="font-bold text-white text-sm truncate">{s.asset.name}</div>
-                                            <div className="text-[11px] text-slate-500">
-                                                {s.asset.category} · bought {new Date(s.asset.purchase_date).toLocaleDateString('en-GB')} · {s.asset.useful_life_years}yr life
+                                    <div key={s.asset.id} className="bg-slate-800/40 border border-slate-800 rounded-xl p-3">
+                                        <div className="flex items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-bold text-white text-sm truncate">{s.asset.name}</div>
+                                                <div className="text-[11px] text-slate-500 truncate">
+                                                    {s.asset.category} · bought {new Date(s.asset.purchase_date).toLocaleDateString('en-GB')} · {s.asset.useful_life_years}yr life
+                                                </div>
+                                            </div>
+                                            <button onClick={() => deleteAsset(s.asset)}
+                                                title="Remove from the register"
+                                                className="text-slate-600 hover:text-red-400 p-1.5 shrink-0">
+                                                <Trash2 size={15} />
+                                            </button>
+                                        </div>
+                                        {/* Three figures across on every width. Squeezed onto one line
+                                            with the name they were unreadable on a phone. */}
+                                        <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2.5 border-t border-slate-800/70">
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 uppercase">Cost</div>
+                                                <div className="font-mono text-xs sm:text-sm text-slate-300 tabular-nums">{lkr(Number(s.asset.cost_lkr))}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 uppercase">This period</div>
+                                                <div className="font-mono text-xs sm:text-sm text-rose-400 tabular-nums">−{lkr(s.chargeForPeriod)}</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-[10px] text-slate-500 uppercase">Book value</div>
+                                                <div className="font-mono text-xs sm:text-sm text-white font-bold tabular-nums">{lkr(s.netBookValue)}</div>
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] text-slate-500 uppercase">Cost</div>
-                                            <div className="font-mono text-sm text-slate-300">{lkr(Number(s.asset.cost_lkr))}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] text-slate-500 uppercase">This period</div>
-                                            <div className="font-mono text-sm text-rose-400">−{lkr(s.chargeForPeriod)}</div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] text-slate-500 uppercase">Book value</div>
-                                            <div className="font-mono text-sm text-white font-bold">{lkr(s.netBookValue)}</div>
-                                        </div>
-                                        <button onClick={() => deleteAsset(s.asset)} className="text-slate-600 hover:text-red-400 p-1.5">
-                                            <Trash2 size={15} />
-                                        </button>
                                     </div>
                                 ))}
                                 <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-800 text-sm">
@@ -1040,12 +1076,12 @@ export const Finances = () => {
                                             : cat.startsWith('Parts') || cat.startsWith('Cost of') ? <Package size={12} className="text-violet-400 shrink-0" />
                                             : <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />}
                                         <span className="truncate">{cat}</span>
-                                        <span className="text-slate-600 font-normal normal-case shrink-0">
-                                            · {rows.length} item{rows.length === 1 ? '' : 's'}
+                                        <span className="text-slate-600 font-normal normal-case shrink-0 hidden sm:inline">
+                                            · {rows.length}<span className="hidden sm:inline"> item{rows.length === 1 ? '' : 's'}</span>
                                         </span>
                                     </h4>
                                     <span className="flex items-center gap-3 shrink-0">
-                                        <span className={`font-mono text-sm font-bold ${rows[0].kind === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        <span className={`font-mono text-xs sm:text-sm font-bold tabular-nums ${rows[0].kind === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                                             {rows[0].kind === 'income' ? '+' : '−'}{lkr(total)}
                                         </span>
                                         <span className="text-[10px] text-slate-500 hidden sm:inline">
@@ -1055,20 +1091,21 @@ export const Finances = () => {
                                 </button>
                                 <div className={`space-y-1 px-2 pb-2 ${open ? 'pt-2' : 'hidden'}`}>
                                     {rows.map(e => (
-                                        <div key={e.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/40 group">
-                                            <span className="text-[11px] text-slate-500 w-16 shrink-0">
+                                        <div key={e.id} className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 rounded-lg hover:bg-slate-800/40 group">
+                                            <span className="text-[10px] sm:text-[11px] text-slate-500 w-11 sm:w-16 shrink-0 leading-tight">
                                                 {new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
                                             </span>
-                                            <span className="text-sm text-slate-200 flex-1 min-w-0 truncate">{e.description}</span>
-                                            {e.jobRef && <span className="text-[10px] font-mono text-slate-600 hidden sm:inline">#{e.jobRef}</span>}
-                                            <span className={`font-mono text-sm shrink-0 ${e.kind === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            <span className="text-xs sm:text-sm text-slate-200 flex-1 min-w-0 truncate">{e.description}</span>
+                                            {e.jobRef && <span className="text-[10px] font-mono text-slate-600 hidden md:inline">#{e.jobRef}</span>}
+                                            <span className={`font-mono text-xs sm:text-sm shrink-0 tabular-nums ${e.kind === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                 {e.kind === 'income' ? '+' : '−'}{lkr(e.amount)}
                                             </span>
+                                            {/* Always visible on touch — there is no hover to reveal it. */}
                                             <button onClick={() => deleteEntry(e)}
                                                 title={e.editable ? 'Delete' : 'Comes from a job card'}
-                                                className={`p-1 transition-opacity ${e.editable
-                                                    ? 'text-slate-600 hover:text-red-400 opacity-0 group-hover:opacity-100'
-                                                    : 'text-slate-800 cursor-default'}`}>
+                                                className={`p-1 shrink-0 transition-opacity ${e.editable
+                                                    ? 'text-slate-600 hover:text-red-400 opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
+                                                    : 'hidden sm:block text-slate-800 cursor-default'}`}>
                                                 <Trash2 size={13} />
                                             </button>
                                         </div>
@@ -1209,15 +1246,15 @@ export const Finances = () => {
                                     style={on ? { borderColor: hue, background: `rgba(${r},${g},${b},0.14)` } : undefined}
                                     className={`w-full flex items-center gap-3 text-left px-3 py-2.5 rounded-xl border transition-colors ${
                                         on ? '' : 'bg-slate-800/40 border-slate-800 hover:border-slate-700'}`}>
-                                    <span className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center text-[11px] font-black text-white"
+                                    <span className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center text-[11px] font-black text-white self-start sm:self-center"
                                         style={{ background: hue, opacity: on ? 1 : 0.4 }}>
                                         {i + 1}
                                     </span>
                                     <span className="min-w-0 flex-1">
-                                        <span className="block text-sm font-bold text-white">{st.title}</span>
+                                        <span className="block text-[13px] sm:text-sm font-bold text-white leading-snug">{st.title}</span>
                                         <span className="block text-[11px] text-slate-500 leading-snug">{st.blurb}</span>
                                     </span>
-                                    <span className={`w-4 h-4 rounded shrink-0 border flex items-center justify-center ${
+                                    <span className={`w-4 h-4 rounded shrink-0 border flex items-center justify-center self-start sm:self-center ${
                                         on ? 'border-transparent' : 'border-slate-600'}`}
                                         style={on ? { background: hue } : undefined}>
                                         {on && <Check size={11} className="text-white" strokeWidth={3} />}
