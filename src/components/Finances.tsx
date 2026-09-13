@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     DollarSign, TrendingUp, TrendingDown, Search, Plus, Trash2, FileText, Download,
     Wallet, Package, Wrench, Building2, Scale, AlertTriangle, Check, Layers,
-    MessageCircle, Smartphone, Banknote, HandCoins, ArrowRight,
+    MessageCircle, Smartphone, Banknote, HandCoins, ArrowRight, ChevronRight,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
@@ -13,12 +13,13 @@ import { downloadCSV } from '../lib/csv';
 import { fyStart, fyEnd, fyLabel, toISODate, describePeriod } from '../lib/fiscal';
 import {
     buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
+    buildJournal, trialBalance, ACCOUNTS,
     type LedgerEntry, type Asset, type AgedItem,
 } from '../lib/finance';
 import { waMeUrl } from '../lib/whatsapp';
 import { sendSMS } from '../lib/sms';
 import { withTitle } from '../lib/textCase';
-import { buildAuditPack } from '../lib/financePdf';
+import { buildAuditPack, STATEMENTS, STATEMENT_COLOURS, type StatementKey } from '../lib/financePdf';
 
 /* Built-in categories. Tenants add their own alongside these, stored in
    finance_categories; the two lists are merged wherever a picker appears. */
@@ -31,13 +32,18 @@ const BUILTIN = {
         'Building & premises', 'Other'],
 };
 
-/* The balance-sheet figures no transaction in this system can produce. */
+/* Opening balances — the position at the START of the financial year.
+   They must be opening rather than closing figures: the journal already posts
+   every receipt and payment, so feeding in a closing balance and then adding
+   the year's movements on top would count the same money twice. The closing
+   position is computed from these plus the transactions. */
 const POSITION_FIELDS = [
-    { key: 'bank', label: 'Bank balance', hint: 'Closing balance per the bank statement at period end' },
-    { key: 'cash', label: 'Cash in hand', hint: 'Physical cash held at period end' },
-    { key: 'loans', label: 'Loans and borrowings', hint: 'Outstanding loan balances' },
+    { key: 'bank', label: 'Bank — opening balance', hint: 'What was in the bank on the first day of this financial year' },
+    { key: 'cash', label: 'Cash in hand — opening', hint: 'Physical cash held on the first day of the year' },
+    { key: 'stock_opening', label: 'Stock — opening value', hint: 'Value of parts on the shelf at the start of the year, at cost' },
+    { key: 'loans', label: 'Loans — opening balance', hint: 'Outstanding on the first day of the year' },
     { key: 'share_capital', label: 'Stated capital', hint: 'Capital introduced by the shareholders' },
-    { key: 'retained_earnings_bf', label: 'Retained earnings b/f', hint: "Accumulated profit at the start of this year" },
+    { key: 'retained_earnings_bf', label: 'Retained earnings b/f', hint: 'Accumulated profit at the start of this year' },
 ];
 
 const lkr = (v: number) => `LKR ${Math.round(v).toLocaleString()}`;
@@ -83,6 +89,9 @@ export const Finances = () => {
         cost_lkr: '', useful_life_years: '5', residual_lkr: '0', notes: '',
     });
     const [newCategory, setNewCategory] = useState('');
+    const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
+    const [statementModal, setStatementModal] = useState(false);
+    const [chosen, setChosen] = useState<Set<StatementKey>>(new Set(STATEMENTS.map(s => s.key)));
     const [positionsForm, setPositionsForm] = useState<Record<string, string>>({});
 
     /* ---------------------------------------------------------------- period */
@@ -205,21 +214,65 @@ export const Finances = () => {
         return m;
     }, [raw.positions]);
 
+    /* The books proper. Every transaction posted as equal debits and credits on
+       the accrual basis, with settlement as a separate entry on its own date. */
+    const journal = useMemo(() => buildJournal({
+        invoices: raw.invoices,
+        jobLabour: raw.labour.map((l: any) => ({ ...l, jobRef: l.job_cards?.id?.slice(0, 8).toUpperCase() })),
+        jobParts: raw.parts.map((p: any) => ({
+            ...p,
+            cost_at_time_lkr: p.cost_at_time_lkr ?? p.parts?.cost_lkr ?? 0,
+            partName: p.parts?.name || p.custom_name,
+        })),
+        manual: raw.manual,
+        invoicesFull: raw.invoices,
+        manualFull: raw.manual,
+        assets: raw.assets,
+        depreciationByAsset: schedules.map(s => ({ assetId: s.asset.id, charge: s.chargeForPeriod })),
+        periodEndISO: toISODate(period.end),
+    }), [raw, schedules, period.end]);
+
+    const trial = useMemo(() => trialBalance(journal, period.start, period.end, [
+        { account: ACCOUNTS.BANK, amount: positionsMap.bank || 0 },
+        { account: ACCOUNTS.CASH, amount: positionsMap.cash || 0 },
+        { account: ACCOUNTS.STOCK, amount: positionsMap.stock_opening || 0 },
+        { account: ACCOUNTS.LOANS, amount: -(positionsMap.loans || 0) },
+        { account: ACCOUNTS.CAPITAL, amount: -(positionsMap.share_capital || 0) },
+        { account: ACCOUNTS.RETAINED, amount: -(positionsMap.retained_earnings_bf || 0) },
+    ]), [journal, period, positionsMap]);
+
+    /* Closing bank and cash are computed — opening balance plus every receipt
+       and payment the journal posted — rather than typed in. */
+    const accountBalance = (code: string) => {
+        const row = trial.rows.find(r => r.account.code === code);
+        return row ? round2(row.debit - row.credit) : 0;
+    };
+
+    /* Every figure comes off the trial balance, so the statement articulates with
+       the books by construction. Reading stock from the parts table and debtors
+       from the invoice list instead would let a balanced set of books still
+       produce an unbalanced balance sheet, which is the confusing outcome. */
     const balance = useMemo(() => balanceSheet({
-        fixedAssetsNbv: round2(schedules.reduce((t, s) => t + s.netBookValue, 0)),
-        stock: raw.stock,
-        debtors: receivables.total,
-        bank: positionsMap.bank || 0,
-        cash: positionsMap.cash || 0,
-        payables: payables.total,
-        loans: positionsMap.loans || 0,
-        shareCapital: positionsMap.share_capital || 0,
-        retainedEarningsBf: positionsMap.retained_earnings_bf || 0,
+        fixedAssetsNbv: round2(accountBalance('1000') + accountBalance('1010')),
+        stock: accountBalance('1100'),
+        debtors: accountBalance('1200'),
+        bank: accountBalance('1300'),
+        cash: accountBalance('1310'),
+        payables: -accountBalance('2000'),
+        loans: -accountBalance('2100'),
+        shareCapital: -accountBalance('3000'),
+        retainedEarningsBf: -accountBalance('3100'),
         profitForYear: pl.netProfit,
-    }), [schedules, raw.stock, receivables.total, payables.total, positionsMap, pl.netProfit]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }), [trial, pl.netProfit]);
+
+    /* The books say one thing about stock; the shelf says another. A gap is worth
+       knowing about — it is shrinkage, mis-costed parts or unrecorded purchases —
+       but it belongs here as a note, not as a broken balance sheet. */
+    const stockVariance = round2(raw.stock - balance.stock);
 
     const cashEntered = raw.positions.some(p => ['bank', 'cash'].includes(p.key));
-    const availableCash = round2((positionsMap.bank || 0) + (positionsMap.cash || 0));
+    const availableCash = round2(balance.bank + balance.cash);
 
     const inPeriod = useMemo(
         () => ledger.filter(e => { const d = new Date(e.date); return d >= period.start && d <= period.end; }),
@@ -424,10 +477,17 @@ export const Finances = () => {
 
     const positionsIncomplete = raw.positions.length === 0;
 
-    const generateStatements = async () => {
+    // Takes the sections explicitly rather than reading `chosen` from the
+    // closure: "Download all" sets the state and generates in the same tick, so
+    // a closure would still hold the previous selection.
+    const generateStatements = async (sections: StatementKey[]) => {
+        if (sections.length === 0) return toast('Pick at least one statement.', 'warning');
+        setStatementModal(false);
         setGenerating(true);
         try {
             const doc = buildAuditPack({
+                sections,
+                trial,
                 company: { name: tenant?.name || 'Workshop', address: tenant?.address, phone: tenant?.phone },
                 startISO: toISODate(period.start), endISO: toISODate(period.end),
                 pl, schedules, balance,
@@ -441,7 +501,10 @@ export const Finances = () => {
                 ledger: inPeriod,
                 positionsIncomplete,
             });
-            doc.save(`Financial-Statements-${toISODate(period.start)}-to-${toISODate(period.end)}.pdf`);
+            const name = sections.length === STATEMENTS.length ? 'Financial-Statements'
+                : sections.length === 1 ? STATEMENTS.find(x => x.key === sections[0])!.title.replace(/[^a-z0-9]+/gi, '-')
+                : 'Financial-Extracts';
+            doc.save(`${name}-${toISODate(period.start)}-to-${toISODate(period.end)}.pdf`);
             toast('Statements downloaded.', 'success');
         } catch (err: any) {
             console.error('[Finances] statement generation failed', err);
@@ -562,11 +625,13 @@ export const Finances = () => {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                     <button onClick={() => { setEntryModal('income'); setEntryForm(f => ({ ...f, category: '' })); }}
-                        className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                        title="Income that did not come from a job"
+                        className="flex items-center gap-2 bg-emerald-600/15 hover:bg-emerald-600/25 text-emerald-300 border border-emerald-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
                         <Plus size={15} /> Other Income
                     </button>
                     <button onClick={() => { setEntryModal('expense'); setEntryForm(f => ({ ...f, category: '' })); }}
-                        className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                        title="Money the workshop spent, paid or on credit"
+                        className="flex items-center gap-2 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
                         <Plus size={15} /> Expense
                     </button>
                     <button onClick={() => {
@@ -574,11 +639,12 @@ export const Finances = () => {
                             [f.key, String(positionsMap[f.key] ?? '')])));
                         setPositionsModal(true);
                     }}
-                        className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
+                        title="Bank, cash, loans and capital — the figures only you know"
+                        className="flex items-center gap-2 bg-violet-600/15 hover:bg-violet-600/25 text-violet-300 border border-violet-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
                         <Scale size={15} /> Balance Sheet
                     </button>
-                    <button onClick={generateStatements} disabled={generating}
-                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95">
+                    <button onClick={() => setStatementModal(true)} disabled={generating}
+                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-60 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg shadow-cyan-500/20">
                         <FileText size={15} /> {generating ? 'Preparing…' : 'Statements'}
                     </button>
                 </div>
@@ -644,9 +710,11 @@ export const Finances = () => {
                     </div>
                     {cashEntered ? (
                         <>
-                            <div className="text-2xl font-black font-mono text-emerald-400">{lkr(availableCash)}</div>
+                            <div className={`text-2xl font-black font-mono ${availableCash < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                {lkr(availableCash)}
+                            </div>
                             <div className="text-[10px] text-slate-500 mt-1.5">
-                                Bank {lkr(positionsMap.bank || 0)} · cash {lkr(positionsMap.cash || 0)} — tap to update
+                                Bank {lkr(balance.bank)} · cash {lkr(balance.cash)} — opening balance plus this period's movements
                             </div>
                         </>
                     ) : (
@@ -949,21 +1017,43 @@ export const Finances = () => {
                             <p className="text-center text-slate-500 py-10 text-sm">
                                 {search || catFilter !== 'all' ? 'Nothing matches that filter.' : 'No entries in this period.'}
                             </p>
-                        ) : grouped.map(([cat, { total, rows }]) => (
-                            <div key={cat} className="mb-5 last:mb-0">
-                                <div className="flex items-center justify-between mb-2 px-1">
-                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                                        {cat === 'Labour' ? <Wrench size={12} className="text-cyan-400" />
-                                            : cat.startsWith('Parts') || cat.startsWith('Cost of') ? <Package size={12} className="text-violet-400" />
-                                            : <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />}
-                                        {cat}
-                                        <span className="text-slate-600 font-normal normal-case">· {rows.length}</span>
+                        ) : grouped.map(([cat, { total, rows }]) => {
+                            // Collapsed by default: the category totals are the
+                            // headline, and a long list of line items buries them.
+                            // A search or filter opens them, since the point of
+                            // filtering is to see the matches.
+                            const forced = search.trim() !== '' || catFilter !== 'all';
+                            const open = forced || openCategories.has(cat);
+                            return (
+                            <div key={cat} className="mb-3 last:mb-0 border border-slate-800/70 rounded-xl overflow-hidden">
+                                <button
+                                    onClick={() => setOpenCategories(prev => {
+                                        const next = new Set(prev);
+                                        next.has(cat) ? next.delete(cat) : next.add(cat);
+                                        return next;
+                                    })}
+                                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 bg-slate-800/30 hover:bg-slate-800/60 transition-colors text-left">
+                                    <h4 className="text-[11px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-2 min-w-0">
+                                        <ChevronRight size={13}
+                                            className={`text-slate-500 transition-transform shrink-0 ${open ? 'rotate-90' : ''}`} />
+                                        {cat === 'Labour' ? <Wrench size={12} className="text-cyan-400 shrink-0" />
+                                            : cat.startsWith('Parts') || cat.startsWith('Cost of') ? <Package size={12} className="text-violet-400 shrink-0" />
+                                            : <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0" />}
+                                        <span className="truncate">{cat}</span>
+                                        <span className="text-slate-600 font-normal normal-case shrink-0">
+                                            · {rows.length} item{rows.length === 1 ? '' : 's'}
+                                        </span>
                                     </h4>
-                                    <span className={`font-mono text-sm font-bold ${rows[0].kind === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {rows[0].kind === 'income' ? '+' : '−'}{lkr(total)}
+                                    <span className="flex items-center gap-3 shrink-0">
+                                        <span className={`font-mono text-sm font-bold ${rows[0].kind === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {rows[0].kind === 'income' ? '+' : '−'}{lkr(total)}
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 hidden sm:inline">
+                                            {open ? 'Hide' : 'View details'}
+                                        </span>
                                     </span>
-                                </div>
-                                <div className="space-y-1">
+                                </button>
+                                <div className={`space-y-1 px-2 pb-2 ${open ? 'pt-2' : 'hidden'}`}>
                                     {rows.map(e => (
                                         <div key={e.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-800/40 group">
                                             <span className="text-[11px] text-slate-500 w-16 shrink-0">
@@ -985,7 +1075,8 @@ export const Finances = () => {
                                     ))}
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -1079,6 +1170,79 @@ export const Finances = () => {
                             : entryForm.paid ? 'Record expense' : 'Record bill'}
                     </button>
                 </form>
+            </Modal>
+
+            <Modal isOpen={statementModal} onClose={() => setStatementModal(false)} title="Download statements">
+                <div className="space-y-3">
+                    <p className="text-xs text-slate-500 -mt-1">
+                        Pick what you need. Everything is prepared on the accrual basis from a
+                        double-entry ledger for <span className="text-slate-300 font-bold">{periodLabel}</span>.
+                    </p>
+
+                    <div className="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2">
+                        <span className="text-xs text-slate-400">
+                            {chosen.size} of {STATEMENTS.length} selected
+                        </span>
+                        <div className="flex gap-2">
+                            <button onClick={() => setChosen(new Set(STATEMENTS.map(x => x.key)))}
+                                className="text-xs font-bold text-cyan-400 hover:text-cyan-300">Select all</button>
+                            <span className="text-slate-700">·</span>
+                            <button onClick={() => setChosen(new Set())}
+                                className="text-xs font-bold text-slate-500 hover:text-slate-300">Clear</button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-[45vh] overflow-y-auto pr-1">
+                        {STATEMENTS.map((st, i) => {
+                            const on = chosen.has(st.key);
+                            // Same hue the statement carries in the PDF, so what you
+                            // tick here is recognisable in the document you get.
+                            const [r, g, b] = STATEMENT_COLOURS[st.key];
+                            const hue = `rgb(${r},${g},${b})`;
+                            return (
+                                <button key={st.key}
+                                    onClick={() => setChosen(prev => {
+                                        const next = new Set(prev);
+                                        next.has(st.key) ? next.delete(st.key) : next.add(st.key);
+                                        return next;
+                                    })}
+                                    style={on ? { borderColor: hue, background: `rgba(${r},${g},${b},0.14)` } : undefined}
+                                    className={`w-full flex items-center gap-3 text-left px-3 py-2.5 rounded-xl border transition-colors ${
+                                        on ? '' : 'bg-slate-800/40 border-slate-800 hover:border-slate-700'}`}>
+                                    <span className="w-6 h-6 rounded-md shrink-0 flex items-center justify-center text-[11px] font-black text-white"
+                                        style={{ background: hue, opacity: on ? 1 : 0.4 }}>
+                                        {i + 1}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block text-sm font-bold text-white">{st.title}</span>
+                                        <span className="block text-[11px] text-slate-500 leading-snug">{st.blurb}</span>
+                                    </span>
+                                    <span className={`w-4 h-4 rounded shrink-0 border flex items-center justify-center ${
+                                        on ? 'border-transparent' : 'border-slate-600'}`}
+                                        style={on ? { background: hue } : undefined}>
+                                        {on && <Check size={11} className="text-white" strokeWidth={3} />}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button onClick={() => {
+                                const all = STATEMENTS.map(x => x.key);
+                                setChosen(new Set(all));
+                                generateStatements(all);
+                            }}
+                            disabled={generating}
+                            className="flex-1 bg-slate-800 hover:bg-slate-700 text-white py-3 rounded-xl font-bold text-sm disabled:opacity-60">
+                            Download all
+                        </button>
+                        <button onClick={() => generateStatements([...chosen])} disabled={generating || chosen.size === 0}
+                            className="flex-1 btn-brand py-3 rounded-xl font-bold text-sm disabled:opacity-60">
+                            {generating ? 'Preparing…' : `Download ${chosen.size || ''}`.trim()}
+                        </button>
+                    </div>
+                </div>
             </Modal>
 
             <Modal isOpen={assetModal} onClose={() => setAssetModal(false)} title="Add an asset">
@@ -1183,7 +1347,22 @@ export const Finances = () => {
                             <span className="font-mono text-slate-300">{lkr(balance.debtors)}</span></div>
                         <div className="flex justify-between"><span className="text-slate-500">Trade payables (unpaid bills)</span>
                             <span className="font-mono text-slate-300">{lkr(balance.payables)}</span></div>
+                        <div className="flex justify-between"><span className="text-slate-500">Stock per the books</span>
+                            <span className="font-mono text-slate-300">{lkr(balance.stock)}</span></div>
+                        {Math.abs(stockVariance) >= 1 && (
+                            <div className="flex justify-between pt-1 border-t border-slate-800/70">
+                                <span className="text-amber-400/80">Stock on the shelf differs by</span>
+                                <span className="font-mono text-amber-400">{lkr(stockVariance)}</span>
+                            </div>
+                        )}
                     </div>
+                    {Math.abs(stockVariance) >= 1 && (
+                        <p className="text-[10px] text-slate-600 leading-relaxed">
+                            The parts list values stock at {lkr(raw.stock)}, the books at {lkr(balance.stock)}.
+                            A gap usually means parts bought without being recorded under
+                            "{'Parts purchases'}", or an opening stock figure that needs setting above.
+                        </p>
+                    )}
                     <button onClick={savePositions} disabled={submitting}
                         className="w-full btn-brand py-3 rounded-xl font-bold disabled:opacity-60">
                         {submitting ? 'Saving…' : 'Save figures'}

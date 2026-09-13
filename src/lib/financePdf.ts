@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import type { ProfitAndLoss, AssetSchedule, BalanceSheet, LedgerEntry } from './finance';
+import type { ProfitAndLoss, AssetSchedule, BalanceSheet, LedgerEntry, TrialBalance } from './finance';
 import { describePeriod } from './fiscal';
 
 /**
@@ -11,6 +11,37 @@ import { describePeriod } from './fiscal';
  * discarded silently — so every block reserves its space before drawing.
  */
 
+/** The statements a user can pick from. Order here is the order they print. */
+export const STATEMENTS = [
+    { key: 'income', title: 'Statement of Comprehensive Income', blurb: 'Revenue, cost of sales, expenses and profit' },
+    { key: 'expenses', title: 'Schedule of Operating Expenses', blurb: 'Every cost category, reconciled to the income statement' },
+    { key: 'assets', title: 'Fixed Asset Register', blurb: 'What you own and its depreciation' },
+    { key: 'position', title: 'Statement of Financial Position', blurb: 'The balance sheet — assets, liabilities and equity' },
+    { key: 'equity', title: 'Statement of Changes in Equity', blurb: 'How retained earnings moved over the period' },
+    { key: 'trial', title: 'Trial Balance', blurb: 'Every account, debits against credits' },
+    { key: 'debtors', title: 'Trade Debtors', blurb: 'Unpaid invoices, aged' },
+    { key: 'ledger', title: 'Transaction Ledger', blurb: 'Every transaction in the period, in full' },
+] as const;
+
+export type StatementKey = typeof STATEMENTS[number]['key'];
+
+/**
+ * One accent colour per statement, used on its heading rule and number chip so
+ * a reader flicking through a long pack can find a section by its colour.
+ * Deliberately muted: this is a document an auditor reads, not a dashboard.
+ * The Finances picker uses the same hues so the two agree.
+ */
+export const STATEMENT_COLOURS: Record<StatementKey, [number, number, number]> = {
+    income:   [11, 107, 125],   // teal — the trading result
+    expenses: [166, 84, 42],    // burnt orange — money going out
+    assets:   [92, 78, 140],    // violet — what is owned
+    position: [30, 74, 120],    // navy — the balance sheet
+    equity:   [46, 104, 92],    // deep green — owners' funds
+    trial:    [90, 90, 100],    // graphite — the underlying books
+    debtors:  [150, 106, 30],   // amber — money owed in
+    ledger:   [70, 78, 90],     // slate — the detail
+};
+
 export interface AuditPackInput {
     company: { name: string; address?: string | null; phone?: string | null };
     startISO: string;
@@ -20,8 +51,11 @@ export interface AuditPackInput {
     balance: BalanceSheet;
     debtors: { invoiceNumber: string; customer: string; date: string; amount: number; daysOld: number }[];
     ledger: LedgerEntry[];
+    trial: TrialBalance;
     /** Set when the tenant has not filled in the balance-sheet inputs. */
     positionsIncomplete: boolean;
+    /** Which statements to print. Defaults to all of them. */
+    sections?: StatementKey[];
 }
 
 /** Never print "Invalid Date" in a document going to an auditor. */
@@ -34,6 +68,9 @@ const money = (v: number) =>
     (v < 0 ? '(' : '') + Math.abs(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + (v < 0 ? ')' : '');
 
 export function buildAuditPack(input: AuditPackInput): jsPDF {
+    const wanted = new Set<StatementKey>(input.sections ?? STATEMENTS.map(s => s.key));
+    const show = (k: StatementKey) => wanted.has(k);
+    let sectionNo = 0;
     const doc = new jsPDF();
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
@@ -48,13 +85,22 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
         y = 22;
     };
 
-    const heading = (text: string) => {
-        ensure(18);
+    const heading = (text: string, key?: StatementKey) => {
+        ensure(20);
         y += 4;
-        doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(20);
-        doc.text(text.toUpperCase(), L, y);
-        y += 2;
-        doc.setDrawColor(20).setLineWidth(0.4).line(L, y, R, y);
+        const [hr, hg, hb] = key ? STATEMENT_COLOURS[key] : [20, 20, 20];
+
+        // Number in a filled chip, title beside it, rule underneath in the same
+        // hue — enough to identify a section at a glance without shouting.
+        doc.setFillColor(hr, hg, hb);
+        doc.roundedRect(L, y - 4.3, 6.6, 6, 1, 1, 'F');
+        doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(255);
+        doc.text(String(++sectionNo), L + 3.3, y + 0.1, { align: 'center' });
+
+        doc.setFontSize(11).setTextColor(hr, hg, hb);
+        doc.text(text.toUpperCase(), L + 9.4, y);
+        y += 2.4;
+        doc.setDrawColor(hr, hg, hb).setLineWidth(0.5).line(L, y, R, y);
         y += 6;
         doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(40);
     };
@@ -121,9 +167,12 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
         doc.setTextColor(40);
     }
 
-    // ---- 1. profit and loss ------------------------------------------------
     const pl = input.pl;
-    heading('1. Statement of Comprehensive Income');
+    const cats = Object.entries(pl.expensesByCategory).sort((a, b) => b[1] - a[1]);
+
+    // ---- profit and loss ----------------------------------------------------
+    if (show('income')) {
+    heading('Statement of Comprehensive Income', 'income');
     line('Revenue', undefined, { bold: true });
     line('Labour', pl.revenueLabour, { indent: 6, col: AMT2 });
     line('Parts and materials', pl.revenueParts, { indent: 6, col: AMT2 });
@@ -139,19 +188,20 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
     line('Other income', pl.revenueOther, { bold: true, indent: 6 });
     y += 2;
     line('Operating expenses', undefined, { bold: true });
-    const cats = Object.entries(pl.expensesByCategory).sort((a, b) => b[1] - a[1]);
     if (cats.length === 0) line('None recorded', undefined, { indent: 6 });
     for (const [cat, amt] of cats) line(cat, -amt, { indent: 6, col: AMT2 });
     if (pl.depreciation > 0) line('Depreciation', -pl.depreciation, { indent: 6, col: AMT2 });
     line('Total operating expenses', -(pl.operatingExpenses + pl.depreciation), { indent: 6, rule: 'single' });
     y += 1;
     line('Net profit for the period', pl.netProfit, { bold: true, indent: 6, rule: 'double' });
+    }
 
-    // ---- 2. expense schedule ----------------------------------------------
+    // ---- expense schedule ---------------------------------------------------
     // Reconciles to the operating expense total in section 1, depreciation
     // included — a schedule that does not tie back to the statement it supports
     // is the first thing an auditor will query.
-    heading('2. Schedule of Operating Expenses');
+    if (show('expenses')) {
+    heading('Schedule of Operating Expenses', 'expenses');
     if (cats.length === 0 && pl.depreciation === 0) {
         line('No operating expenses recorded in the period.');
     } else {
@@ -164,11 +214,13 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
             const pct = grandTotal > 0 ? (pl.depreciation / grandTotal) * 100 : 0;
             line(`Depreciation  (${pct.toFixed(1)}%)  — non-cash`, pl.depreciation, { indent: 4 });
         }
-        line('Total, per section 1', grandTotal, { bold: true, indent: 4, rule: 'double' });
+        line('Total, per the income statement', grandTotal, { bold: true, indent: 4, rule: 'double' });
+    }
     }
 
-    // ---- 3. fixed assets ---------------------------------------------------
-    heading('3. Fixed Asset Register and Depreciation Schedule');
+    // ---- fixed assets -------------------------------------------------------
+    if (show('assets')) {
+    heading('Fixed Asset Register and Depreciation Schedule', 'assets');
     if (input.schedules.length === 0) {
         line('No fixed assets recorded.');
     } else {
@@ -211,10 +263,12 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
         doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(40);
         note('Depreciation is charged on the straight-line basis over the useful life stated for each asset.');
     }
+    }
 
-    // ---- 4. balance sheet --------------------------------------------------
+    // ---- balance sheet ------------------------------------------------------
     const b = input.balance;
-    heading('4. Statement of Financial Position');
+    if (show('position')) {
+    heading('Statement of Financial Position', 'position');
     line('Assets', undefined, { bold: true });
     line('Non-current — fixed assets at net book value', b.fixedAssetsNbv, { indent: 6, col: AMT2 });
     line('Current — stock of parts, at cost', b.stock, { indent: 6, col: AMT2 });
@@ -246,15 +300,59 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
             + 'opening reserves figure has not been entered, or that opening retained earnings do not '
             + 'agree with the prior period. It is shown rather than suppressed so it can be resolved.');
     }
+    }
 
-    // ---- 5. changes in equity ---------------------------------------------
-    heading('5. Statement of Changes in Equity');
+    // ---- changes in equity --------------------------------------------------
+    if (show('equity')) {
+    heading('Statement of Changes in Equity', 'equity');
     line('Balance brought forward', b.shareCapital + b.retainedEarningsBf, { indent: 6 });
     line('Profit for the period', b.profitForYear, { indent: 6, rule: 'single' });
     line('Balance carried forward', b.totalEquity, { bold: true, indent: 6, rule: 'double' });
+    }
 
-    // ---- 6. debtors --------------------------------------------------------
-    heading('6. Trade Debtors — Unpaid Invoices');
+    // ---- trial balance ------------------------------------------------------
+    if (show('trial')) {
+        const t = input.trial;
+        heading('Trial Balance', 'trial');
+        note('Every account in the books, on the accrual basis. Debits and credits are equal '
+            + 'when the double entry is complete — that equality is what makes an error visible.');
+        ensure(9);
+        doc.setFont('helvetica', 'bold').setFontSize(7.6).setTextColor(20);
+        doc.text('CODE', L, y);
+        doc.text('ACCOUNT', L + 18, y);
+        doc.text('DEBIT', L + 132, y, { align: 'right' });
+        doc.text('CREDIT', AMT, y, { align: 'right' });
+        y += 1.5;
+        doc.setDrawColor(150).setLineWidth(0.3).line(L, y, R, y);
+        y += 4.5;
+        for (const row of t.rows) {
+            ensure(5.5);
+            doc.setFont('helvetica', 'normal').setFontSize(8).setTextColor(50);
+            doc.text(row.account.code, L, y);
+            doc.text(doc.splitTextToSize(row.account.name, 108)[0], L + 18, y);
+            if (row.debit) doc.text(money(row.debit), L + 132, y, { align: 'right' });
+            if (row.credit) doc.text(money(row.credit), AMT, y, { align: 'right' });
+            y += 4.8;
+        }
+        ensure(10);
+        doc.setDrawColor(150).line(L, y - 1, R, y - 1);
+        y += 3.5;
+        doc.setFont('helvetica', 'bold').setFontSize(8.5).setTextColor(20);
+        doc.text('Total', L, y);
+        doc.text(money(t.totalDebits), L + 132, y, { align: 'right' });
+        doc.text(money(t.totalCredits), AMT, y, { align: 'right' });
+        y += 6;
+        if (!t.balanced) {
+            doc.setTextColor(170, 40, 40);
+            line('Out of balance by', t.outOfBalance, { bold: true });
+            doc.setTextColor(40);
+        }
+        doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(40);
+    }
+
+    // ---- debtors ------------------------------------------------------------
+    if (show('debtors')) {
+    heading('Trade Debtors — Unpaid Invoices', 'debtors');
     if (input.debtors.length === 0) {
         line('No unpaid invoices at the period end.');
     } else {
@@ -271,9 +369,11 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
         y += 1;
         line('Total debtors', input.debtors.reduce((t, d) => t + d.amount, 0), { bold: true, rule: 'double' });
     }
+    }
 
-    // ---- 7. ledger ---------------------------------------------------------
-    heading('7. Transaction Ledger');
+    // ---- ledger -------------------------------------------------------------
+    if (show('ledger')) {
+    heading('Transaction Ledger', 'ledger');
     note('Every transaction in the period, in full. No rows are omitted.');
     ensure(9);
     doc.setFont('helvetica', 'bold').setFontSize(7.6).setTextColor(20);
@@ -304,6 +404,7 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
     doc.text(`Total — ${input.ledger.length} transactions`, L, y);
     doc.text(money(totIn), L + 152, y, { align: 'right' });
     doc.text(money(totOut), AMT, y, { align: 'right' });
+    }
 
     // ---- signature + footers ----------------------------------------------
     ensure(34);
@@ -315,12 +416,29 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
     doc.text('Director', L, y + 5);
     doc.text('Date', R - 62, y + 5);
 
+    // The company name is left-aligned against a centred period and a
+    // right-aligned page number. A long name ran straight under the centre text,
+    // so it is clipped to the space actually available before the centre block
+    // begins, with an ellipsis if it does not fit.
     const pages = doc.getNumberOfPages();
+    doc.setFont('helvetica', 'normal').setFontSize(7.5);
+    const periodText = describePeriod(input.startISO, input.endISO);
+    const centreHalf = doc.getTextWidth(periodText) / 2;
+    const nameSpace = (W / 2 - centreHalf) - L - 6;   // 6mm of clear air
+
+    let footerName = input.company.name;
+    if (doc.getTextWidth(footerName) > nameSpace) {
+        while (footerName.length > 1 && doc.getTextWidth(footerName + '…') > nameSpace) {
+            footerName = footerName.slice(0, -1);
+        }
+        footerName = footerName.trimEnd() + '…';
+    }
+
     for (let p = 1; p <= pages; p++) {
         doc.setPage(p);
         doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(140);
-        doc.text(input.company.name, L, H - 10);
-        doc.text(describePeriod(input.startISO, input.endISO), W / 2, H - 10, { align: 'center' });
+        if (nameSpace > 12) doc.text(footerName, L, H - 10);
+        doc.text(periodText, W / 2, H - 10, { align: 'center' });
         doc.text(`Page ${p} of ${pages}`, R, H - 10, { align: 'right' });
     }
 

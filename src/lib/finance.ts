@@ -326,3 +326,263 @@ export function ageItems(
         overdue: round2(byBucket['31-60'] + byBucket['61-90'] + byBucket['90+']),
     };
 }
+
+/* ------------------------------------------------------- double-entry books */
+
+/**
+ * Every transaction is posted as equal debits and credits against named
+ * accounts, on the accrual basis: revenue is recognised when the work is
+ * invoiced and a cost when it is incurred, not when the money moves. The cash
+ * side is a second, separate entry made on the settlement date.
+ *
+ * Debits are positive, credits negative, so a correct set of books sums to
+ * exactly zero. That property is the point — it is what makes an error
+ * detectable rather than invisible.
+ */
+
+export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
+
+export interface Account {
+    code: string;
+    name: string;
+    type: AccountType;
+}
+
+export const ACCOUNTS: Record<string, Account> = {
+    FIXED_ASSETS: { code: '1000', name: 'Fixed assets at cost', type: 'asset' },
+    ACC_DEP: { code: '1010', name: 'Accumulated depreciation', type: 'asset' },
+    STOCK: { code: '1100', name: 'Stock of parts', type: 'asset' },
+    RECEIVABLES: { code: '1200', name: 'Trade receivables', type: 'asset' },
+    BANK: { code: '1300', name: 'Bank', type: 'asset' },
+    CASH: { code: '1310', name: 'Cash in hand', type: 'asset' },
+    PAYABLES: { code: '2000', name: 'Trade payables', type: 'liability' },
+    LOANS: { code: '2100', name: 'Loans and borrowings', type: 'liability' },
+    CAPITAL: { code: '3000', name: 'Stated capital', type: 'equity' },
+    RETAINED: { code: '3100', name: 'Retained earnings brought forward', type: 'equity' },
+    REV_LABOUR: { code: '4000', name: 'Revenue — labour', type: 'income' },
+    REV_PARTS: { code: '4010', name: 'Revenue — parts', type: 'income' },
+    REV_OTHER: { code: '4020', name: 'Other income', type: 'income' },
+    DISCOUNTS: { code: '4030', name: 'Discounts allowed', type: 'income' },
+    COGS: { code: '5000', name: 'Cost of parts sold', type: 'expense' },
+    OPEX: { code: '6000', name: 'Operating expenses', type: 'expense' },
+    DEPRECIATION: { code: '6900', name: 'Depreciation', type: 'expense' },
+    SUSPENSE: { code: '9999', name: 'Suspense — unreconciled', type: 'equity' },
+};
+
+export interface JournalLine {
+    account: Account;
+    /** Positive debit, negative credit. */
+    amount: number;
+}
+
+export interface JournalEntry {
+    id: string;
+    date: string;
+    narrative: string;
+    lines: JournalLine[];
+}
+
+const dr = (account: Account, amount: number): JournalLine => ({ account, amount: round2(amount) });
+const cr = (account: Account, amount: number): JournalLine => ({ account, amount: round2(-amount) });
+
+/** An operating-expense account per category, so the P&L can be read by category. */
+const opexAccount = (category: string): Account =>
+    ({ code: '6000', name: category, type: 'expense' });
+
+/**
+ * Buying parts is not a cost — it is swapping cash for stock. The cost lands
+ * later, when the part is fitted to a job and moves from Stock to cost of
+ * sales. Perpetual inventory, which is what the parts table already maintains.
+ *
+ * Expenses filed under this category therefore debit Stock rather than an
+ * expense account. Without it the Stock account only ever received credits as
+ * parts were consumed, and ran negative.
+ */
+export const STOCK_PURCHASE_CATEGORY = 'Parts purchases';
+
+export interface JournalSources extends LedgerSources {
+    invoicesFull: {
+        id: string; created_at: string; total_amount_lkr: unknown;
+        discount_lkr?: unknown; status?: string | null; paid_on?: string | null;
+    }[];
+    manualFull: {
+        id: string; date: string; description?: string | null; category?: string | null;
+        amount_lkr: unknown; is_income?: boolean; paid?: boolean; paid_on?: string | null;
+    }[];
+    assets: Asset[];
+    depreciationByAsset: { assetId: string; charge: number }[];
+    periodEndISO: string;
+}
+
+/**
+ * Builds the journal. Sales are posted from the labour and parts lines with the
+ * discount as a contra-revenue debit, so the three net to the invoice total and
+ * receivables carry exactly what the customer owes.
+ */
+export function buildJournal(src: JournalSources): JournalEntry[] {
+    const entries: JournalEntry[] = [];
+
+    for (const l of src.jobLabour) {
+        const amt = round2(n(l.hours) * n(l.hourly_rate_lkr));
+        if (amt === 0) continue;
+        entries.push({
+            id: `j-lab-${l.id}`, date: l.created_at,
+            narrative: `Labour — ${l.description || 'service'}`,
+            lines: [dr(ACCOUNTS.RECEIVABLES, amt), cr(ACCOUNTS.REV_LABOUR, amt)],
+        });
+    }
+
+    for (const p of src.jobParts) {
+        const qty = n(p.quantity);
+        const sale = round2(qty * n(p.price_at_time_lkr));
+        const name = p.partName || p.custom_name || 'part';
+        if (sale !== 0) {
+            entries.push({
+                id: `j-psale-${p.id}`, date: p.created_at,
+                narrative: `Parts sold — ${name}`,
+                lines: [dr(ACCOUNTS.RECEIVABLES, sale), cr(ACCOUNTS.REV_PARTS, sale)],
+            });
+        }
+        const cost = round2(qty * n(p.cost_at_time_lkr));
+        if (cost !== 0) {
+            entries.push({
+                id: `j-pcost-${p.id}`, date: p.created_at,
+                narrative: `Parts consumed — ${name}`,
+                lines: [dr(ACCOUNTS.COGS, cost), cr(ACCOUNTS.STOCK, cost)],
+            });
+        }
+    }
+
+    for (const inv of src.invoicesFull) {
+        const discount = round2(n(inv.discount_lkr));
+        if (discount > 0) {
+            entries.push({
+                id: `j-disc-${inv.id}`, date: inv.created_at,
+                narrative: 'Discount allowed',
+                lines: [dr(ACCOUNTS.DISCOUNTS, discount), cr(ACCOUNTS.RECEIVABLES, discount)],
+            });
+        }
+        // Settlement is its own entry on its own date — that separation is what
+        // makes the books accrual rather than cash.
+        if (inv.status === 'Paid') {
+            const amt = round2(n(inv.total_amount_lkr));
+            if (amt !== 0) {
+                entries.push({
+                    id: `j-rcpt-${inv.id}`,
+                    date: inv.paid_on || inv.created_at,
+                    narrative: 'Invoice settled',
+                    lines: [dr(ACCOUNTS.BANK, amt), cr(ACCOUNTS.RECEIVABLES, amt)],
+                });
+            }
+        }
+    }
+
+    for (const m of src.manualFull) {
+        const amt = round2(Math.abs(n(m.amount_lkr)));
+        if (amt === 0) continue;
+        const label = m.description || m.category || 'entry';
+        if (m.is_income) {
+            entries.push({
+                id: `j-oi-${m.id}`, date: m.date, narrative: `Other income — ${label}`,
+                lines: [dr(ACCOUNTS.BANK, amt), cr(ACCOUNTS.REV_OTHER, amt)],
+            });
+            continue;
+        }
+        const buysStock = (m.category || '') === STOCK_PURCHASE_CATEGORY;
+        const debitAccount = buysStock ? ACCOUNTS.STOCK : opexAccount(m.category || 'Other');
+        const settled = m.paid !== false;
+        entries.push({
+            id: `j-exp-${m.id}`, date: m.date,
+            narrative: buysStock ? `Parts purchased into stock — ${label}` : `Expense — ${label}`,
+            lines: [dr(debitAccount, amt), settled ? cr(ACCOUNTS.BANK, amt) : cr(ACCOUNTS.PAYABLES, amt)],
+        });
+        // A bill entered unpaid and settled later needs the second entry too.
+        if (!settled && m.paid_on) {
+            entries.push({
+                id: `j-billpay-${m.id}`, date: m.paid_on, narrative: `Paid supplier — ${label}`,
+                lines: [dr(ACCOUNTS.PAYABLES, amt), cr(ACCOUNTS.BANK, amt)],
+            });
+        }
+    }
+
+    for (const a of src.assets) {
+        const cost = round2(n(a.cost_lkr));
+        if (cost === 0) continue;
+        entries.push({
+            id: `j-asset-${a.id}`, date: a.purchase_date, narrative: `Asset purchased — ${a.name}`,
+            lines: [dr(ACCOUNTS.FIXED_ASSETS, cost), cr(ACCOUNTS.BANK, cost)],
+        });
+    }
+
+    for (const d of src.depreciationByAsset) {
+        if (d.charge === 0) continue;
+        entries.push({
+            id: `j-dep-${d.assetId}`, date: src.periodEndISO, narrative: 'Depreciation for the period',
+            lines: [dr(ACCOUNTS.DEPRECIATION, d.charge), cr(ACCOUNTS.ACC_DEP, d.charge)],
+        });
+    }
+
+    return entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+export interface TrialBalanceRow {
+    account: Account;
+    debit: number;
+    credit: number;
+}
+
+export interface TrialBalance {
+    rows: TrialBalanceRow[];
+    totalDebits: number;
+    totalCredits: number;
+    /** Zero when the books are internally consistent. */
+    outOfBalance: number;
+    balanced: boolean;
+}
+
+/**
+ * Aggregates the journal into account balances up to `asOf`. Income and expense
+ * accounts are restricted to the period; balance-sheet accounts accumulate from
+ * the beginning, because a balance is a position rather than a flow.
+ */
+export function trialBalance(
+    journal: JournalEntry[],
+    periodStart: Date,
+    periodEnd: Date,
+    opening: { account: Account; amount: number }[] = [],
+): TrialBalance {
+    const totals = new Map<string, { account: Account; net: number }>();
+    const add = (account: Account, amount: number) => {
+        const key = `${account.code}:${account.name}`;
+        const cur = totals.get(key) || { account, net: 0 };
+        cur.net = round2(cur.net + amount);
+        totals.set(key, cur);
+    };
+
+    for (const o of opening) add(o.account, o.amount);
+
+    for (const entry of journal) {
+        const d = new Date(entry.date);
+        if (d > periodEnd) continue;
+        for (const line of entry.lines) {
+            const isFlow = line.account.type === 'income' || line.account.type === 'expense';
+            if (isFlow && d < periodStart) continue;
+            add(line.account, line.amount);
+        }
+    }
+
+    const rows: TrialBalanceRow[] = [...totals.values()]
+        .filter(t => Math.abs(t.net) >= 0.005)
+        .map(t => ({
+            account: t.account,
+            debit: t.net > 0 ? round2(t.net) : 0,
+            credit: t.net < 0 ? round2(-t.net) : 0,
+        }))
+        .sort((a, b) => a.account.code.localeCompare(b.account.code) || a.account.name.localeCompare(b.account.name));
+
+    const totalDebits = round2(rows.reduce((t, r) => t + r.debit, 0));
+    const totalCredits = round2(rows.reduce((t, r) => t + r.credit, 0));
+    const outOfBalance = round2(totalDebits - totalCredits);
+
+    return { rows, totalDebits, totalCredits, outOfBalance, balanced: Math.abs(outOfBalance) < 1 };
+}

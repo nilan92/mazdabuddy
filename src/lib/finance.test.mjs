@@ -1,6 +1,6 @@
 // node src/lib/finance.test.mjs
 import assert from 'node:assert/strict';
-import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf } from './finance.ts';
+import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf, buildJournal, trialBalance, ACCOUNTS } from './finance.ts';
 
 const FY_START = new Date(2026, 3, 1);   // 1 Apr 2026
 const FY_END = new Date(2027, 2, 31, 23, 59, 59);
@@ -133,5 +133,89 @@ assert.equal(aged.byBucket['1-30'], 2000);
 assert.equal(aged.byBucket['90+'], 5000);
 assert.equal(aged.overdue, 5000, 'only past 30 days counts as worth chasing');
 assert.equal(aged.items[0].reference, 'INV-3', 'oldest first — that is what gets chased');
+
+// ---- double entry ----------------------------------------------------------
+const invoicesFull = [
+  { id: 'v1', created_at: '2026-06-10T00:00:00Z', total_amount_lkr: 18000, discount_lkr: 2000, status: 'Paid', paid_on: '2026-06-20' },
+  { id: 'v2', created_at: '2026-07-01T00:00:00Z', total_amount_lkr: 5000, discount_lkr: 0, status: 'Unpaid' },
+];
+const manualFull = [
+  { id: 'm1', date: '2026-05-02', description: 'Electricity', category: 'Utilities', amount_lkr: 12000, paid: true },
+  { id: 'm2', date: '2026-05-20', description: 'Rent', category: 'Rent', amount_lkr: 40000, paid: true },
+  { id: 'm3', date: '2026-06-15', description: 'Scrap metal', category: 'Scrap', amount_lkr: 7000, is_income: true },
+  { id: 'm5', date: '2026-08-01', description: 'Pads restock', category: 'Parts purchases', amount_lkr: 30000, paid: false },
+];
+const jAssets = [{ id: 'a1', name: 'Hoist', category: 'equipment', purchase_date: '2026-04-01',
+  cost_lkr: 450000, useful_life_years: 10, residual_lkr: 0 }];
+
+const journal = buildJournal({
+  ...sources, invoicesFull, manualFull, assets: jAssets,
+  depreciationByAsset: [{ assetId: 'a1', charge: 45000 }],
+  periodEndISO: '2027-03-31',
+});
+
+// The defining property: every entry nets to zero.
+for (const e of journal) {
+  const net = e.lines.reduce((t, l) => t + l.amount, 0);
+  assert.ok(Math.abs(net) < 0.005, `entry ${e.id} does not balance: ${net}`);
+}
+
+const tb = trialBalance(journal, FY_START, FY_END);
+assert.ok(tb.balanced, `trial balance out by ${tb.outOfBalance}`);
+assert.equal(tb.outOfBalance, 0);
+assert.equal(tb.totalDebits, tb.totalCredits);
+
+const bal = (code, name) => {
+  const r = tb.rows.find(r => r.account.code === code && (!name || r.account.name === name));
+  return r ? r.debit - r.credit : 0;
+};
+
+// Receivables: labour 13000 + parts 12000 - discount 2000 - receipt 18000 = 5000,
+// which is exactly the one invoice still unpaid.
+assert.equal(bal('1200'), 5000, 'receivables equal the unpaid invoice');
+assert.equal(bal('2000'), -30000, 'the unpaid restock sits in payables as a credit');
+assert.equal(bal('4000'), -13000, 'labour revenue is a credit balance');
+assert.equal(bal('4030'), 2000, 'discounts allowed is a debit, contra to revenue');
+assert.equal(bal('1000'), 450000, 'asset at cost');
+assert.equal(bal('1010'), -45000, 'accumulated depreciation is a credit');
+assert.equal(bal('6900'), 45000, 'depreciation charged');
+
+// Revenue net of discount must equal what was actually invoiced.
+assert.equal(-bal('4000') - bal('4010') - bal('4030'), 23000, 'net revenue ties to invoice totals');
+
+// Buying parts is not an expense — it debits Stock, and only becomes a cost
+// when the part is fitted. Without this the Stock account only ever received
+// credits and ran negative.
+const stockAcct = tb.rows.find(r => r.account.code === '1100');
+assert.ok(stockAcct, 'stock account exists');
+assert.equal(bal('1100'), 30000 - 6900,
+  'restock 30,000 debited to stock, less 6,900 of parts consumed');
+assert.equal(tb.rows.find(r => r.account.name === 'Parts purchases'), undefined,
+  'a parts purchase is not an operating expense');
+
+// A bill settled later produces the second entry, clearing the payable.
+const settledLater = buildJournal({
+  ...sources, invoicesFull, assets: [], depreciationByAsset: [], periodEndISO: '2027-03-31',
+  manualFull: manualFull.map(m => m.id === 'm5' ? { ...m, paid_on: '2026-09-05' } : m),
+});
+const tb2 = trialBalance(settledLater, FY_START, FY_END);
+assert.ok(tb2.balanced);
+const pay2 = tb2.rows.find(r => r.account.code === '2000');
+assert.equal(pay2, undefined, 'payable is cleared once the bill is paid');
+
+// Opening balances participate and must keep it balanced.
+const tb3 = trialBalance(journal, FY_START, FY_END, [
+  { account: ACCOUNTS.BANK, amount: 500000 },
+  { account: ACCOUNTS.CAPITAL, amount: -100000 },
+  { account: ACCOUNTS.RETAINED, amount: -400000 },
+]);
+assert.ok(tb3.balanced, `with opening balances, out by ${tb3.outOfBalance}`);
+
+// Expenses before the period are excluded, but a balance carried into it is not.
+const tbLate = trialBalance(journal, new Date(2026, 7, 1), FY_END);
+assert.equal(tbLate.rows.find(r => r.account.name === 'Rent'), undefined,
+  'May rent falls outside an August-onward period');
+assert.ok(tbLate.rows.some(r => r.account.code === '1000'),
+  'the asset is still on the balance sheet even though it was bought earlier');
 
 console.log('ok');
