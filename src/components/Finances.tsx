@@ -13,7 +13,7 @@ import { downloadCSV } from '../lib/csv';
 import { fyStart, fyEnd, fyLabel, toISODate, describePeriod } from '../lib/fiscal';
 import {
     buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
-    buildJournal, trialBalance, ACCOUNTS,
+    buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow,
     type LedgerEntry, type Asset, type AgedItem,
 } from '../lib/finance';
 import { waMeUrl } from '../lib/whatsapp';
@@ -232,14 +232,35 @@ export const Finances = () => {
         periodEndISO: toISODate(period.end),
     }), [raw, schedules, period.end]);
 
+    /* Consuming a part credits Stock. With no opening figure and no recorded
+       purchases the account only receives credits and the balance sheet reports
+       negative inventory, which cannot exist. The parts list knows the real
+       closing valuation, so the opening figure is derived from it. */
+    const stockOpeningEntered = raw.positions.some(p => p.key === 'stock_opening');
+    const openingStock = stockOpeningEntered
+        ? (positionsMap.stock_opening || 0)
+        : deriveOpeningStock(raw.stock, journal, period.start, period.end);
+
     const trial = useMemo(() => trialBalance(journal, period.start, period.end, [
         { account: ACCOUNTS.BANK, amount: positionsMap.bank || 0 },
         { account: ACCOUNTS.CASH, amount: positionsMap.cash || 0 },
-        { account: ACCOUNTS.STOCK, amount: positionsMap.stock_opening || 0 },
+        { account: ACCOUNTS.STOCK, amount: openingStock },
         { account: ACCOUNTS.LOANS, amount: -(positionsMap.loans || 0) },
         { account: ACCOUNTS.CAPITAL, amount: -(positionsMap.share_capital || 0) },
-        { account: ACCOUNTS.RETAINED, amount: -(positionsMap.retained_earnings_bf || 0) },
-    ]), [journal, period, positionsMap]);
+        // Opening stock the tenant did not supply is derived, and its contra has
+        // to go somewhere or the books open out of balance by that amount.
+        // Stock held at the start was funded by past profits, so it belongs in
+        // opening reserves — the same place a bookkeeper would put it.
+        { account: ACCOUNTS.RETAINED,
+          amount: -((positionsMap.retained_earnings_bf || 0) + (stockOpeningEntered ? 0 : openingStock)) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    ]), [journal, period, positionsMap, openingStock]);
+
+    const cash = useMemo(() => cashFlow(
+        journal, period.start, period.end,
+        positionsMap.bank || 0, positionsMap.cash || 0,
+        !raw.positions.some(p => ['bank', 'cash'].includes(p.key)),
+    ), [journal, period, positionsMap, raw.positions]);
 
     /* Closing bank and cash are computed — opening balance plus every receipt
        and payment the journal posted — rather than typed in. */
@@ -488,6 +509,8 @@ export const Finances = () => {
             const doc = buildAuditPack({
                 sections,
                 trial,
+                journal,
+                cash,
                 company: { name: tenant?.name || 'Workshop', address: tenant?.address, phone: tenant?.phone },
                 startISO: toISODate(period.start), endISO: toISODate(period.end),
                 pl, schedules, balance,
@@ -626,7 +649,7 @@ export const Finances = () => {
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-white mb-1">Finances</h1>
+                    <h1 className="text-3xl font-bold text-white mb-1">Finance</h1>
                     <p className="text-slate-400 text-sm">{periodLabel}</p>
                 </div>
                 <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">

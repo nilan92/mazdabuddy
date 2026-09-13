@@ -1,6 +1,6 @@
 // node src/lib/finance.test.mjs
 import assert from 'node:assert/strict';
-import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf, buildJournal, trialBalance, ACCOUNTS } from './finance.ts';
+import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf, buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow } from './finance.ts';
 
 const FY_START = new Date(2026, 3, 1);   // 1 Apr 2026
 const FY_END = new Date(2027, 2, 31, 23, 59, 59);
@@ -217,5 +217,60 @@ assert.equal(tbLate.rows.find(r => r.account.name === 'Rent'), undefined,
   'May rent falls outside an August-onward period');
 assert.ok(tbLate.rows.some(r => r.account.code === '1000'),
   'the asset is still on the balance sheet even though it was bought earlier');
+
+// ---- derived opening stock -------------------------------------------------
+// The production case: parts consumed, nothing recorded as purchased, no
+// opening figure — the Stock account goes negative, which is impossible.
+const consumeOnly = buildJournal({
+  ...sources, invoicesFull: [], manualFull: [], assets: [], depreciationByAsset: [],
+  periodEndISO: '2027-03-31',
+});
+const tbNeg = trialBalance(consumeOnly, FY_START, FY_END);
+const stockRow = tbNeg.rows.find(r => r.account.code === '1100');
+assert.equal(stockRow.credit, 6900, 'without an opening figure stock is a pure credit');
+
+// Deriving the opening figure from the physical count fixes it.
+const physical = 50000;
+const openingStock = deriveOpeningStock(physical, consumeOnly, FY_START, FY_END);
+assert.equal(openingStock, 56900, 'physical 50,000 + 6,900 consumed');
+const tbFixed = trialBalance(consumeOnly, FY_START, FY_END, [
+  { account: ACCOUNTS.STOCK, amount: openingStock },
+]);
+const fixedStock = tbFixed.rows.find(r => r.account.code === '1100');
+assert.equal(fixedStock.debit, physical, 'closing stock now equals the shelf');
+assert.equal(fixedStock.credit, 0, 'and is never negative');
+
+// A derived opening balance still has to be double-sided. Posting the stock
+// debit alone throws the books out by exactly that amount.
+const lopsided = trialBalance(consumeOnly, FY_START, FY_END, [
+  { account: ACCOUNTS.STOCK, amount: openingStock },
+]);
+assert.equal(lopsided.outOfBalance, openingStock, 'a one-sided opening entry does not balance');
+const withContra = trialBalance(consumeOnly, FY_START, FY_END, [
+  { account: ACCOUNTS.STOCK, amount: openingStock },
+  { account: ACCOUNTS.RETAINED, amount: -openingStock },
+]);
+assert.ok(withContra.balanced, `with its contra the books balance, out by ${withContra.outOfBalance}`);
+
+assert.equal(deriveOpeningStock(0, consumeOnly, FY_START, FY_END), 6900);
+assert.ok(deriveOpeningStock(-999, consumeOnly, FY_START, FY_END) >= 0, 'never returns negative');
+
+// ---- cash flow -------------------------------------------------------------
+const cf = cashFlow(journal, FY_START, FY_END, 100000, 5000);
+assert.equal(cf.opening, 105000);
+assert.equal(cf.receiptsFromCustomers, 18000, 'the one settled invoice');
+assert.equal(cf.otherReceipts, 7000, 'scrap sale');
+assert.equal(cf.paymentsForExpenses, 52000, 'rent + electricity, both paid');
+assert.equal(cf.assetPurchases, 450000, 'the hoist');
+assert.equal(cf.paymentsToSuppliers, 0, 'the restock is unpaid, so no cash left for it');
+assert.equal(cf.closing, round2(105000 + 18000 + 7000 - 52000 - 450000));
+// Closing cash must agree with the bank and cash accounts on the trial balance.
+const tbCash = trialBalance(journal, FY_START, FY_END, [
+  { account: ACCOUNTS.BANK, amount: 100000 }, { account: ACCOUNTS.CASH, amount: 5000 },
+]);
+const bankRow = tbCash.rows.find(r => r.account.code === '1300');
+const cashRow = tbCash.rows.find(r => r.account.code === '1310');
+const tbClosing = round2((bankRow ? bankRow.debit - bankRow.credit : 0) + (cashRow ? cashRow.debit - cashRow.credit : 0));
+assert.equal(cf.closing, tbClosing, 'cash flow ties to the balance sheet');
 
 console.log('ok');

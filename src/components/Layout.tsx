@@ -37,7 +37,7 @@ export const Layout = ({ children }: LayoutProps) => {
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
     { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
 
-    { to: '/finances', icon: PieChart, label: 'Finances', roles: ['admin', 'manager', 'accountant'] },
+    { to: '/finances', icon: PieChart, label: 'Finance', roles: ['admin', 'manager', 'accountant'] },
     { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager'] },
   ];
 

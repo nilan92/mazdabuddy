@@ -72,8 +72,15 @@ const inRange = (iso: string, start: Date, end: Date) => {
     return d >= start && d <= end;
 };
 
-/** Money is rounded to cents at the boundary so repeated sums cannot drift. */
-export const round2 = (v: number): number => Math.round(v * 100) / 100;
+/**
+ * Money is rounded to cents at the boundary so repeated sums cannot drift.
+ * Negative zero is normalised: -0 would otherwise survive a subtraction and
+ * print as "(0.00)" in a statement, and it fails a strict equality against 0.
+ */
+export const round2 = (v: number): number => {
+    const r = Math.round(v * 100) / 100;
+    return r === 0 ? 0 : r;
+};
 
 /**
  * Straight-line: (cost − residual) / life, charged from the purchase date and
@@ -585,4 +592,98 @@ export function trialBalance(
     const outOfBalance = round2(totalDebits - totalCredits);
 
     return { rows, totalDebits, totalCredits, outOfBalance, balanced: Math.abs(outOfBalance) < 1 };
+}
+
+/* ------------------------------------------------- stock and cash movement */
+
+/** Net movement on one account across the period, debits positive. */
+function movementOn(journal: JournalEntry[], code: string, start: Date, end: Date): number {
+    let net = 0;
+    for (const e of journal) {
+        const d = new Date(e.date);
+        if (d < start || d > end) continue;
+        for (const l of e.lines) if (l.account.code === code) net += l.amount;
+    }
+    return round2(net);
+}
+
+/**
+ * Works out what stock must have been on the shelf at the start of the period.
+ *
+ * Consuming a part credits Stock. If the workshop never recorded buying the
+ * parts — no opening figure, nothing filed under "Parts purchases" — the account
+ * only ever receives credits and the balance sheet reports negative inventory,
+ * which cannot exist. The parts list knows the real closing valuation, so the
+ * opening figure is the one that reconciles it:
+ *
+ *     opening = physical closing − net movement during the period
+ *
+ * Derived, not invented: it is the only value consistent with a stock count the
+ * system already maintains. The statements label it as derived and ask for the
+ * real figure, because a wrong opening balance misstates opening equity.
+ */
+export function deriveOpeningStock(
+    physicalClosingStock: number,
+    journal: JournalEntry[],
+    start: Date,
+    end: Date,
+): number {
+    return Math.max(0, round2(physicalClosingStock - movementOn(journal, ACCOUNTS.STOCK.code, start, end)));
+}
+
+export interface CashFlow {
+    opening: number;
+    receiptsFromCustomers: number;
+    otherReceipts: number;
+    paymentsForExpenses: number;
+    paymentsToSuppliers: number;
+    assetPurchases: number;
+    netMovement: number;
+    closing: number;
+    /** True when no opening bank or cash figure was supplied. */
+    openingAssumed: boolean;
+}
+
+/**
+ * Direct-method cash flow, built from the actual bank and cash postings rather
+ * than reconstructed from profit. Every line traces to a transaction, which is
+ * what makes it checkable — and easier to follow than the indirect method for
+ * someone learning to read their own accounts.
+ */
+export function cashFlow(
+    journal: JournalEntry[],
+    start: Date, end: Date,
+    openingBank = 0, openingCash = 0,
+    openingAssumed = false,
+): CashFlow {
+    const opening = round2(openingBank + openingCash);
+    const bucket = { rcpt: 0, oi: 0, exp: 0, billpay: 0, asset: 0 };
+
+    for (const e of journal) {
+        const d = new Date(e.date);
+        if (d < start || d > end) continue;
+        const cashMoved = e.lines
+            .filter(l => l.account.code === ACCOUNTS.BANK.code || l.account.code === ACCOUNTS.CASH.code)
+            .reduce((t, l) => t + l.amount, 0);
+        if (cashMoved === 0) continue;
+
+        if (e.id.startsWith('j-rcpt-')) bucket.rcpt += cashMoved;
+        else if (e.id.startsWith('j-oi-')) bucket.oi += cashMoved;
+        else if (e.id.startsWith('j-billpay-')) bucket.billpay += cashMoved;
+        else if (e.id.startsWith('j-asset-')) bucket.asset += cashMoved;
+        else bucket.exp += cashMoved;
+    }
+
+    const netMovement = round2(bucket.rcpt + bucket.oi + bucket.exp + bucket.billpay + bucket.asset);
+    return {
+        opening,
+        receiptsFromCustomers: round2(bucket.rcpt),
+        otherReceipts: round2(bucket.oi),
+        paymentsForExpenses: round2(-bucket.exp),
+        paymentsToSuppliers: round2(-bucket.billpay),
+        assetPurchases: round2(-bucket.asset),
+        netMovement,
+        closing: round2(opening + netMovement),
+        openingAssumed,
+    };
 }
