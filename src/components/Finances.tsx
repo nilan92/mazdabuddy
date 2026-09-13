@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { downloadCSV } from '../lib/csv';
+import { fyStart, fyEnd, toISODate, describePeriod } from '../lib/fiscal';
 import jsPDF from 'jspdf';
 import { urlToBase64 } from '../utils/pdfHelpers';
 
@@ -43,6 +44,7 @@ export const Finances = () => {
     });
     const [generatingReport, setGeneratingReport] = useState(false);
     const [allJobs, setAllJobs] = useState<any[]>([]);
+    const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
 
     const fetchFinances = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
@@ -65,7 +67,13 @@ export const Finances = () => {
                 .abortSignal(signal!);
             if (invErr) console.warn('[Finances] Invoice revenue fetch error:', invErr);
             const jobRevenue = (invoiceRows || []).reduce((sum, i) => sum + (Number(i.total_amount_lkr) || 0), 0);
-            
+
+            // Kept as rows, not just a total: the report has to filter revenue by
+            // period, and it previously fell back to job_cards.estimated_cost_lkr
+            // to do that — a column that is null on almost every job, which is
+            // why every report showed revenue of zero.
+            setInvoiceRows(invoiceRows || []);
+
             // Store all jobs for report generation
             setAllJobs(jobs || []);
 
@@ -242,19 +250,17 @@ export const Finances = () => {
         
         if (type === 'monthly') {
             // Current month
-            const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            // toISODate, not toISOString: at UTC+5:30 the latter rolls local
+            // midnight back to the previous day, so ranges started a day early.
             setReportDateRange({
-                startDate: startDate.toISOString().split('T')[0],
-                endDate: endDate.toISOString().split('T')[0]
+                startDate: toISODate(new Date(now.getFullYear(), now.getMonth(), 1)),
+                endDate: toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0))
             });
         } else if (type === 'annual') {
-            // Current year
-            const startDate = new Date(now.getFullYear(), 0, 1);
-            const endDate = new Date(now.getFullYear(), 11, 31);
+            // The financial year, 1 April – 31 March, not the calendar year.
             setReportDateRange({
-                startDate: startDate.toISOString().split('T')[0],
-                endDate: endDate.toISOString().split('T')[0]
+                startDate: toISODate(fyStart(now)),
+                endDate: toISODate(fyEnd(now))
             });
         }
         // For custom, user will set dates manually
@@ -277,7 +283,12 @@ export const Finances = () => {
             return expDate >= start && expDate <= end;
         });
 
-        const revenue = filteredJobs.reduce((sum, j) => sum + (Number(j.estimated_cost_lkr) || 0), 0);
+        // Revenue is what was invoiced in the period. The old code summed
+        // job_cards.estimated_cost_lkr, which is optional and null on virtually
+        // every job, so the report reported zero revenue no matter the period.
+        const revenue = invoiceRows
+            .filter(i => { const d = new Date(i.created_at); return d >= start && d <= end; })
+            .reduce((sum, i) => sum + (Number(i.total_amount_lkr) || 0), 0);
         const totalExpenses = filteredExpenses
             .filter(e => !e.is_income)
             .reduce((sum, e) => sum + (Number(e.amount_lkr) || 0), 0);
@@ -342,9 +353,7 @@ export const Finances = () => {
             // Report Period
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            const periodText = reportType === 'monthly' ? 'Monthly Report' : 
-                              reportType === 'annual' ? 'Annual Report' : 'Custom Period Report';
-            doc.text(`${periodText}: ${reportDateRange.startDate} to ${reportDateRange.endDate}`, 105, 38, { align: 'center' });
+            doc.text(describePeriod(reportDateRange.startDate, reportDateRange.endDate), 105, 38, { align: 'center' });
             doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 105, 44, { align: 'center' });
             
             // Summary Section
@@ -433,7 +442,7 @@ export const Finances = () => {
             yPos += 5;
             doc.setFont('helvetica', 'normal');
             
-            reportData.filteredExpenses.forEach((exp) => { // Limit to 30 for PDF
+            reportData.filteredExpenses.forEach((exp) => {
                 if (yPos > 280) {
                     doc.addPage();
                     yPos = 20;
@@ -444,19 +453,15 @@ export const Finances = () => {
                 doc.text(desc, 45, yPos);
                 doc.text(exp.category || 'unknown', 120, yPos);
                 
-                const displayAmt = (exp.amount_lkr === 0 && exp.display_amount) 
-                    ? `+ ${exp.display_amount.toLocaleString()}` 
-                    : exp.amount_lkr.toLocaleString();
-                
-                doc.text(displayAmt, 160, yPos);
+                // One convention for the whole column: income carries a +, money
+                // going out carries a -. Previously only the derived labour and
+                // part-margin rows were signed and everything else was bare, so
+                // the column mixed two conventions.
+                const isIncome = exp.is_income || (exp.amount_lkr === 0 && exp.display_amount);
+                const magnitude = Number(exp.display_amount ?? exp.amount_lkr) || 0;
+                doc.text(`${isIncome ? '+' : '-'} ${magnitude.toLocaleString()}`, 160, yPos);
                 yPos += 6;
             });
-            
-            if (reportData.filteredExpenses.length > 30) {
-                yPos += 5;
-                doc.setFont('helvetica', 'italic');
-                doc.text(`... and ${reportData.filteredExpenses.length - 30} more expenses`, 20, yPos);
-            }
             
             // Footer
             const pageCount = doc.getNumberOfPages();
@@ -486,7 +491,7 @@ export const Finances = () => {
         <div className="p-2 space-y-8 overflow-x-hidden">
             {loading && (
                 <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-slate-900/90 border border-cyan-500/20 px-4 py-2 rounded-full backdrop-blur shadow-xl animate-fade-in">
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-500 border-t-transparent"></div>
+                    <div className="animate-spin shrink-0 rounded-full h-4 w-4 border-2 border-cyan-500 border-t-transparent"></div>
                     <span className="text-cyan-400 text-xs font-bold uppercase tracking-widest">Updating Finances...</span>
                 </div>
             )}
@@ -517,7 +522,7 @@ export const Finances = () => {
                         className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm"
                         title="Income that did not come from a job — scrap metal, waste oil"
                     >
-                        <Plus size={16} /> <span className="hidden sm:inline">Add </span>Revenue
+                        <Plus size={16} /> <span className="hidden sm:inline">Other </span>Income
                     </button>
                     <button
                         onClick={() => { setEntryKind('expense'); setExpenseForm(f => ({ ...f, category: 'parts' })); setIsExpenseModalOpen(true); }}
