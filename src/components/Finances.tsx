@@ -14,7 +14,7 @@ import { fyStart, fyEnd, fyLabel, toISODate, describePeriod } from '../lib/fisca
 import {
     buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
     buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow,
-    type LedgerEntry, type Asset, type AgedItem,
+    type LedgerEntry, type Asset, type AgedItem, type ProfitAndLoss,
 } from '../lib/finance';
 import { waMeUrl } from '../lib/whatsapp';
 import { sendSMS } from '../lib/sms';
@@ -53,6 +53,111 @@ const short = (v: number) =>
 
 type PeriodKind = 'month' | 'fy' | 'all' | 'custom';
 type Tab = 'all' | 'income' | 'expenses' | 'owed' | 'assets';
+
+/*
+ * Charts live at module scope, not inside Finances.
+ *
+ * Declared inside the component they were a new function on every render, so
+ * React saw a different component type each time and tore the whole subtree
+ * down and rebuilt it — on every keystroke in the search box. Unstable
+ * component identity also makes reconciliation errors far harder to read,
+ * which matters for a page that has already thrown one in production.
+ */
+const IncomeMix = ({ pl }: { pl: ProfitAndLoss }) => {
+    const total = pl.revenueLabour + pl.revenueParts + pl.revenueOther;
+    if (total <= 0) return <p className="text-slate-600 text-sm italic py-6 text-center">No income in this period.</p>;
+    const segs = [
+        { label: 'Labour', value: pl.revenueLabour, color: '#06b6d4' },
+        { label: 'Parts', value: pl.revenueParts, color: '#8b5cf6' },
+        { label: 'Other', value: pl.revenueOther, color: '#f59e0b' },
+    ].filter(s => s.value > 0);
+    let x = 0;
+    return (
+        <div>
+            <svg viewBox="0 0 100 10" className="w-full h-6 rounded overflow-hidden" preserveAspectRatio="none">
+                {segs.map(s => {
+                    const w = (s.value / total) * 100;
+                    const el = <rect key={s.label} x={x} y={0} width={w} height={10} fill={s.color} />;
+                    x += w;
+                    return el;
+                })}
+            </svg>
+            <div className="mt-4 space-y-2">
+                {segs.map(s => (
+                    <div key={s.label} className="flex items-center gap-2 text-sm">
+                        <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
+                        <span className="text-slate-300 flex-1 min-w-0 truncate">{s.label}</span>
+                        <span className="text-slate-500 text-xs shrink-0">{((s.value / total) * 100).toFixed(0)}%</span>
+                        <span className="font-mono text-white text-xs sm:text-sm shrink-0 tabular-nums">{lkr(s.value)}</span>
+                    </div>
+                ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
+                Labour is time you sold; parts is goods you resold. Labour usually carries the
+                better margin — parts cost you {pl.revenueParts > 0 ? `${((pl.costOfParts / pl.revenueParts) * 100).toFixed(0)}%` : '—'} of
+                what you charged for them.
+            </p>
+        </div>
+    );
+};
+
+const TrendChart = ({ monthly }: { monthly: { label: string; income: number; expense: number }[] }) => {
+    if (monthly.length === 0) return <p className="text-slate-600 text-sm italic py-6 text-center">Nothing to chart yet.</p>;
+    const max = Math.max(...monthly.flatMap(m => [m.income, m.expense]), 1);
+    const bw = 100 / monthly.length;
+    return (
+        <div>
+            <svg viewBox="0 0 100 46" className="w-full h-36" preserveAspectRatio="none">
+                <line x1="0" y1="40" x2="100" y2="40" stroke="#334155" strokeWidth="0.3" />
+                {monthly.map((m, i) => {
+                    const ih = (m.income / max) * 36, eh = (m.expense / max) * 36;
+                    const cx = i * bw;
+                    return (
+                        <g key={i}>
+                            <rect x={cx + bw * 0.18} y={40 - ih} width={bw * 0.28} height={ih} fill="#10b981" />
+                            <rect x={cx + bw * 0.52} y={40 - eh} width={bw * 0.28} height={eh} fill="#f43f5e" />
+                        </g>
+                    );
+                })}
+            </svg>
+            <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 mt-1">
+                {/* Past eight months the labels collide on a phone, so show
+                    every other one — the bars still carry the shape. */}
+                {monthly.map((m, i) => (
+                    <span key={i} className={monthly.length > 8 && i % 2 === 1 ? 'hidden sm:inline' : ''}>
+                        {m.label}
+                    </span>
+                ))}
+            </div>
+            <div className="flex gap-4 mt-3 text-xs">
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> <span className="text-slate-400">Income</span></span>
+                <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> <span className="text-slate-400">Expenses</span></span>
+                <span className="ml-auto text-slate-500">peak {short(max)}</span>
+            </div>
+        </div>
+    );
+};
+
+const ExpenseBars = ({ pl }: { pl: ProfitAndLoss }) => {
+    const cats = Object.entries(pl.expensesByCategory).sort((a, b) => b[1] - a[1]).slice(0, 7);
+    if (cats.length === 0) return <p className="text-slate-600 text-sm italic py-6 text-center">No operating expenses recorded.</p>;
+    const max = Math.max(...cats.map(c => c[1]));
+    return (
+        <div className="space-y-2.5">
+            {cats.map(([cat, amt]) => (
+                <div key={cat}>
+                    <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-300">{cat}</span>
+                        <span className="font-mono text-slate-400">{lkr(amt)}</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-rose-500/70 rounded-full" style={{ width: `${(amt / max) * 100}%` }} />
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
 
 export const Finances = () => {
     const { profile } = useAuth();
@@ -524,8 +629,11 @@ export const Finances = () => {
                 ledger: inPeriod,
                 positionsIncomplete,
             });
+            // No non-null assertion on the lookup: an unknown key would throw
+            // inside the download handler and the user would see nothing happen.
+            const only = sections.length === 1 ? STATEMENTS.find(x => x.key === sections[0]) : undefined;
             const name = sections.length === STATEMENTS.length ? 'Financial-Statements'
-                : sections.length === 1 ? STATEMENTS.find(x => x.key === sections[0])!.title.replace(/[^a-z0-9]+/gi, '-')
+                : only ? only.title.replace(/[^a-z0-9]+/gi, '-')
                 : 'Financial-Extracts';
             doc.save(`${name}-${toISODate(period.start)}-to-${toISODate(period.end)}.pdf`);
             toast('Statements downloaded.', 'success');
@@ -538,102 +646,6 @@ export const Finances = () => {
     };
 
     /* ----------------------------------------------------------------- chart */
-    const IncomeMix = () => {
-        const total = pl.revenueLabour + pl.revenueParts + pl.revenueOther;
-        if (total <= 0) return <p className="text-slate-600 text-sm italic py-6 text-center">No income in this period.</p>;
-        const segs = [
-            { label: 'Labour', value: pl.revenueLabour, color: '#06b6d4' },
-            { label: 'Parts', value: pl.revenueParts, color: '#8b5cf6' },
-            { label: 'Other', value: pl.revenueOther, color: '#f59e0b' },
-        ].filter(s => s.value > 0);
-        let x = 0;
-        return (
-            <div>
-                <svg viewBox="0 0 100 10" className="w-full h-6 rounded overflow-hidden" preserveAspectRatio="none">
-                    {segs.map(s => {
-                        const w = (s.value / total) * 100;
-                        const el = <rect key={s.label} x={x} y={0} width={w} height={10} fill={s.color} />;
-                        x += w;
-                        return el;
-                    })}
-                </svg>
-                <div className="mt-4 space-y-2">
-                    {segs.map(s => (
-                        <div key={s.label} className="flex items-center gap-2 text-sm">
-                            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: s.color }} />
-                            <span className="text-slate-300 flex-1 min-w-0 truncate">{s.label}</span>
-                            <span className="text-slate-500 text-xs shrink-0">{((s.value / total) * 100).toFixed(0)}%</span>
-                            <span className="font-mono text-white text-xs sm:text-sm shrink-0 tabular-nums">{lkr(s.value)}</span>
-                        </div>
-                    ))}
-                </div>
-                <p className="text-[11px] text-slate-500 mt-3 leading-relaxed">
-                    Labour is time you sold; parts is goods you resold. Labour usually carries the
-                    better margin — parts cost you {pl.revenueParts > 0 ? `${((pl.costOfParts / pl.revenueParts) * 100).toFixed(0)}%` : '—'} of
-                    what you charged for them.
-                </p>
-            </div>
-        );
-    };
-
-    const TrendChart = () => {
-        if (monthly.length === 0) return <p className="text-slate-600 text-sm italic py-6 text-center">Nothing to chart yet.</p>;
-        const max = Math.max(...monthly.flatMap(m => [m.income, m.expense]), 1);
-        const bw = 100 / monthly.length;
-        return (
-            <div>
-                <svg viewBox="0 0 100 46" className="w-full h-36" preserveAspectRatio="none">
-                    <line x1="0" y1="40" x2="100" y2="40" stroke="#334155" strokeWidth="0.3" />
-                    {monthly.map((m, i) => {
-                        const ih = (m.income / max) * 36, eh = (m.expense / max) * 36;
-                        const cx = i * bw;
-                        return (
-                            <g key={i}>
-                                <rect x={cx + bw * 0.18} y={40 - ih} width={bw * 0.28} height={ih} fill="#10b981" />
-                                <rect x={cx + bw * 0.52} y={40 - eh} width={bw * 0.28} height={eh} fill="#f43f5e" />
-                            </g>
-                        );
-                    })}
-                </svg>
-                <div className="flex justify-between text-[9px] sm:text-[10px] text-slate-500 mt-1">
-                    {/* Past eight months the labels collide on a phone, so show
-                        every other one — the bars still carry the shape. */}
-                    {monthly.map((m, i) => (
-                        <span key={i} className={monthly.length > 8 && i % 2 === 1 ? 'hidden sm:inline' : ''}>
-                            {m.label}
-                        </span>
-                    ))}
-                </div>
-                <div className="flex gap-4 mt-3 text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" /> <span className="text-slate-400">Income</span></span>
-                    <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-rose-500" /> <span className="text-slate-400">Expenses</span></span>
-                    <span className="ml-auto text-slate-500">peak {short(max)}</span>
-                </div>
-            </div>
-        );
-    };
-
-    const ExpenseBars = () => {
-        const cats = Object.entries(pl.expensesByCategory).sort((a, b) => b[1] - a[1]).slice(0, 7);
-        if (cats.length === 0) return <p className="text-slate-600 text-sm italic py-6 text-center">No operating expenses recorded.</p>;
-        const max = Math.max(...cats.map(c => c[1]));
-        return (
-            <div className="space-y-2.5">
-                {cats.map(([cat, amt]) => (
-                    <div key={cat}>
-                        <div className="flex justify-between text-xs mb-1">
-                            <span className="text-slate-300">{cat}</span>
-                            <span className="font-mono text-slate-400">{lkr(amt)}</span>
-                        </div>
-                        <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-rose-500/70 rounded-full" style={{ width: `${(amt / max) * 100}%` }} />
-                        </div>
-                    </div>
-                ))}
-            </div>
-        );
-    };
-
     /* ---------------------------------------------------------------- render */
     const card = 'bg-slate-900/50 border border-slate-800 rounded-2xl';
 
@@ -796,19 +808,19 @@ export const Finances = () => {
                     <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <Layers size={14} className="text-cyan-400" /> Where income comes from
                     </h3>
-                    <IncomeMix />
+                    <IncomeMix pl={pl} />
                 </div>
                 <div className={`${card} p-5`}>
                     <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <TrendingUp size={14} className="text-emerald-400" /> Income vs expenses by month
                     </h3>
-                    <TrendChart />
+                    <TrendChart monthly={monthly} />
                 </div>
                 <div className={`${card} p-5`}>
                     <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <TrendingDown size={14} className="text-rose-400" /> Biggest costs
                     </h3>
-                    <ExpenseBars />
+                    <ExpenseBars pl={pl} />
                 </div>
             </div>
 
