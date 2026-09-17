@@ -1021,7 +1021,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                 value: Number(row.discount_value) ? String(row.discount_value) : '',
                             })}
                             title="Edit line discount"
-                            className="flex items-center gap-0.5 px-2 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/25 active:bg-emerald-500/35 transition-colors touch-manipulation">
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 text-[11px] font-bold hover:bg-emerald-500/25 active:bg-emerald-500/35 transition-colors touch-manipulation shadow-sm shadow-emerald-500/10">
                             <Percent size={11} className="shrink-0" />
                             <span>{row.discount_type === 'percent' ? `-${row.discount_value}%` : `-${Number(row.discount_value).toLocaleString()}`}</span>
                         </button>
@@ -1035,7 +1035,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                             })}
                             title="Discount this line"
                             className={`flex items-center justify-center h-8 w-8 rounded-lg text-xs font-bold transition-colors touch-manipulation ${
-                                editing ? 'bg-brand text-slate-950 shadow-md shadow-brand/20' : 'text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/50 active:bg-slate-700'
+                                editing
+                                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30 font-black'
+                                    : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 hover:text-emerald-300 border border-emerald-500/30 active:bg-emerald-500/30'
                             }`}>
                             <Percent size={13} />
                         </button>
@@ -1067,7 +1069,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                     className="flex-1 min-w-[70px] bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-sm font-mono text-right focus:border-brand focus:outline-none" />
                 <div className="flex items-center gap-1.5 shrink-0">
                     <button onClick={saveLineDiscount}
-                        className="px-3 py-1.5 rounded-lg bg-brand text-slate-950 text-xs font-bold active:scale-95 transition-transform">Save</button>
+                        className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold active:scale-95 transition-all shadow-sm shadow-emerald-500/20">Save</button>
                     <button onClick={() => setLineDiscount(null)}
                         className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold active:scale-95 transition-transform">Cancel</button>
                 </div>
@@ -1389,7 +1391,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             </button>
                                                             <button
                                                                 type="submit"
-                                                                className="btn-brand px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-brand/20 active:scale-95 transition-transform"
+                                                                className="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold shadow-md shadow-sky-500/20 active:scale-95 transition-all"
                                                             >
                                                                 Save
                                                             </button>
@@ -1415,7 +1417,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                         type="button"
                                                                         onClick={() => handleStartEditPart(part)}
                                                                         title="Edit part"
-                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/50 active:bg-slate-700 transition-colors touch-manipulation shrink-0"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 hover:text-sky-300 border border-sky-500/30 active:bg-sky-500/30 transition-colors touch-manipulation shrink-0"
                                                                     >
                                                                         <Pencil size={13} />
                                                                     </button>
@@ -1423,7 +1425,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                         type="button"
                                                                         onClick={() => handleRemovePart(part.id)}
                                                                         title="Remove part"
-                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-800/90 hover:bg-rose-500/15 border border-slate-700/50 active:bg-rose-500/25 transition-colors touch-manipulation shrink-0"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/30 active:bg-rose-500/30 transition-colors touch-manipulation shrink-0"
                                                                     >
                                                                         <Trash2 size={13} />
                                                                     </button>
@@ -1572,7 +1574,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             </button>
                                                             <button
                                                                 type="submit"
-                                                                className="btn-brand px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-brand/20 active:scale-95 transition-transform"
+                                                                className="px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold shadow-md shadow-sky-500/20 active:scale-95 transition-all"
                                                             >
                                                                 Save
                                                             </button>
@@ -1596,7 +1598,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                         type="button"
                                                                         onClick={() => handleStartEditLabor(labor)}
                                                                         title="Edit labor"
-                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/50 active:bg-slate-700 transition-colors touch-manipulation shrink-0"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 hover:text-sky-300 border border-sky-500/30 active:bg-sky-500/30 transition-colors touch-manipulation shrink-0"
                                                                     >
                                                                         <Pencil size={13} />
                                                                     </button>
@@ -1604,7 +1606,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                         type="button"
                                                                         onClick={() => handleRemoveLabor(labor.id)}
                                                                         title="Remove labor"
-                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-800/90 hover:bg-rose-500/15 border border-slate-700/50 active:bg-rose-500/25 transition-colors touch-manipulation shrink-0"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/30 active:bg-rose-500/30 transition-colors touch-manipulation shrink-0"
                                                                     >
                                                                         <Trash2 size={13} />
                                                                     </button>
