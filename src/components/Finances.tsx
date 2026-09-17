@@ -1049,12 +1049,12 @@ export const Finances = () => {
                                 <Download size={15} />
                             </button>
                         </div>
-                    ) : (
+                    ) : tab === 'assets' ? (
                         <button onClick={() => setAssetModal(true)}
                             className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded-lg text-xs font-bold transition-colors">
                             <Plus size={14} /> Add asset
                         </button>
-                    )}
+                    ) : null}
                 </div>
 
                 {tab === 'suppliers' ? (
