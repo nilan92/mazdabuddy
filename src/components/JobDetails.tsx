@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent } from 'lucide-react';
+import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -74,6 +74,25 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const [laborForm, setLaborForm] = useState({ description: '', hours: '', hourly_rate_lkr: '5000', fixedAmount: '' });
     // Some work is priced flat (a service is 6,500 regardless of the clock).
     const [laborMode, setLaborMode] = useState<'hourly' | 'fixed'>('hourly');
+
+    // Line item editing state
+    const [editingPartId, setEditingPartId] = useState<string | null>(null);
+    const [editingPartForm, setEditingPartForm] = useState<{
+        custom_name: string;
+        quantity: number;
+        price_at_time_lkr: string;
+        cost_at_time_lkr: string;
+        is_custom: boolean;
+    }>({ custom_name: '', quantity: 1, price_at_time_lkr: '', cost_at_time_lkr: '', is_custom: false });
+
+    const [editingLaborId, setEditingLaborId] = useState<string | null>(null);
+    const [editingLaborForm, setEditingLaborForm] = useState<{
+        description: string;
+        is_fixed: boolean;
+        hours: string;
+        hourly_rate_lkr: string;
+        fixedAmount: string;
+    }>({ description: '', is_fixed: false, hours: '', hourly_rate_lkr: '', fixedAmount: '' });
 
     // Dirty state tracking
     const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
@@ -828,6 +847,119 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         else fetchJobDetails();
     };
 
+    const handleStartEditPart = (part: any) => {
+        setEditingLaborId(null);
+        setLineDiscount(null);
+        setEditingPartId(part.id);
+        setEditingPartForm({
+            custom_name: part.custom_name || part.parts?.name || '',
+            quantity: part.quantity,
+            price_at_time_lkr: String(part.price_at_time_lkr ?? ''),
+            cost_at_time_lkr: String(part.cost_at_time_lkr ?? ''),
+            is_custom: !!part.is_custom,
+        });
+    };
+
+    const handleSavePartEdit = async (partId: string) => {
+        const qty = parseInt(String(editingPartForm.quantity), 10);
+        if (!qty || qty <= 0) return toast("Quantity must be at least 1.", "warning");
+        const price = parseFloat(editingPartForm.price_at_time_lkr);
+        if (isNaN(price) || price < 0) return toast("Price cannot be negative.", "warning");
+        const cost = parseFloat(editingPartForm.cost_at_time_lkr) || 0;
+
+        if (editingPartForm.is_custom) {
+            const name = editingPartForm.custom_name.trim();
+            if (!name) return toast("Part name is required.", "warning");
+
+            const { error } = await supabase.from('job_parts').update({
+                custom_name: name,
+                quantity: qty,
+                price_at_time_lkr: price,
+                cost_at_time_lkr: cost,
+            }).eq('id', partId);
+
+            if (error) {
+                toast(error.message, 'error');
+            } else {
+                setEditingPartId(null);
+                fetchJobDetails();
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                toast("Part updated.", 'success');
+            }
+        } else {
+            const { data, error } = await supabase.rpc('update_job_part_transaction', {
+                p_job_part_id: partId,
+                p_quantity: qty,
+                p_price: price,
+                p_cost: cost,
+            });
+
+            if (error) {
+                toast("Error updating part: " + error.message, 'error');
+            } else if (data && !data.success) {
+                toast(data.message, 'error');
+            } else {
+                setEditingPartId(null);
+                fetchJobDetails();
+                queryClient.invalidateQueries({ queryKey: ['invoices'] });
+                toast("Part updated.", 'success');
+            }
+        }
+    };
+
+    const handleStartEditLabor = (labor: any) => {
+        setEditingPartId(null);
+        setLineDiscount(null);
+        setEditingLaborId(labor.id);
+        const isFixed = !!(labor as any).is_fixed;
+        setEditingLaborForm({
+            description: labor.description || '',
+            is_fixed: isFixed,
+            hours: isFixed ? '' : String(labor.hours ?? ''),
+            hourly_rate_lkr: isFixed ? '' : String(labor.hourly_rate_lkr ?? ''),
+            fixedAmount: isFixed ? String(labor.hourly_rate_lkr ?? '') : '',
+        });
+    };
+
+    const handleSaveLaborEdit = async (laborId: string) => {
+        const desc = editingLaborForm.description.trim();
+        if (!desc) return toast("Description is required.", "warning");
+
+        const isFixed = editingLaborForm.is_fixed;
+        let hours = 1;
+        let rate = 0;
+
+        if (isFixed) {
+            const fixedAmt = parseFloat(editingLaborForm.fixedAmount);
+            if (isNaN(fixedAmt) || fixedAmt <= 0) return toast("Enter a valid fixed amount.", "warning");
+            rate = fixedAmt;
+            hours = 1;
+        } else {
+            const h = parseFloat(editingLaborForm.hours);
+            const r = parseFloat(editingLaborForm.hourly_rate_lkr);
+            if (isNaN(h) || h <= 0) return toast("Enter valid hours.", "warning");
+            if (isNaN(r) || r < 0) return toast("Enter a valid hourly rate.", "warning");
+            hours = h;
+            rate = r;
+        }
+
+        const { error } = await supabase.from('job_labor').update({
+            description: desc,
+            is_fixed: isFixed,
+            hours,
+            hourly_rate_lkr: rate,
+        }).eq('id', laborId);
+
+        if (error) {
+            toast(error.message, 'error');
+        } else {
+            setEditingLaborId(null);
+            fetchJobDetails();
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            toast("Labor entry updated.", 'success');
+        }
+    };
+
     const handleAiAssist = async () => {
         if (!aiKey) {
             toast("AI API Key not configured in Settings.", 'warning');
@@ -868,28 +1000,46 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const LineAmount = ({ row, gross, table }: { row: any; gross: number; table: 'job_parts' | 'job_labor' }) => {
         const off = calcDiscount(gross, row.discount_type, row.discount_value);
         const editing = lineDiscount?.table === table && lineDiscount?.id === row.id;
+        const hasDiscount = off > 0;
         return (
-            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
                 <div className="text-right">
-                    {off > 0 && (
-                        <div className="text-[10px] text-slate-500 line-through font-mono">{gross.toLocaleString()}</div>
+                    {hasDiscount && (
+                        <div className="text-[10px] text-slate-500 line-through font-mono leading-none">{gross.toLocaleString()}</div>
                     )}
-                    <span className={`font-mono text-sm ${off > 0 ? 'text-emerald-400' : 'text-white'}`}>
+                    <span className={`font-mono text-sm ${hasDiscount ? 'text-emerald-400 font-bold' : 'text-white'}`}>
                         {Math.max(0, gross - off).toLocaleString()}
                     </span>
                 </div>
                 {!readOnly && (
-                    <button
-                        onClick={() => setLineDiscount(editing ? null : {
-                            table, id: row.id,
-                            type: (row.discount_type === 'percent' ? 'percent' : 'amount') as DiscountType,
-                            value: Number(row.discount_value) ? String(row.discount_value) : '',
-                        })}
-                        title={off > 0 ? `Discount of ${off.toLocaleString()} on this line` : 'Discount this line'}
-                        className={`p-1 rounded transition-colors ${
-                            off > 0 ? 'text-emerald-400' : 'text-slate-600 hover:text-white'}`}>
-                        <Percent size={13} />
-                    </button>
+                    hasDiscount ? (
+                        <button
+                            type="button"
+                            onClick={() => setLineDiscount(editing ? null : {
+                                table, id: row.id,
+                                type: (row.discount_type === 'percent' ? 'percent' : 'amount') as DiscountType,
+                                value: Number(row.discount_value) ? String(row.discount_value) : '',
+                            })}
+                            title="Edit line discount"
+                            className="flex items-center gap-0.5 px-2 py-1 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold hover:bg-emerald-500/25 active:bg-emerald-500/35 transition-colors touch-manipulation">
+                            <Percent size={11} className="shrink-0" />
+                            <span>{row.discount_type === 'percent' ? `-${row.discount_value}%` : `-${Number(row.discount_value).toLocaleString()}`}</span>
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setLineDiscount(editing ? null : {
+                                table, id: row.id,
+                                type: 'percent',
+                                value: '',
+                            })}
+                            title="Discount this line"
+                            className={`flex items-center justify-center h-8 w-8 rounded-lg text-xs font-bold transition-colors touch-manipulation ${
+                                editing ? 'bg-brand text-slate-950 shadow-md shadow-brand/20' : 'text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/50 active:bg-slate-700'
+                            }`}>
+                            <Percent size={13} />
+                        </button>
+                    )
                 )}
             </div>
         );
@@ -898,7 +1048,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const LineDiscountEditor = ({ table, id }: { table: 'job_parts' | 'job_labor'; id: string }) => {
         if (lineDiscount?.table !== table || lineDiscount?.id !== id) return null;
         return (
-            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-700/60">
+            <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-700/60">
                 <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shrink-0">
                     {(['amount', 'percent'] as DiscountType[]).map(t => (
                         <button key={t} type="button"
@@ -914,11 +1064,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                     value={lineDiscount.value}
                     onChange={e => setLineDiscount(d => d && { ...d, value: e.target.value })}
                     placeholder="0"
-                    className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-sm font-mono text-right" />
-                <button onClick={saveLineDiscount}
-                    className="px-3 py-1.5 rounded-lg bg-brand text-slate-950 text-xs font-bold shrink-0">Save</button>
-                <button onClick={() => setLineDiscount(null)}
-                    className="px-2 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-xs font-bold shrink-0">Cancel</button>
+                    className="flex-1 min-w-[70px] bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white text-sm font-mono text-right focus:border-brand focus:outline-none" />
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={saveLineDiscount}
+                        className="px-3 py-1.5 rounded-lg bg-brand text-slate-950 text-xs font-bold active:scale-95 transition-transform">Save</button>
+                    <button onClick={() => setLineDiscount(null)}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold active:scale-95 transition-transform">Cancel</button>
+                </div>
             </div>
         );
     };
@@ -1146,7 +1298,15 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                     <div className="flex gap-2">
                                                         <div className="relative flex-1">
                                                             <span className="absolute left-2 top-2 text-[10px] text-slate-400">Sell</span>
-                                                            <input required type="number" onFocus={(e) => e.target.select()} value={partForm.custom_price_lkr} onChange={e => setPartForm({...partForm, custom_price_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
+                                                            <input required type="number" onFocus={(e) => e.target.select()} value={partForm.custom_price_lkr} onChange={e => {
+                                                                const sellVal = e.target.value;
+                                                                const sellNum = parseFloat(sellVal);
+                                                                const prevSellNum = parseFloat(partForm.custom_price_lkr);
+                                                                const prevExpectedCost = !isNaN(prevSellNum) && prevSellNum > 0 ? String(Math.round(prevSellNum * 0.8)) : '';
+                                                                const shouldAutoCalc = !partForm.custom_cost_lkr || partForm.custom_cost_lkr === prevExpectedCost;
+                                                                const newCost = shouldAutoCalc && !isNaN(sellNum) && sellNum > 0 ? String(Math.round(sellNum * 0.8)) : partForm.custom_cost_lkr;
+                                                                setPartForm({ ...partForm, custom_price_lkr: sellVal, custom_cost_lkr: newCost });
+                                                            }} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
                                                         </div>
                                                         <div className="relative flex-1">
                                                             <span className="absolute left-2 top-2 text-[10px] text-slate-400">Cost</span>
@@ -1162,20 +1322,116 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     <div className="px-4 pb-4 space-y-2">
                                         {jobParts.map(part => (
                                             <div key={part.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-800">
-                                                <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <Package size={14} className={part.is_custom ? "text-amber-400 flex-shrink-0" : "text-purple-400 flex-shrink-0"} />
-                                                    <div className="min-w-0">
-                                                        <div className="font-medium text-white text-sm truncate">
-                                                            {part.is_custom ? part.custom_name : part.parts?.name}
-                                                            {part.is_custom && <span className="ml-1 text-[8px] bg-amber-500/10 text-amber-500 px-1 rounded uppercase">Custom</span>}
+                                                {editingPartId === part.id ? (
+                                                    <form onSubmit={(e) => { e.preventDefault(); handleSavePartEdit(part.id); }} className="space-y-2.5">
+                                                        <div className="flex items-center justify-between pb-1 border-b border-slate-700/50">
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-brand flex items-center gap-1.5">
+                                                                <Pencil size={11} /> Editing Part
+                                                            </span>
+                                                            {part.is_custom && <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded uppercase font-bold">Custom</span>}
                                                         </div>
-                                                        <div className="text-xs text-slate-500">{part.quantity} × LKR {part.price_at_time_lkr.toLocaleString()}</div>
+                                                        {part.is_custom ? (
+                                                            <input
+                                                                required
+                                                                placeholder="Part name"
+                                                                value={editingPartForm.custom_name}
+                                                                onChange={e => setEditingPartForm({ ...editingPartForm, custom_name: e.target.value })}
+                                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm focus:border-brand focus:outline-none"
+                                                            />
+                                                        ) : (
+                                                            <div className="text-sm font-semibold text-white truncate px-1">
+                                                                {part.parts?.name}
+                                                            </div>
+                                                        )}
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                            <div className="relative">
+                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Qty</span>
+                                                                <input
+                                                                    required
+                                                                    type="number"
+                                                                    min="1"
+                                                                    value={editingPartForm.quantity}
+                                                                    onChange={e => setEditingPartForm({ ...editingPartForm, quantity: parseInt(e.target.value) || 1 })}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-9 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                />
+                                                            </div>
+                                                            <div className="relative">
+                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Sell</span>
+                                                                <input
+                                                                    required
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={editingPartForm.price_at_time_lkr}
+                                                                    onChange={e => setEditingPartForm({ ...editingPartForm, price_at_time_lkr: e.target.value })}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                />
+                                                            </div>
+                                                            {part.is_custom && (
+                                                                <div className="relative col-span-2 sm:col-span-1">
+                                                                    <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Cost</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={editingPartForm.cost_at_time_lkr}
+                                                                        onChange={e => setEditingPartForm({ ...editingPartForm, cost_at_time_lkr: e.target.value })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center justify-end gap-2 pt-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setEditingPartId(null)}
+                                                                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="submit"
+                                                                className="btn-brand px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-brand/20 active:scale-95 transition-transform"
+                                                            >
+                                                                Save
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                ) : (
+                                                    <div className="flex justify-between items-center gap-2">
+                                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                            <Package size={14} className={part.is_custom ? "text-amber-400 flex-shrink-0" : "text-purple-400 flex-shrink-0"} />
+                                                            <div className="min-w-0">
+                                                                <div className="font-medium text-white text-sm truncate">
+                                                                    {part.is_custom ? part.custom_name : part.parts?.name}
+                                                                    {part.is_custom && <span className="ml-1 text-[8px] bg-amber-500/10 text-amber-500 px-1 rounded uppercase">Custom</span>}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500">{part.quantity} × LKR {part.price_at_time_lkr.toLocaleString()}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <LineAmount row={part} gross={part.price_at_time_lkr * part.quantity} table="job_parts" />
+                                                            {!readOnly && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleStartEditPart(part)}
+                                                                        title="Edit part"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/50 active:bg-slate-700 transition-colors touch-manipulation shrink-0"
+                                                                    >
+                                                                        <Pencil size={13} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemovePart(part.id)}
+                                                                        title="Remove part"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-800/90 hover:bg-rose-500/15 border border-slate-700/50 active:bg-rose-500/25 transition-colors touch-manipulation shrink-0"
+                                                                    >
+                                                                        <Trash2 size={13} />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <LineAmount row={part} gross={part.price_at_time_lkr * part.quantity} table="job_parts" />
-                                                {!readOnly && <button onClick={() => handleRemovePart(part.id)} className="text-slate-600 hover:text-red-400 p-1 shrink-0"><Trash2 size={14}/></button>}
-                                                </div>
+                                                )}
                                                 <LineDiscountEditor table="job_parts" id={part.id} />
                                             </div>
                                         ))}
@@ -1233,18 +1489,130 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     <div className="px-4 pb-6 space-y-2">
                                         {jobLabor.map(labor => (
                                             <div key={labor.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-800">
-                                                <div className="flex justify-between items-center">
-                                                <div className="min-w-0">
-                                                    <div className="font-medium text-white text-sm truncate">{labor.description}</div>
-                                                    <div className="text-xs text-slate-500">
-                                                        {(labor as unknown as { is_fixed?: boolean }).is_fixed
-                                                            ? 'Fixed price'
-                                                            : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`}
+                                                {editingLaborId === labor.id ? (
+                                                    <form onSubmit={(e) => { e.preventDefault(); handleSaveLaborEdit(labor.id); }} className="space-y-2.5">
+                                                        <div className="flex items-center justify-between pb-1 border-b border-slate-700/50">
+                                                            <span className="text-[11px] font-bold uppercase tracking-wider text-brand flex items-center gap-1.5">
+                                                                <Pencil size={11} /> Editing Labor
+                                                            </span>
+                                                            <div className="flex gap-1 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: false })}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                                                        !editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
+                                                                    }`}
+                                                                >
+                                                                    Hourly
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: true })}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                                                        editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
+                                                                    }`}
+                                                                >
+                                                                    Fixed
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <input
+                                                            required
+                                                            placeholder="Labor description"
+                                                            value={editingLaborForm.description}
+                                                            onChange={e => setEditingLaborForm({ ...editingLaborForm, description: e.target.value })}
+                                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm focus:border-brand focus:outline-none"
+                                                        />
+                                                        {!editingLaborForm.is_fixed ? (
+                                                            <div className="grid grid-cols-2 gap-2">
+                                                                <div className="relative">
+                                                                    <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
+                                                                    <input
+                                                                        required
+                                                                        type="number"
+                                                                        step="0.5"
+                                                                        min="0.1"
+                                                                        value={editingLaborForm.hours}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, hours: e.target.value })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-12 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Rate</span>
+                                                                    <input
+                                                                        required
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={editingLaborForm.hourly_rate_lkr}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, hourly_rate_lkr: e.target.value })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-12 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="relative">
+                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Amount (LKR)</span>
+                                                                <input
+                                                                    required
+                                                                    type="number"
+                                                                    min="1"
+                                                                    value={editingLaborForm.fixedAmount}
+                                                                    onChange={e => setEditingLaborForm({ ...editingLaborForm, fixedAmount: e.target.value })}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-24 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center justify-end gap-2 pt-1">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setEditingLaborId(null)}
+                                                                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="submit"
+                                                                className="btn-brand px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-brand/20 active:scale-95 transition-transform"
+                                                            >
+                                                                Save
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                ) : (
+                                                    <div className="flex justify-between items-center gap-2">
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-medium text-white text-sm truncate">{labor.description}</div>
+                                                            <div className="text-xs text-slate-500">
+                                                                {(labor as unknown as { is_fixed?: boolean }).is_fixed
+                                                                    ? 'Fixed price'
+                                                                    : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <LineAmount row={labor} gross={labor.hourly_rate_lkr * labor.hours} table="job_labor" />
+                                                            {!readOnly && (
+                                                                <>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleStartEditLabor(labor)}
+                                                                        title="Edit labor"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-white bg-slate-800/90 hover:bg-slate-700/80 border border-slate-700/50 active:bg-slate-700 transition-colors touch-manipulation shrink-0"
+                                                                    >
+                                                                        <Pencil size={13} />
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveLabor(labor.id)}
+                                                                        title="Remove labor"
+                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:text-rose-400 bg-slate-800/90 hover:bg-rose-500/15 border border-slate-700/50 active:bg-rose-500/25 transition-colors touch-manipulation shrink-0"
+                                                                    >
+                                                                        <Trash2 size={13} />
+                                                                    </button>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <LineAmount row={labor} gross={labor.hourly_rate_lkr * labor.hours} table="job_labor" />
-                                                {!readOnly && <button onClick={() => handleRemoveLabor(labor.id)} className="text-slate-600 hover:text-red-400 p-1 shrink-0"><Trash2 size={14}/></button>}
-                                                </div>
+                                                )}
                                                 <LineDiscountEditor table="job_labor" id={labor.id} />
                                             </div>
                                         ))}

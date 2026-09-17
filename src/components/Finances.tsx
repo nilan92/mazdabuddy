@@ -228,7 +228,12 @@ export const Finances = () => {
        so fyStart() resolved it to FY 1999/00 — a year with no figures — and the
        balance sheet lost every entered value. The anchor is the year the period
        ends in, which for "All time" is the current one. */
-    const fyAnchor = periodKind === 'all' ? new Date() : period.start;
+    /* Must be a stable reference. `new Date()` here produced a fresh object on
+       every render, which rebuilt fetchAll, which refired its effect, which set
+       state and rendered again — All time span the loading spinner forever.
+       period.end comes from the memo above, so it only changes when the period
+       does, and for All time it is already "now". */
+    const fyAnchor = periodKind === 'all' ? period.end : period.start;
 
     /* ------------------------------------------------------------------ data */
     const fetchAll = useCallback(async () => {
@@ -970,12 +975,16 @@ export const Finances = () => {
             {/* Ledger */}
             <div className={card}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border-b border-slate-800">
-                    <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 w-full md:w-auto min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'],
+                    {/* A grid on a phone, not a scroll strip. Six chips are wider
+                        than a phone, and a horizontally scrolling row gives no hint
+                        that more exist — Suppliers and Assets simply looked absent.
+                        Two rows of three shows all of them at once. */}
+                    <div className="grid grid-cols-3 sm:flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 w-full md:w-auto min-w-0">
+                        {([['all', 'Activity'], ['income', 'Income'], ['expenses', 'Expenses'],
                            ['owed', 'Owed'], ['suppliers', 'Suppliers'], ['assets', 'Assets']] as [Tab, string][])
                             .map(([k, label]) => (
                                 <button key={k} onClick={() => { setTab(k); setCatFilter('all'); }}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
+                                    className={`px-2 sm:px-3 py-2 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                                         tab === k ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                                     {label}
                                 </button>
