@@ -1564,77 +1564,130 @@ export const Finances = () => {
             </Modal>
 
             <Modal isOpen={assetModal} onClose={() => setAssetModal(false)} title="Add an asset">
-                <form onSubmit={saveAsset} className="space-y-3">
-                    <p className="text-xs text-slate-500 -mt-1">
-                        Something the workshop owns and will use for more than a year. Its cost is spread
-                        across its useful life rather than charged all at once.
+                <form onSubmit={saveAsset} className="space-y-4">
+                    <p className="text-xs text-slate-400 leading-relaxed -mt-1">
+                        Equipment or property the workshop owns for over a year. The cost is spread across its useful life through depreciation.
                     </p>
+
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">What is it</label>
-                        <input required value={assetForm.name} onChange={e => setAssetForm(f => ({ ...f, name: e.target.value }))}
-                            placeholder="Two-post ramp hoist"
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm" />
+                        <label className="block text-xs font-semibold text-slate-300 mb-1.5">Asset name</label>
+                        <input
+                            required
+                            value={assetForm.name}
+                            onChange={e => setAssetForm(f => ({ ...f, name: e.target.value }))}
+                            placeholder="e.g. Two-post vehicle hoist"
+                            className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white text-base sm:text-sm placeholder:text-slate-500 focus:border-brand focus:outline-none transition-colors"
+                        />
                     </div>
+
                     <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Category</label>
+                        <label className="block text-xs font-semibold text-slate-300 mb-1.5">Category</label>
                         <div className="flex flex-wrap gap-1.5 mb-2">
                             {categoriesFor('asset').map(c => (
-                                <button key={c} type="button" onClick={() => setAssetForm(f => ({ ...f, category: c }))}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                                        assetForm.category === c ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+                                <button
+                                    key={c}
+                                    type="button"
+                                    onClick={() => setAssetForm(f => ({ ...f, category: c }))}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold touch-manipulation active:scale-95 transition-all ${
+                                        assetForm.category === c
+                                            ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30'
+                                            : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700/50'
+                                    }`}
+                                >
                                     {c}
                                 </button>
                             ))}
                         </div>
                         <div className="flex gap-2">
-                            <input value={newCategory} onChange={e => setNewCategory(e.target.value)}
-                                placeholder="Add your own category…"
-                                className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
-                            <button type="button" onClick={() => addCategory('asset', newCategory)}
-                                className="px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold">
-                                <Check size={14} />
+                            <input
+                                value={newCategory}
+                                onChange={e => setNewCategory(e.target.value)}
+                                placeholder="Add custom category…"
+                                className="flex-1 bg-slate-800/60 border border-slate-700/80 rounded-xl px-3 py-2 text-base sm:text-xs text-white placeholder:text-slate-500 focus:border-brand focus:outline-none"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => addCategory('asset', newCategory)}
+                                className="px-3.5 h-10 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center shrink-0 active:scale-95 transition-transform"
+                                title="Add category"
+                            >
+                                <Check size={16} />
                             </button>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
                         <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Purchase date</label>
-                            <input type="date" required value={assetForm.purchase_date}
+                            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Purchase date</label>
+                            <input
+                                type="date"
+                                required
+                                value={assetForm.purchase_date}
                                 onChange={e => setAssetForm(f => ({ ...f, purchase_date: e.target.value }))}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm" />
+                                className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white text-base sm:text-sm focus:border-brand focus:outline-none"
+                            />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Cost (LKR)</label>
-                            <input type="number" required min="0" step="0.01" value={assetForm.cost_lkr}
+                            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Cost (LKR)</label>
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                required
+                                min="0"
+                                step="any"
+                                placeholder="0"
+                                value={assetForm.cost_lkr}
                                 onChange={e => setAssetForm(f => ({ ...f, cost_lkr: e.target.value }))}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono text-sm" />
+                                className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white font-mono text-base sm:text-sm focus:border-brand focus:outline-none"
+                            />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Useful life (years)</label>
-                            <input type="number" required min="1" step="0.5" value={assetForm.useful_life_years}
+                            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Useful life (years)</label>
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                required
+                                min="1"
+                                step="0.5"
+                                placeholder="5"
+                                value={assetForm.useful_life_years}
                                 onChange={e => setAssetForm(f => ({ ...f, useful_life_years: e.target.value }))}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono text-sm" />
+                                className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white font-mono text-base sm:text-sm focus:border-brand focus:outline-none"
+                            />
                         </div>
                         <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Scrap value (LKR)</label>
-                            <input type="number" min="0" step="0.01" value={assetForm.residual_lkr}
+                            <label className="block text-xs font-semibold text-slate-300 mb-1.5">Scrap / residual value (LKR)</label>
+                            <input
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="any"
+                                placeholder="0"
+                                value={assetForm.residual_lkr}
                                 onChange={e => setAssetForm(f => ({ ...f, residual_lkr: e.target.value }))}
-                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono text-sm" />
+                                className="w-full bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-white font-mono text-base sm:text-sm focus:border-brand focus:outline-none"
+                            />
                         </div>
                     </div>
+
                     {parseFloat(assetForm.cost_lkr) > 0 && parseFloat(assetForm.useful_life_years) > 0 && (
-                        <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-400">
-                            Writes down about{' '}
-                            <span className="font-mono text-cyan-400">
-                                {lkr((parseFloat(assetForm.cost_lkr) - (parseFloat(assetForm.residual_lkr) || 0)) / parseFloat(assetForm.useful_life_years))}
-                            </span>{' '}
-                            a year.
+                        <div className="flex items-center justify-between bg-cyan-500/10 border border-cyan-500/25 rounded-xl px-3.5 py-2.5 text-xs text-slate-300">
+                            <span className="text-slate-400">Annual depreciation:</span>
+                            <span className="font-mono text-cyan-300 font-bold text-sm">
+                                {lkr((parseFloat(assetForm.cost_lkr) - (parseFloat(assetForm.residual_lkr) || 0)) / parseFloat(assetForm.useful_life_years))} / yr
+                            </span>
                         </div>
                     )}
-                    <button type="submit" disabled={submitting}
-                        className="w-full btn-brand py-3 rounded-xl font-bold disabled:opacity-60">
-                        {submitting ? 'Saving…' : 'Add to register'}
-                    </button>
+
+                    <div className="pt-1">
+                        <button
+                            type="submit"
+                            disabled={submitting}
+                            className="w-full btn-brand py-3.5 sm:py-3 rounded-xl font-bold text-sm shadow-md shadow-brand/20 active:scale-[0.98] transition-all disabled:opacity-60"
+                        >
+                            {submitting ? 'Saving…' : 'Add to register'}
+                        </button>
+                    </div>
                 </form>
             </Modal>
 

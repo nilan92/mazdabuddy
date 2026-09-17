@@ -21,30 +21,30 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
         <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
                 >
                     <motion.div
-                        className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh]"
+                        className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
                         initial={{ opacity: 0, scale: 0.94, y: 16 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96, y: 8 }}
                         transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.8 }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between p-6 border-b border-slate-800">
-                            <h2 className="text-xl font-bold text-white">{title}</h2>
+                        <div className="flex items-center justify-between px-4 py-3.5 sm:px-6 sm:py-4 border-b border-slate-800 shrink-0">
+                            <h2 className="text-lg sm:text-xl font-bold text-white truncate pr-2">{title}</h2>
                             <button
                                 onClick={onClose}
-                                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-800"
+                                className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800 shrink-0"
                             >
                                 <X size={20} />
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto">
+                        <div className="p-4 sm:p-6 overflow-y-auto">
                             {children}
                         </div>
                     </motion.div>
