@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, MessageCircle, Download, Wrench } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, MessageCircle, Download, Wrench, Users } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
-import { waMeUrl } from '../lib/whatsapp';
+import { waMeUrl, toSriLankanMsisdn } from '../lib/whatsapp';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Customer, Vehicle, JobCard } from '../types';
 
@@ -44,6 +44,8 @@ export const Customers = () => {
     const [customerHistory, setCustomerHistory] = useState<HistoryJob[]>([]);
     const [historySearch, setHistorySearch] = useState('');
     const [historyJobId, setHistoryJobId] = useState<string | null>(null);
+    const [mergeOpen, setMergeOpen] = useState(false);
+    const [merging, setMerging] = useState(false);
 
     // Service reminder SMS modal
     const [smsModal, setSmsModal] = useState<{ customer: Customer; vehicle: Vehicle | null } | null>(null);
@@ -99,6 +101,96 @@ export const Customers = () => {
             return tally;
         },
     });
+
+    /* Two records are the same person when their phone numbers normalise to the
+       same thing — 0771234567, +94 77 123 4567 and 771234567 are one number.
+       Express intake used to create a fresh customer for every walk-in, which is
+       where these came from. */
+    const duplicateGroups = useMemo(() => {
+        const byPhone = new Map<string, Customer[]>();
+        for (const c of customers) {
+            const key = toSriLankanMsisdn(c.phone || '');
+            if (!key) continue;
+            byPhone.set(key, [...(byPhone.get(key) ?? []), c]);
+        }
+        return [...byPhone.values()]
+            .filter(g => g.length > 1)
+            // Keep the record with the most work against it by default; it is the
+            // one most likely to carry the correct details.
+            .map(g => [...g].sort((a, b) =>
+                (jobCounts[b.id]?.total ?? 0) - (jobCounts[a.id]?.total ?? 0)
+                || new Date((a as any).created_at ?? 0).getTime() - new Date((b as any).created_at ?? 0).getTime()));
+    }, [customers, jobCounts]);
+
+    /** A shared phone number does not always mean the same person — families and
+     *  small firms share one. Where the names disagree the group is flagged, so
+     *  a real pair of people are not silently welded together. */
+    const namesAgree = (group: Customer[]) => {
+        const norm = (n: string) => (n || '').toLowerCase().replace(/[^a-z]/g, '');
+        const first = norm(group[0].name);
+        return group.every(c => {
+            const other = norm(c.name);
+            return other === first || other.startsWith(first) || first.startsWith(other);
+        });
+    };
+
+    /**
+     * Moves every vehicle onto the surviving customer, then deletes the others.
+     *
+     * The order is not optional: customers cascade to vehicles and vehicles
+     * cascade to job_cards, so deleting a duplicate first would take its whole
+     * job history with it.
+     */
+    const mergeCustomer = async (group: Customer[]) => {
+        const [keeper, ...dupes] = group;
+        const totalJobs = group.reduce((t, c) => t + (jobCounts[c.id]?.total ?? 0), 0);
+        const mismatched = !namesAgree(group);
+        const ok = await confirm({
+            title: `Merge into ${withTitle(keeper.title, keeper.name)}?`,
+            message: (mismatched
+                    ? `These records carry different names — ${group.map(c => c.name).join(', ')} — so they may be `
+                      + `different people sharing one phone number. Merging them cannot be undone. `
+                    : '')
+                + `${dupes.length} record${dupes.length === 1 ? '' : 's'} will be removed and their `
+                + `vehicles and ${totalJobs} job${totalJobs === 1 ? '' : 's'} moved onto `
+                + `${withTitle(keeper.title, keeper.name)}.`,
+            confirmLabel: mismatched ? 'Merge anyway' : 'Merge',
+            confirmStyle: 'warning',
+        });
+        if (!ok) return;
+
+        setMerging(true);
+        try {
+            const dupeIds = dupes.map(d => d.id);
+
+            const { error: moveError } = await supabase
+                .from('vehicles').update({ customer_id: keeper.id }).in('customer_id', dupeIds);
+            if (moveError) throw moveError;
+
+            // Fill anything blank on the survivor from the records being removed,
+            // so merging never loses a detail that was only on a duplicate.
+            const patch: Record<string, string> = {};
+            for (const field of ['email', 'address', 'phone'] as const) {
+                if (!keeper[field]) {
+                    const found = dupes.find(d => d[field]);
+                    if (found?.[field]) patch[field] = found[field] as string;
+                }
+            }
+            if (Object.keys(patch).length) {
+                await supabase.from('customers').update(patch).eq('id', keeper.id);
+            }
+
+            const { error: delError } = await supabase.from('customers').delete().in('id', dupeIds);
+            if (delError) throw delError;
+
+            refreshData();
+            toast(`Merged into ${withTitle(keeper.title, keeper.name)}.`, 'success');
+        } catch (e: any) {
+            toast('Merge failed: ' + e.message, 'error');
+        } finally {
+            setMerging(false);
+        }
+    };
 
     const refreshData = () => {
         queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -283,6 +375,23 @@ export const Customers = () => {
                  />
             </div>
 
+            {duplicateGroups.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3 mb-6">
+                    <Users size={16} className="text-amber-400 shrink-0" />
+                    <p className="text-sm text-amber-200/90 flex-1">
+                        <span className="font-bold">
+                            {duplicateGroups.length} customer{duplicateGroups.length === 1 ? '' : 's'} recorded more than once.
+                        </span>{' '}
+                        Same phone number, separate records — usually a walk-in entered again rather than looked up.
+                        Merging keeps every vehicle and job.
+                    </p>
+                    <button onClick={() => setMergeOpen(true)}
+                        className="shrink-0 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 px-4 py-2 rounded-lg text-xs font-bold transition-colors">
+                        Review &amp; merge
+                    </button>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {loading ? (
                     <div className="col-span-full py-20 text-center text-slate-500">Loading customer database...</div>
@@ -354,7 +463,7 @@ export const Customers = () => {
                                             );
                                             window.open(waMeUrl(customer.phone, msg), '_blank', 'noopener');
                                         }}
-                                        className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors"
+                                        className="p-2 rounded-lg bg-[#25D366]/15 text-[#25D366] hover:bg-[#25D366]/25 transition-colors"
                                         title="Service reminder on WhatsApp — opens a draft you send"
                                     >
                                         <MessageCircle size={18} />
@@ -634,6 +743,65 @@ export const Customers = () => {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            <Modal isOpen={mergeOpen} onClose={() => setMergeOpen(false)} title="Merge duplicate customers">
+                <div className="space-y-4">
+                    <p className="text-xs text-slate-500 -mt-1">
+                        Grouped by phone number. The record kept is the one with the most jobs against
+                        it; the others are removed and their vehicles and job history moved across.
+                        Any detail missing from the record being kept is filled in from the others.
+                    </p>
+
+                    {duplicateGroups.length === 0 ? (
+                        <p className="text-center text-slate-500 py-8 text-sm">No duplicates left.</p>
+                    ) : duplicateGroups.map(group => {
+                        const [keeper, ...dupes] = group;
+                        return (
+                            <div key={keeper.id} className="bg-slate-950/60 border border-slate-800 rounded-xl p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                        {keeper.phone}
+                                    </span>
+                                    {!namesAgree(group) && (
+                                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">
+                                            NAMES DIFFER
+                                        </span>
+                                    )}
+                                </div>
+                                {!namesAgree(group) && (
+                                    <p className="text-[11px] text-amber-300/80 mb-2 leading-snug">
+                                        Different names on one number. This is often a family or a
+                                        workplace sharing a phone rather than a duplicate — check before merging.
+                                    </p>
+                                )}
+                                <div className="space-y-1.5 mb-3">
+                                    {group.map((c, i) => (
+                                        <div key={c.id} className="flex items-center gap-2 text-sm">
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                                i === 0 ? 'bg-emerald-500/15 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                                                {i === 0 ? 'KEEP' : 'MERGE'}
+                                            </span>
+                                            <span className={`flex-1 min-w-0 truncate ${i === 0 ? 'text-white font-medium' : 'text-slate-400'}`}>
+                                                {withTitle(c.title, c.name)}
+                                            </span>
+                                            <span className="text-[11px] text-slate-500 shrink-0">
+                                                {jobCounts[c.id]?.total ?? 0} job{(jobCounts[c.id]?.total ?? 0) === 1 ? '' : 's'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button onClick={() => mergeCustomer(group)} disabled={merging}
+                                    className={`w-full py-2.5 rounded-lg text-xs font-bold transition-colors disabled:opacity-60 ${
+                                        namesAgree(group)
+                                            ? 'bg-slate-800 hover:bg-emerald-600 text-slate-200 hover:text-white'
+                                            : 'bg-slate-900 border border-amber-500/30 text-amber-300/80 hover:bg-amber-500/15'}`}>
+                                    {merging ? 'Merging…' : `Merge ${dupes.length} into ${keeper.name}`}
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
             </Modal>
 
             {/* Renders above the history modal (z-9999 vs z-50), so closing it

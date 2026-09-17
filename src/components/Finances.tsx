@@ -213,7 +213,10 @@ export const Finances = () => {
             const anchor = new Date(fyAnchorYear, FY_START_MONTH, 1);
             return { start: fyStart(anchor), end: new Date(fyEnd(anchor).setHours(23, 59, 59, 999)) };
         }
-        if (periodKind === 'all') return { start: new Date(2000, 0, 1), end: new Date(2999, 11, 31) };
+        // Ends today, not in the year 2999. An open-ended end date put "as at
+        // 31 Dec 2999" on the statements and let depreciation run for a
+        // millennium, writing every asset down to nothing.
+        if (periodKind === 'all') return { start: new Date(2000, 0, 1), end: new Date() };
         return { start: new Date(`${customRange.start}T00:00:00`), end: new Date(`${customRange.end}T23:59:59`) };
     }, [periodKind, customRange, monthAnchor, fyAnchorYear]);
 
@@ -742,11 +745,18 @@ export const Finances = () => {
             </div>
 
             {/* Period selector */}
-            <div className="flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center gap-2 overflow-x-auto overscroll-x-contain -mx-2 px-2 pb-1 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {([['month', 'Month'], ['fy', fyLabel(new Date(fyAnchorYear, FY_START_MONTH, 1))],
                    ['all', 'All time'], ['custom', 'Custom']] as [PeriodKind, string][])
                     .map(([k, label]) => (
-                        <button key={k} onClick={() => setPeriodKind(k)}
+                        <button key={k} onClick={() => {
+                                setPeriodKind(k);
+                                // Tapping the chip always returns to now, so there is no
+                                // way to be stuck looking at a month chosen minutes ago
+                                // and wonder why the figures look wrong.
+                                if (k === 'month') setMonthAnchor(new Date());
+                                if (k === 'fy') setFyAnchorYear(fyStart().getFullYear());
+                            }}
                             className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
                                 periodKind === k ? 'bg-cyan-600 text-white' : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'}`}>
                             {label}
@@ -767,7 +777,7 @@ export const Finances = () => {
                 financial year can be picked, rather than only ever showing the
                 current one. */}
             {periodKind === 'month' && (
-                <div className="animate-reveal-strip flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex items-center gap-2 overflow-x-auto overscroll-x-contain -mx-2 px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <button
                         onClick={() => setMonthAnchor(d => new Date(d.getFullYear() - 1, d.getMonth(), 1))}
                         title="Previous year"
@@ -800,7 +810,7 @@ export const Finances = () => {
             )}
 
             {periodKind === 'fy' && (
-                <div className="animate-reveal-strip flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex items-center gap-2 overflow-x-auto overscroll-x-contain -mx-2 px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {/* Years run back from the one in progress. It follows the
                         clock, so on 1 April the list rolls forward on its own. */}
                     {Array.from({ length: 6 }, (_, i) => fyStart().getFullYear() - i).map(y => {
@@ -960,7 +970,7 @@ export const Finances = () => {
             {/* Ledger */}
             <div className={card}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border-b border-slate-800">
-                    <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 w-full md:w-auto min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                         {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'],
                            ['owed', 'Owed'], ['suppliers', 'Suppliers'], ['assets', 'Assets']] as [Tab, string][])
                             .map(([k, label]) => (
