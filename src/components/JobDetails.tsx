@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon } from 'lucide-react';
+import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -57,6 +57,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const [status, setStatus] = useState<string>('');
     const [assignedTech, setAssignedTech] = useState<string>('');
     const [estimatedHours, setEstimatedHours] = useState<string>('');
+    // Which line is having its discount edited, and the draft being typed.
+    const [lineDiscount, setLineDiscount] = useState<
+        { table: 'job_parts' | 'job_labor'; id: string; type: DiscountType; value: string } | null>(null);
     const [discountType, setDiscountType] = useState<DiscountType>('amount');
     const [discountValue, setDiscountValue] = useState<string>('');
 
@@ -738,6 +741,25 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         }
     };
 
+    /** Line discounts mirror the job-level one, so there is a single way to
+     *  express a discount. The database nets it off and re-bills the invoice. */
+    const saveLineDiscount = async () => {
+        if (!lineDiscount) return;
+        const value = parseFloat(lineDiscount.value) || 0;
+        const { error } = await supabase.from(lineDiscount.table)
+            .update({ discount_type: lineDiscount.type, discount_value: value })
+            .eq('id', lineDiscount.id);
+        if (error) return toast(error.message, 'error');
+        setLineDiscount(null);
+        fetchJobDetails();
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        toast(value > 0 ? 'Discount applied to this line.' : 'Line discount removed.', 'success');
+    };
+
+    /** What a line is worth after its own discount, floored at zero. */
+    const netOf = (gross: number, row: any) =>
+        Math.max(0, gross - calcDiscount(gross, row?.discount_type, row?.discount_value));
+
     const handleRemovePart = async (id: string) => {
         const ok = await confirm({ message: "Remove this part? Stock will be returned to inventory.", confirmLabel: "Remove" });
         if (!ok) return;
@@ -827,8 +849,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     // Calculations
-    const totalParts = jobParts.reduce((sum, p) => sum + (p.price_at_time_lkr * p.quantity), 0);
-    const totalLabor = jobLabor.reduce((sum, l) => sum + (l.hourly_rate_lkr * l.hours), 0);
+    // Net of each line's own discount, the same way recalc_invoice_total does it,
+    // so the footer agrees with the invoice the customer receives.
+    const totalParts = jobParts.reduce((sum, p) => sum + netOf(p.price_at_time_lkr * p.quantity, p), 0);
+    const totalLabor = jobLabor.reduce((sum, l) => sum + netOf(l.hourly_rate_lkr * l.hours, l), 0);
     const subtotal = totalParts + totalLabor;
     const discountAmount = calcDiscount(subtotal, discountType, discountValue);
     // const totalHours = jobLabor.reduce((sum, l) => sum + l.hours, 0); // Removed unused
@@ -837,6 +861,67 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     // Efficiency
     // Efficiency - Logic moved to inline render
 
+
+
+    /** Amount column for a line: struck-through gross plus the net when the line
+     *  carries its own discount, and a control to set one. */
+    const LineAmount = ({ row, gross, table }: { row: any; gross: number; table: 'job_parts' | 'job_labor' }) => {
+        const off = calcDiscount(gross, row.discount_type, row.discount_value);
+        const editing = lineDiscount?.table === table && lineDiscount?.id === row.id;
+        return (
+            <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                <div className="text-right">
+                    {off > 0 && (
+                        <div className="text-[10px] text-slate-500 line-through font-mono">{gross.toLocaleString()}</div>
+                    )}
+                    <span className={`font-mono text-sm ${off > 0 ? 'text-emerald-400' : 'text-white'}`}>
+                        {Math.max(0, gross - off).toLocaleString()}
+                    </span>
+                </div>
+                {!readOnly && (
+                    <button
+                        onClick={() => setLineDiscount(editing ? null : {
+                            table, id: row.id,
+                            type: (row.discount_type === 'percent' ? 'percent' : 'amount') as DiscountType,
+                            value: Number(row.discount_value) ? String(row.discount_value) : '',
+                        })}
+                        title={off > 0 ? `Discount of ${off.toLocaleString()} on this line` : 'Discount this line'}
+                        className={`p-1 rounded transition-colors ${
+                            off > 0 ? 'text-emerald-400' : 'text-slate-600 hover:text-white'}`}>
+                        <Percent size={13} />
+                    </button>
+                )}
+            </div>
+        );
+    };
+
+    const LineDiscountEditor = ({ table, id }: { table: 'job_parts' | 'job_labor'; id: string }) => {
+        if (lineDiscount?.table !== table || lineDiscount?.id !== id) return null;
+        return (
+            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-700/60">
+                <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shrink-0">
+                    {(['amount', 'percent'] as DiscountType[]).map(t => (
+                        <button key={t} type="button"
+                            onClick={() => setLineDiscount(d => d && { ...d, type: t })}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors ${
+                                lineDiscount.type === t ? 'bg-brand text-slate-950' : 'text-slate-400'}`}>
+                            {t === 'amount' ? 'LKR' : '%'}
+                        </button>
+                    ))}
+                </div>
+                <input type="number" min="0" inputMode="decimal" autoFocus
+                    max={lineDiscount.type === 'percent' ? 100 : undefined}
+                    value={lineDiscount.value}
+                    onChange={e => setLineDiscount(d => d && { ...d, value: e.target.value })}
+                    placeholder="0"
+                    className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-white text-sm font-mono text-right" />
+                <button onClick={saveLineDiscount}
+                    className="px-3 py-1.5 rounded-lg bg-brand text-slate-950 text-xs font-bold shrink-0">Save</button>
+                <button onClick={() => setLineDiscount(null)}
+                    className="px-2 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-xs font-bold shrink-0">Cancel</button>
+            </div>
+        );
+    };
 
     if (!job) return null;
 
@@ -1076,7 +1161,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     </div>
                                     <div className="px-4 pb-4 space-y-2">
                                         {jobParts.map(part => (
-                                            <div key={part.id} className="flex justify-between items-center bg-slate-800/40 p-3 rounded-lg border border-slate-800">
+                                            <div key={part.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-800">
+                                                <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     <Package size={14} className={part.is_custom ? "text-amber-400 flex-shrink-0" : "text-purple-400 flex-shrink-0"} />
                                                     <div className="min-w-0">
@@ -1087,10 +1173,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                         <div className="text-xs text-slate-500">{part.quantity} × LKR {part.price_at_time_lkr.toLocaleString()}</div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                                    <span className="font-mono text-white text-sm">{(part.price_at_time_lkr * part.quantity).toLocaleString()}</span>
-                                                    {!readOnly && <button onClick={() => handleRemovePart(part.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>}
+                                                <LineAmount row={part} gross={part.price_at_time_lkr * part.quantity} table="job_parts" />
+                                                {!readOnly && <button onClick={() => handleRemovePart(part.id)} className="text-slate-600 hover:text-red-400 p-1 shrink-0"><Trash2 size={14}/></button>}
                                                 </div>
+                                                <LineDiscountEditor table="job_parts" id={part.id} />
                                             </div>
                                         ))}
                                         {jobParts.length === 0 && <p className="text-center text-slate-600 py-2 text-sm italic">No parts added yet.</p>}
@@ -1146,7 +1232,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     </div>
                                     <div className="px-4 pb-6 space-y-2">
                                         {jobLabor.map(labor => (
-                                            <div key={labor.id} className="flex justify-between items-center bg-slate-800/40 p-3 rounded-lg border border-slate-800">
+                                            <div key={labor.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-800">
+                                                <div className="flex justify-between items-center">
                                                 <div className="min-w-0">
                                                     <div className="font-medium text-white text-sm truncate">{labor.description}</div>
                                                     <div className="text-xs text-slate-500">
@@ -1155,10 +1242,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                                                    <span className="font-mono text-white text-sm">{(labor.hourly_rate_lkr * labor.hours).toLocaleString()}</span>
-                                                    {!readOnly && <button onClick={() => handleRemoveLabor(labor.id)} className="text-slate-600 hover:text-red-400 p-1"><Trash2 size={14}/></button>}
+                                                <LineAmount row={labor} gross={labor.hourly_rate_lkr * labor.hours} table="job_labor" />
+                                                {!readOnly && <button onClick={() => handleRemoveLabor(labor.id)} className="text-slate-600 hover:text-red-400 p-1 shrink-0"><Trash2 size={14}/></button>}
                                                 </div>
+                                                <LineDiscountEditor table="job_labor" id={labor.id} />
                                             </div>
                                         ))}
                                         {jobLabor.length === 0 && <p className="text-center text-slate-600 py-2 text-sm italic">No labor entries yet.</p>}

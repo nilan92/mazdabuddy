@@ -17,6 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
 import { shareInvoice, invoiceMessage } from '../lib/whatsapp';
 import { withTitle } from '../lib/textCase';
+import { calcDiscount } from '../lib/totals';
 import { downloadCSV } from '../lib/csv';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -50,8 +51,8 @@ export const Invoices = () => {
                         discount_type,
                         discount_value,
                         vehicles!inner (license_plate, make, model, year, vin, color, customers!inner(title, name, address, phone, email)),
-                        job_parts ( quantity, price_at_time_lkr, custom_name, parts(name) ),
-                        job_labor ( description, hours, hourly_rate_lkr, is_fixed )
+                        job_parts ( quantity, price_at_time_lkr, custom_name, discount_type, discount_value, parts(name) ),
+                        job_labor ( description, hours, hourly_rate_lkr, is_fixed, discount_type, discount_value )
                     )
                 `)
                 .order('created_at', { ascending: false })
@@ -351,23 +352,33 @@ export const Invoices = () => {
             // the clock; a fixed-price job has no hours worth printing.
             const anyHourly = inv.labor.some((l: any) => !l.is_fixed);
             sectionHeader('Labour / Description', anyHourly ? 'RATE' : undefined, anyHourly ? 'HOURS' : undefined);
-            inv.labor.forEach((l: any) => row(
-                l.description || 'Service',
-                (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0),
-                anyHourly && !l.is_fixed ? Number(l.hourly_rate_lkr) || 0 : undefined,
-                anyHourly && !l.is_fixed ? l.hours : undefined,
-            ));
+            inv.labor.forEach((l: any) => {
+                const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
+                const off = calcDiscount(gross, l.discount_type, l.discount_value);
+                row(
+                    off > 0 ? `${l.description || 'Service'}  (less ${off.toLocaleString()} discount)` : (l.description || 'Service'),
+                    Math.max(0, gross - off),
+                    anyHourly && !l.is_fixed ? Number(l.hourly_rate_lkr) || 0 : undefined,
+                    anyHourly && !l.is_fixed ? l.hours : undefined,
+                );
+            });
             yPos += 3;
         }
 
         if (inv.parts.length) {
             sectionHeader('Materials / Parts', 'PRICE', 'QTY');
-            inv.parts.forEach((p: any) => row(
-                p.custom_name || p.parts?.name || 'Part',
-                (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0),
-                Number(p.price_at_time_lkr) || 0,
-                p.quantity,
-            ));
+            inv.parts.forEach((p: any) => {
+                const gross = (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0);
+                const off = calcDiscount(gross, p.discount_type, p.discount_value);
+                row(
+                    off > 0
+                        ? `${p.custom_name || p.parts?.name || 'Part'}  (less ${off.toLocaleString()} discount)`
+                        : (p.custom_name || p.parts?.name || 'Part'),
+                    Math.max(0, gross - off),
+                    Number(p.price_at_time_lkr) || 0,
+                    p.quantity,
+                );
+            });
             yPos += 3;
         }
 
@@ -721,7 +732,16 @@ export const Invoices = () => {
                                                     )}
                                                 </td>
                                                 <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
-                                                    {(l.hours * l.hourly_rate_lkr).toLocaleString()}
+                                                    {(() => {
+                                                        const gross = l.hours * l.hourly_rate_lkr;
+                                                        const off = calcDiscount(gross, l.discount_type, l.discount_value);
+                                                        return off > 0 ? (
+                                                            <>
+                                                                <span className="block text-[10px] text-slate-500 line-through">{gross.toLocaleString()}</span>
+                                                                <span className="text-emerald-400">{Math.max(0, gross - off).toLocaleString()}</span>
+                                                            </>
+                                                        ) : gross.toLocaleString();
+                                                    })()}
                                                 </td>
                                             </tr>
                                         ))}
@@ -741,7 +761,16 @@ export const Invoices = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
-                                                    {(p.quantity * p.price_at_time_lkr).toLocaleString()}
+                                                    {(() => {
+                                                        const gross = p.quantity * p.price_at_time_lkr;
+                                                        const off = calcDiscount(gross, p.discount_type, p.discount_value);
+                                                        return off > 0 ? (
+                                                            <>
+                                                                <span className="block text-[10px] text-slate-500 line-through">{gross.toLocaleString()}</span>
+                                                                <span className="text-emerald-400">{Math.max(0, gross - off).toLocaleString()}</span>
+                                                            </>
+                                                        ) : gross.toLocaleString();
+                                                    })()}
                                                 </td>
                                             </tr>
                                         ))}
