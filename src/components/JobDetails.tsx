@@ -512,6 +512,31 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const handleUpdateJob = async () => {
         if (!job) return;
 
+        // A completed job has been invoiced and may already have been paid.
+        // Re-opening it or changing its figures after the fact is a real
+        // decision, not a stray tap, so it has to be confirmed — and the
+        // confirmation says what actually follows.
+        if (job.status === 'completed' && status !== 'completed') {
+            const ok = await confirm({
+                title: 'Re-open a completed job?',
+                message: 'This job is finished and has an invoice against it. Re-opening it lets the '
+                    + 'work and the pricing change after the customer was billed, and the invoice will '
+                    + 'follow those changes. Only do this if the job genuinely was not finished.',
+                confirmLabel: 'Re-open job',
+                confirmStyle: 'warning',
+            });
+            if (!ok) return;
+        } else if (job.status === 'completed' && isDirty) {
+            const ok = await confirm({
+                title: 'Change a completed job?',
+                message: 'This job is already invoiced. Saving will update the invoice the customer '
+                    + 'was given.',
+                confirmLabel: 'Save changes',
+                confirmStyle: 'warning',
+            });
+            if (!ok) return;
+        }
+
         const now = new Date();
         const updates: any = {
             mileage: mileage ? parseInt(mileage) : null,

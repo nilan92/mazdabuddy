@@ -3,6 +3,7 @@ import { Plus, Search, RefreshCcw, Archive, UserCheck, Download } from 'lucide-r
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { ensureInvoiceForJob } from '../lib/invoices';
+import { toSriLankanMsisdn } from '../lib/whatsapp';
 import { tidyName, withTitle, CUSTOMER_TITLES } from '../lib/textCase';
 import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
@@ -48,7 +49,7 @@ export const Jobs = () => {
             const { data } = await supabase
                 .from('job_cards')
                 // @ts-ignore
-                .select('*, vehicles(id, make, model, license_plate), staff(id, name)')
+                .select('*, vehicles(id, make, model, license_plate, customers(name, phone)), staff(id, name)')
                 .order('created_at', { ascending: false })
                 .limit(50);
             return data as JobCard[] || [];
@@ -122,35 +123,76 @@ export const Jobs = () => {
 
             // Handle Express Intake (Customer -> Vehicle -> Job)
             if (intakeMode === 'EXPRESS') {
-                // 1. Create Customer
-                const { data: customerData, error: custError } = await supabase
-                    .from('customers')
-                    .insert([{ 
-                        title: newJobForm.customerTitle,
-                        name: tidyName(newJobForm.customerName), 
-                        phone: newJobForm.customerPhone,
-                        tenant_id: profile?.tenant_id
-                    }])
-                    .select()
-                    .single();
-                
-                if (custError) throw custError;
+                // Express intake used to insert a new customer and a new vehicle
+                // every single time, which is why the same person appears several
+                // times over — it is quicker to re-type a walk-in than to go
+                // looking for them. Match first, create only what is missing.
+                const plate = newJobForm.licensePlate.toUpperCase().trim();
+                const wantedPhone = toSriLankanMsisdn(newJobForm.customerPhone);
 
-                // 2. Create Vehicle
-                const { data: vehicleData, error: vehError } = await supabase
-                    .from('vehicles')
-                    .insert([{
-                        customer_id: customerData.id,
-                        make: tidyName(newJobForm.vehicleMake),
-                        model: tidyName(newJobForm.vehicleModel),
-                        license_plate: newJobForm.licensePlate.toUpperCase(),
-                        tenant_id: profile?.tenant_id
-                    }])
-                    .select()
-                    .single();
-                
-                if (vehError) throw vehError;
-                finalVehicleId = vehicleData.id;
+                const [{ data: existingCustomers }, { data: existingVehicles }] = await Promise.all([
+                    supabase.from('customers').select('id, name, phone'),
+                    supabase.from('vehicles').select('id, license_plate, customer_id'),
+                ]);
+
+                // The plate identifies the car outright, so if it is already on
+                // file reuse it and the owner attached to it.
+                const vehicleMatch = plate
+                    ? (existingVehicles || []).find(v =>
+                        (v.license_plate || '').toUpperCase().replace(/\s+/g, '') === plate.replace(/\s+/g, ''))
+                    : undefined;
+
+                // Otherwise match the customer on the phone number, compared in
+                // its normalised form so 0771234567, +94 77 123 4567 and
+                // 771234567 are recognised as one person.
+                const customerMatch = wantedPhone
+                    ? (existingCustomers || []).find(c => toSriLankanMsisdn(c.phone || '') === wantedPhone)
+                    : undefined;
+
+                let customerId = vehicleMatch?.customer_id ?? customerMatch?.id;
+                let matchedName = customerMatch?.name
+                    ?? (existingCustomers || []).find(c => c.id === vehicleMatch?.customer_id)?.name;
+
+                if (!customerId) {
+                    const { data: customerData, error: custError } = await supabase
+                        .from('customers')
+                        .insert([{
+                            title: newJobForm.customerTitle,
+                            name: tidyName(newJobForm.customerName),
+                            phone: newJobForm.customerPhone,
+                            tenant_id: profile?.tenant_id
+                        }])
+                        .select()
+                        .single();
+                    if (custError) throw custError;
+                    customerId = customerData.id;
+                }
+
+                if (vehicleMatch) {
+                    finalVehicleId = vehicleMatch.id;
+                } else {
+                    const { data: vehicleData, error: vehError } = await supabase
+                        .from('vehicles')
+                        .insert([{
+                            customer_id: customerId,
+                            make: tidyName(newJobForm.vehicleMake),
+                            model: tidyName(newJobForm.vehicleModel),
+                            license_plate: plate,
+                            tenant_id: profile?.tenant_id
+                        }])
+                        .select()
+                        .single();
+                    if (vehError) throw vehError;
+                    finalVehicleId = vehicleData.id;
+                }
+
+                // Say so, otherwise a silent match looks like the details were
+                // ignored.
+                if (vehicleMatch || customerMatch) {
+                    toast(vehicleMatch
+                        ? `${plate} is already on file — job added to ${matchedName || 'the existing customer'}.`
+                        : `Matched ${matchedName} by phone number — no duplicate created.`, 'info');
+                }
             }
 
             if (!finalVehicleId) throw new Error("Please select or add a vehicle.");
@@ -231,11 +273,16 @@ export const Jobs = () => {
 
     const filteredJobs = jobs.filter(job => {
         const q = searchTerm.toLowerCase();
+        // Staff look for a job by whoever brought the car in as often as by the
+        // car itself, so the customer's name and phone are searchable too.
+        const customer = (job.vehicles as any)?.customers;
         const matchesSearch = !q ||
                               job.vehicles?.make?.toLowerCase().includes(q) ||
                               job.vehicles?.model?.toLowerCase().includes(q) ||
                               job.vehicles?.license_plate?.toLowerCase().includes(q) ||
-                              job.description?.toLowerCase().includes(q);
+                              job.description?.toLowerCase().includes(q) ||
+                              customer?.name?.toLowerCase().includes(q) ||
+                              (customer?.phone || '').replace(/\D/g, '').includes(q.replace(/\D/g, '') || '\u0000');
                               
         const matchesArchive = showArchived ? job.archived : !job.archived;
         
@@ -309,7 +356,7 @@ export const Jobs = () => {
                  <Search className="absolute left-3 top-3 text-slate-500" size={20} />
                  <input 
                     type="text" 
-                    placeholder="Search by vehicle or plate..." 
+                    placeholder="Search customer, plate, vehicle or job..." 
                     className="w-full bg-slate-900 border border-slate-800 rounded-xl py-3 pl-10 text-white focus:outline-none focus:border-brand"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

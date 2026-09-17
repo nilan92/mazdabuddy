@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, Download } from 'lucide-react';
+import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, MessageCircle, Download, Wrench } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
+import { waMeUrl } from '../lib/whatsapp';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Customer, Vehicle, JobCard } from '../types';
 
@@ -75,9 +76,34 @@ export const Customers = () => {
         }
     });
 
+    /* Job counts for the whole list in one query. Counting per row would be
+       500 round trips; this returns only the vehicle→customer mapping and the
+       job rows, which is small enough to tally on the client. */
+    const { data: jobCounts = {} } = useQuery({
+        queryKey: ['customer-job-counts'],
+        queryFn: async () => {
+            const [{ data: veh }, { data: jobs }] = await Promise.all([
+                supabase.from('vehicles').select('id, customer_id'),
+                supabase.from('job_cards').select('vehicle_id, status'),
+            ]);
+            const owner = new Map((veh || []).map(v => [v.id, v.customer_id]));
+            const tally: Record<string, { total: number; open: number }> = {};
+            for (const j of jobs || []) {
+                const cust = owner.get(j.vehicle_id);
+                if (!cust) continue;
+                const t = tally[cust] ?? { total: 0, open: 0 };
+                t.total += 1;
+                if (j.status !== 'completed' && j.status !== 'cancelled') t.open += 1;
+                tally[cust] = t;
+            }
+            return tally;
+        },
+    });
+
     const refreshData = () => {
         queryClient.invalidateQueries({ queryKey: ['customers'] });
         queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+        queryClient.invalidateQueries({ queryKey: ['customer-job-counts'] });
     };
 
     const loading = customersLoading || vehiclesLoading;
@@ -269,7 +295,26 @@ export const Customers = () => {
                                         {(customer.name?.[0] || '?').toUpperCase()}
                                     </div>
                                     <div className="min-w-0">
-                                        <h3 className="text-xl font-bold text-white truncate">{withTitle(customer.title, customer.name)}</h3>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <h3 className="text-xl font-bold text-white truncate">{withTitle(customer.title, customer.name)}</h3>
+                                            {/* How much work this person has actually brought in — the
+                                                quickest read on whether they are a regular. */}
+                                            {(jobCounts[customer.id]?.total ?? 0) > 0 && (
+                                                <span
+                                                    title={`${jobCounts[customer.id].total} job${jobCounts[customer.id].total === 1 ? '' : 's'}`
+                                                        + (jobCounts[customer.id].open ? ` · ${jobCounts[customer.id].open} still open` : '')}
+                                                    className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                                                        jobCounts[customer.id].open > 0
+                                                            ? 'bg-cyan-500/15 text-cyan-300'
+                                                            : 'bg-slate-800 text-slate-400'}`}>
+                                                    <Wrench size={10} />
+                                                    {jobCounts[customer.id].total}
+                                                    {jobCounts[customer.id].open > 0 && (
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                                                    )}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap items-center gap-3 text-sm text-slate-400 mt-1">
                                             <span className="flex items-center gap-1"><Phone size={14}/> {customer.phone}</span>
                                             {customer.email && <span className="flex items-center gap-1"><Mail size={14}/> {customer.email}</span>}
@@ -291,9 +336,28 @@ export const Customers = () => {
                                             setSmsModal({ customer, vehicle: veh || null });
                                         }}
                                         className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-blue-400 transition-colors"
-                                        title="Send Service Reminder SMS"
+                                        title="Service reminder by SMS — sends immediately"
                                     >
                                         <MessageSquare size={18} />
+                                    </button>
+                                    {/* WhatsApp alongside SMS rather than instead of it: this one
+                                        opens a draft the user sends themselves, which is both cheaper
+                                        and reviewable, but not every customer is on WhatsApp. */}
+                                    <button
+                                        onClick={async () => {
+                                            if (!profile?.tenant_id) return;
+                                            const veh = (vehicles as Vehicle[]).find(v => v.customer_id === customer.id);
+                                            const { data: tenant } = await supabase.from('tenants').select('name, phone').eq('id', profile.tenant_id).single();
+                                            const msg = smsTemplates.serviceReminder(
+                                                customer.name, veh?.make || 'your vehicle', veh?.model || '',
+                                                veh?.license_plate || '', tenant?.name || 'us', tenant?.phone || ''
+                                            );
+                                            window.open(waMeUrl(customer.phone, msg), '_blank', 'noopener');
+                                        }}
+                                        className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors"
+                                        title="Service reminder on WhatsApp — opens a draft you send"
+                                    >
+                                        <MessageCircle size={18} />
                                     </button>
                                      <button
                                         onClick={() => { setHistorySearch(''); fetchHistory(customer.id); }}

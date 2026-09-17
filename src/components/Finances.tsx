@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     DollarSign, TrendingUp, TrendingDown, Search, Plus, Trash2, FileText, Download,
     Wallet, Package, Wrench, Building2, Scale, AlertTriangle, Check, Layers,
-    MessageCircle, Smartphone, Banknote, HandCoins, ArrowRight, ChevronRight,
+    MessageCircle, Smartphone, Banknote, HandCoins, ArrowRight, ChevronRight, Truck,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
@@ -52,7 +52,7 @@ const short = (v: number) =>
     : Math.abs(v) >= 1_000 ? `${Math.round(v / 1_000)}k` : String(Math.round(v));
 
 type PeriodKind = 'month' | 'fy' | 'all' | 'custom';
-type Tab = 'all' | 'income' | 'expenses' | 'owed' | 'assets';
+type Tab = 'all' | 'income' | 'expenses' | 'owed' | 'suppliers' | 'assets';
 
 /*
  * Charts live at module scope, not inside Finances.
@@ -420,6 +420,32 @@ export const Finances = () => {
        knowing about — it is shrinkage, mis-costed parts or unrecorded purchases —
        but it belongs here as a note, not as a broken balance sheet. */
     const stockVariance = round2(raw.stock - balance.stock);
+
+    /* Suppliers are not a separate thing to maintain — they are whoever has
+       been named on a bill. Every expense carrying a supplier contributes, so
+       the list builds itself as bills are recorded and always reflects who is
+       actually being bought from. */
+    const suppliers = useMemo(() => {
+        const byName = new Map<string, {
+            name: string; billCount: number; total: number; outstanding: number;
+            lastDate: string; categories: Set<string>;
+        }>();
+        for (const m of raw.manual as any[]) {
+            const name = (m.supplier || '').trim();
+            if (!name || m.is_income) continue;
+            const amount = Number(m.amount_lkr) || 0;
+            const cur = byName.get(name.toLowerCase()) ?? {
+                name, billCount: 0, total: 0, outstanding: 0, lastDate: m.date, categories: new Set<string>(),
+            };
+            cur.billCount += 1;
+            cur.total = round2(cur.total + amount);
+            if (m.paid === false) cur.outstanding = round2(cur.outstanding + amount);
+            if (new Date(m.date) > new Date(cur.lastDate)) cur.lastDate = m.date;
+            if (m.category) cur.categories.add(m.category);
+            byName.set(name.toLowerCase(), cur);
+        }
+        return [...byName.values()].sort((a, b) => b.outstanding - a.outstanding || b.total - a.total);
+    }, [raw.manual]);
 
     const cashEntered = raw.positions.some(p => ['bank', 'cash'].includes(p.key));
     const availableCash = round2(balance.bank + balance.cash);
@@ -935,7 +961,8 @@ export const Finances = () => {
             <div className={card}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 p-4 border-b border-slate-800">
                     <div className="flex gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                        {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'], ['owed', 'Owed'], ['assets', 'Assets']] as [Tab, string][])
+                        {([['all', 'All activity'], ['income', 'Income'], ['expenses', 'Expenses'],
+                           ['owed', 'Owed'], ['suppliers', 'Suppliers'], ['assets', 'Assets']] as [Tab, string][])
                             .map(([k, label]) => (
                                 <button key={k} onClick={() => { setTab(k); setCatFilter('all'); }}
                                     className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
@@ -944,7 +971,7 @@ export const Finances = () => {
                                 </button>
                             ))}
                     </div>
-                    {tab !== 'assets' && tab !== 'owed' ? (
+                    {tab !== 'assets' && tab !== 'owed' && tab !== 'suppliers' ? (
                         <div className="flex items-center gap-2 w-full md:w-auto">
                             <div className="relative flex-1 md:flex-none">
                                 <Search className="absolute left-3 top-2.5 text-slate-500" size={15} />
@@ -976,7 +1003,65 @@ export const Finances = () => {
                     )}
                 </div>
 
-                {tab === 'owed' ? (
+                {tab === 'suppliers' ? (
+                    <div className="p-4">
+                        {suppliers.length === 0 ? (
+                            <div className="text-center py-10">
+                                <Truck size={30} className="mx-auto text-slate-700 mb-3" />
+                                <p className="text-slate-400 text-sm mb-1">No suppliers yet.</p>
+                                <p className="text-slate-600 text-xs max-w-md mx-auto">
+                                    Record an expense and name the supplier — the ones you buy from
+                                    appear here on their own, with what you have spent and what is
+                                    still owed. Nothing separate to keep up to date.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {suppliers.map(sup => (
+                                    <div key={sup.name} className="bg-slate-800/40 border border-slate-800 rounded-xl p-3">
+                                        <div className="flex items-start gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="font-bold text-white text-sm truncate">{sup.name}</div>
+                                                <div className="text-[11px] text-slate-500 truncate">
+                                                    {[...sup.categories].slice(0, 3).join(' · ') || 'Uncategorised'}
+                                                    {' · last '}{new Date(sup.lastDate).toLocaleDateString('en-GB')}
+                                                </div>
+                                            </div>
+                                            {sup.outstanding > 0 && (
+                                                <span className="text-[10px] font-bold px-2 py-1 rounded uppercase bg-rose-500/10 text-rose-400 shrink-0">
+                                                    owing
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-2 mt-2.5 pt-2.5 border-t border-slate-800/70">
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 uppercase">Bills</div>
+                                                <div className="font-mono text-xs sm:text-sm text-slate-300 tabular-nums">{sup.billCount}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[10px] text-slate-500 uppercase">Spent</div>
+                                                <div className="font-mono text-xs sm:text-sm text-slate-300 tabular-nums">{lkr(sup.total)}</div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-[10px] text-slate-500 uppercase">Still owed</div>
+                                                <div className={`font-mono text-xs sm:text-sm font-bold tabular-nums ${
+                                                    sup.outstanding > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                                                    {lkr(sup.outstanding)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                <div className="flex justify-between items-center pt-3 mt-1 border-t border-slate-800 text-sm">
+                                    <span className="text-slate-400 font-bold">Owed across {suppliers.length} supplier{suppliers.length === 1 ? '' : 's'}</span>
+                                    <span className="font-mono text-rose-400 font-black">
+                                        {lkr(round2(suppliers.reduce((t, x) => t + x.outstanding, 0)))}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : tab === 'owed' ? (
                     <div className="p-4 space-y-8">
                         {/* ---- receivables ------------------------------------ */}
                         <section>
