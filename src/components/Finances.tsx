@@ -1344,16 +1344,23 @@ export const Finances = () => {
                     </p>
                     <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Amount (LKR)</label>
-                        <input type="number" required min="0" step="0.01" value={entryForm.amount}
-                            onChange={e => setEntryForm(f => ({ ...f, amount: e.target.value }))}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono" />
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold pointer-events-none">LKR</span>
+                            {/* inputMode decimal brings up the numeric keypad; the 16px
+                                base size stops iOS zooming the page on focus. */}
+                            <input type="number" required min="0" step="0.01" inputMode="decimal"
+                                value={entryForm.amount} autoFocus
+                                onChange={e => setEntryForm(f => ({ ...f, amount: e.target.value }))}
+                                placeholder="0.00"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-12 pr-3 py-3 text-white font-mono text-base tabular-nums" />
+                        </div>
                     </div>
                     <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Category</label>
-                        <div className="flex flex-wrap gap-1.5 mb-2">
+                        <div className="flex flex-wrap gap-1.5 mb-2 max-h-28 overflow-y-auto sm:max-h-none">
                             {categoriesFor(entryModal === 'income' ? 'income' : 'expense').map(c => (
                                 <button key={c} type="button" onClick={() => setEntryForm(f => ({ ...f, category: c }))}
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                                    className={`px-3 py-2 sm:py-1 rounded-lg text-xs font-medium transition-colors ${
                                         entryForm.category === c ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
                                     {c}
                                 </button>
@@ -1362,10 +1369,11 @@ export const Finances = () => {
                         <div className="flex gap-2">
                             <input value={newCategory} onChange={e => setNewCategory(e.target.value)}
                                 placeholder="Add your own category…"
-                                className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
+                                className="flex-1 min-w-0 bg-slate-900 border border-slate-800 rounded-lg px-3 py-2.5 text-sm text-white" />
                             <button type="button" onClick={() => addCategory(entryModal === 'income' ? 'income' : 'expense', newCategory)}
-                                className="px-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold">
-                                <Check size={14} />
+                                title="Add this category"
+                                className="px-4 shrink-0 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold">
+                                <Check size={15} />
                             </button>
                         </div>
                     </div>
@@ -1373,13 +1381,13 @@ export const Finances = () => {
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description</label>
                         <input value={entryForm.description} onChange={e => setEntryForm(f => ({ ...f, description: e.target.value }))}
                             placeholder={entryModal === 'income' ? 'Scrap metal sold to collector' : 'Electricity bill — August'}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm" />
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-white text-base" />
                     </div>
                     <div>
                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Date</label>
                         <input type="date" required value={entryForm.date}
                             onChange={e => setEntryForm(f => ({ ...f, date: e.target.value }))}
-                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm" />
+                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-white text-base" />
                     </div>
                     {entryModal === 'expense' && (
                         <div className="border-t border-slate-800 pt-3">
@@ -1415,12 +1423,16 @@ export const Finances = () => {
                             )}
                         </div>
                     )}
-                    <button type="submit" disabled={submitting}
-                        className="w-full btn-brand py-3 rounded-xl font-bold disabled:opacity-60">
-                        {submitting ? 'Saving…'
-                            : entryModal === 'income' ? 'Record income'
-                            : entryForm.paid ? 'Record expense' : 'Record bill'}
-                    </button>
+                    {/* Sticky so it stays reachable once the on-screen keyboard
+                        has pushed the form up. */}
+                    <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-1 bg-slate-900 border-t border-slate-800">
+                        <button type="submit" disabled={submitting}
+                            className="w-full btn-brand py-3.5 rounded-xl font-bold disabled:opacity-60">
+                            {submitting ? 'Saving…'
+                                : entryModal === 'income' ? 'Record income'
+                                : entryForm.paid ? 'Record expense' : 'Record bill'}
+                        </button>
+                    </div>
                 </form>
             </Modal>
 

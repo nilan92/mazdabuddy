@@ -120,7 +120,14 @@
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.animate-page-in { animation: page-in 0.18s ease-out forwards; }
+/* No `forwards`. The fill kept `transform: translateY(0)` applied after the
+   animation finished, and a transform other than `none` makes the element a
+   containing block for `position: fixed` descendants — so every fixed overlay
+   inside a page centred on this wrapper instead of the viewport. On a short
+   desktop page that looks correct; on a tall phone page the overlay lands below
+   the fold. The end state matches the element's normal styles anyway, so
+   dropping the fill changes nothing visually. */
+.animate-page-in { animation: page-in 0.18s ease-out; }
 
 /* Soft fade-up entrance */
 @keyframes fade-up {

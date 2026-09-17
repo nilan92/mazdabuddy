@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -184,21 +185,22 @@ export const Dashboard = () => {
         )}
       </div>
 
-      {showQuote && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowQuote(false)}>
-              <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl max-w-md w-full relative shadow-2xl transform transition-all scale-100" onClick={e => e.stopPropagation()}>
+      {showQuote && createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={() => setShowQuote(false)}>
+              <div className="bg-slate-900 border border-slate-700 p-6 sm:p-8 rounded-3xl max-w-md w-full relative shadow-2xl max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                   <button onClick={() => setShowQuote(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors">
                       <X size={24} />
                   </button>
                   <div className="flex flex-col items-center text-center">
-                      <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-brand mb-6 border border-brand/20">
+                      <div className="w-14 h-14 sm:w-16 sm:h-16 bg-brand/10 rounded-2xl flex items-center justify-center text-brand mb-5 sm:mb-6 border border-brand/20 shrink-0">
                           <Quote size={32} />
                       </div>
-                      <h3 className="text-xl font-bold text-white mb-4 leading-relaxed">"{currentQuote}"</h3>
+                      <h3 className="text-lg sm:text-xl font-bold text-white mb-4 leading-relaxed">"{currentQuote}"</h3>
                       <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">- Management Era</p>
                   </div>
               </div>
-          </div>
+          </div>,
+          document.body
       )}
 
       {/* BOTTOM SECTIONS */}
