@@ -433,8 +433,42 @@ export interface JournalSources extends LedgerSources {
     }[];
     assets: Asset[];
     depreciationByAsset: { assetId: string; charge: number }[];
+    openingDateISO?: string;
     periodEndISO: string;
 }
+
+/**
+ * Computes opening fixed assets at cost and opening accumulated depreciation
+ * for assets acquired prior to `asOf`.
+ */
+export function openingAssetBalances(assets: Asset[], asOf: Date): { cost: number; accumulatedDepreciation: number } {
+    let cost = 0;
+    let accumulatedDepreciation = 0;
+    const asOfMs = asOf.getTime();
+
+    for (const a of assets) {
+        const pDate = new Date(a.purchase_date);
+        if (pDate.getTime() >= asOfMs) continue;
+
+        const c = round2(n(a.cost_lkr));
+        if (c <= 0) continue;
+        cost = round2(cost + c);
+
+        const residual = n(a.residual_lkr);
+        const life = n(a.useful_life_years) || 1;
+        const depAmt = Math.max(0, c - residual);
+        const annual = depAmt / life;
+
+        const disposed = a.disposal_date ? new Date(a.disposal_date) : null;
+        const stopAtMs = disposed && disposed.getTime() < asOfMs ? disposed.getTime() : asOfMs;
+        const yearsHeld = Math.max(0, (stopAtMs - pDate.getTime()) / (365.25 * 86400000));
+        const priorAcc = Math.min(depAmt, annual * yearsHeld);
+        accumulatedDepreciation = round2(accumulatedDepreciation + priorAcc);
+    }
+
+    return { cost, accumulatedDepreciation };
+}
+
 
 /**
  * Builds the journal. Sales are posted from the labour and parts lines with the
@@ -530,6 +564,9 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
     for (const a of src.assets) {
         const cost = round2(n(a.cost_lkr));
         if (cost === 0) continue;
+        // Assets acquired before the current opening date are opening capital assets;
+        // they were not paid out of the opening bank balance and must not credit Bank.
+        if (src.openingDateISO && a.purchase_date < src.openingDateISO) continue;
         entries.push({
             id: `j-asset-${a.id}`, date: a.purchase_date, narrative: `Asset purchased — ${a.name}`,
             lines: [dr(ACCOUNTS.FIXED_ASSETS, cost), cr(ACCOUNTS.BANK, cost)],

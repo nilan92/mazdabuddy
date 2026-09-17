@@ -16,6 +16,7 @@ import { fyStart, fyEnd, fyLabel, toISODate, describePeriod, FY_START_MONTH } fr
 import {
     buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
     buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow, reconcileStock, STOCK_PURCHASE_CATEGORY,
+    openingAssetBalances,
     type LedgerEntry, type Asset, type AgedItem, type ProfitAndLoss,
 } from '../lib/finance';
 import { waMeUrl } from '../lib/whatsapp';
@@ -366,8 +367,9 @@ export const Finances = () => {
         manualFull: raw.manual,
         assets: raw.assets,
         depreciationByAsset: schedules.map(s => ({ assetId: s.asset.id, charge: s.chargeForPeriod })),
+        openingDateISO: toISODate(fyStart(fyAnchor)),
         periodEndISO: toISODate(period.end),
-    }), [raw, schedules, period.end]);
+    }), [raw, schedules, fyAnchor, period.end]);
 
     /* Consuming a part credits Stock. With no opening figure and no recorded
        purchases the account only receives credits and the balance sheet reports
@@ -389,10 +391,16 @@ export const Finances = () => {
         () => (stockRecon ? [...journal, stockRecon] : journal),
         [journal, stockRecon]);
 
+    const openingAssets = useMemo(
+        () => openingAssetBalances(raw.assets, fyStart(fyAnchor)),
+        [raw.assets, fyAnchor]);
+
     const trial = useMemo(() => trialBalance(postedJournal, period.start, period.end, [
         { account: ACCOUNTS.BANK, amount: positionsMap.bank || 0 },
         { account: ACCOUNTS.CASH, amount: positionsMap.cash || 0 },
         { account: ACCOUNTS.STOCK, amount: openingStock },
+        { account: ACCOUNTS.FIXED_ASSETS, amount: openingAssets.cost },
+        { account: ACCOUNTS.ACC_DEP, amount: -openingAssets.accumulatedDepreciation },
         { account: ACCOUNTS.LOANS, amount: -(positionsMap.loans || 0) },
         { account: ACCOUNTS.CAPITAL, amount: -(positionsMap.share_capital || 0) },
         // Opening stock the tenant did not supply is derived, and its contra has
@@ -402,7 +410,7 @@ export const Finances = () => {
         { account: ACCOUNTS.RETAINED,
           amount: -((positionsMap.retained_earnings_bf || 0) + (stockOpeningEntered ? 0 : openingStock)) },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ]), [postedJournal, period, positionsMap, openingStock]);
+    ]), [postedJournal, period, positionsMap, openingStock, openingAssets]);
 
     const cash = useMemo(() => cashFlow(
         postedJournal, period.start, period.end,
