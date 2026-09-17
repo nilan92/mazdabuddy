@@ -347,6 +347,18 @@ export function ageItems(
  * detectable rather than invisible.
  */
 
+/** Net movement on one account across the period, debits positive. */
+function movementOn(journal: JournalEntry[], code: string, start: Date, end: Date): number {
+    let net = 0;
+    for (const e of journal) {
+        const d = new Date(e.date);
+        if (d < start || d > end) continue;
+        for (const l of e.lines) if (l.account.code === code) net += l.amount;
+    }
+    return round2(net);
+}
+
+
 export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
 
 export interface Account {
@@ -373,6 +385,7 @@ export const ACCOUNTS: Record<string, Account> = {
     COGS: { code: '5000', name: 'Cost of parts sold', type: 'expense' },
     OPEX: { code: '6000', name: 'Operating expenses', type: 'expense' },
     DEPRECIATION: { code: '6900', name: 'Depreciation', type: 'expense' },
+    UNRECORDED_PURCHASES: { code: '2900', name: 'Unrecorded parts purchases', type: 'liability' },
     SUSPENSE: { code: '9999', name: 'Suspense — unreconciled', type: 'equity' },
 };
 
@@ -596,17 +609,6 @@ export function trialBalance(
 
 /* ------------------------------------------------- stock and cash movement */
 
-/** Net movement on one account across the period, debits positive. */
-function movementOn(journal: JournalEntry[], code: string, start: Date, end: Date): number {
-    let net = 0;
-    for (const e of journal) {
-        const d = new Date(e.date);
-        if (d < start || d > end) continue;
-        for (const l of e.lines) if (l.account.code === code) net += l.amount;
-    }
-    return round2(net);
-}
-
 /**
  * Works out what stock must have been on the shelf at the start of the period.
  *
@@ -629,6 +631,47 @@ export function deriveOpeningStock(
     end: Date,
 ): number {
     return Math.max(0, round2(physicalClosingStock - movementOn(journal, ACCOUNTS.STOCK.code, start, end)));
+}
+
+/**
+ * Brings the Stock account onto the physical count.
+ *
+ * A workshop restocks the shelf in the Inventory tab without recording it as a
+ * purchase, so Stock receives credits as parts are fitted and no debits at all.
+ * The account then runs negative — inventory that cannot exist — and the
+ * opening figure the owner types in is far too small to absorb a year of
+ * consumption.
+ *
+ * The parts list knows the real valuation, so the difference is posted to a
+ * named liability rather than being hidden or clamped: the parts were bought
+ * and paid for somehow, and until that is recorded the books owe an
+ * explanation. It is a liability and not an expense because the stock is still
+ * on the shelf — treating it as a cost would understate profit.
+ *
+ * Returns null when the books already agree with the count.
+ */
+export function reconcileStock(
+    physicalStock: number,
+    journal: JournalEntry[],
+    openingStock: number,
+    periodEnd: Date,
+    periodEndISO: string,
+): JournalEntry | null {
+    const movement = movementOn(journal, ACCOUNTS.STOCK.code, new Date(0), periodEnd);
+    const perBooks = round2(openingStock + movement);
+    const difference = round2(physicalStock - perBooks);
+    if (Math.abs(difference) < 1) return null;
+
+    return {
+        id: 'j-stockrecon',
+        date: periodEndISO,
+        narrative: difference > 0
+            ? 'Stock on hand exceeds the recorded purchases — parts bought but not entered'
+            : 'Stock on hand is below the books — parts recorded but not on the shelf',
+        lines: difference > 0
+            ? [dr(ACCOUNTS.STOCK, difference), cr(ACCOUNTS.UNRECORDED_PURCHASES, difference)]
+            : [dr(ACCOUNTS.UNRECORDED_PURCHASES, -difference), cr(ACCOUNTS.STOCK, -difference)],
+    };
 }
 
 export interface CashFlow {

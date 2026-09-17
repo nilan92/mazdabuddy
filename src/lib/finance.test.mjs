@@ -1,6 +1,6 @@
 // node src/lib/finance.test.mjs
 import assert from 'node:assert/strict';
-import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf, buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow } from './finance.ts';
+import { buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, bucketFor, ageOf, buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow, reconcileStock } from './finance.ts';
 
 const FY_START = new Date(2026, 3, 1);   // 1 Apr 2026
 const FY_END = new Date(2027, 2, 31, 23, 59, 59);
@@ -254,6 +254,39 @@ assert.ok(withContra.balanced, `with its contra the books balance, out by ${with
 
 assert.equal(deriveOpeningStock(0, consumeOnly, FY_START, FY_END), 6900);
 assert.ok(deriveOpeningStock(-999, consumeOnly, FY_START, FY_END) >= 0, 'never returns negative');
+
+// ---- stock reconciliation --------------------------------------------------
+// Their production case: an opening figure was entered, but it is far smaller
+// than a year of consumption because purchases are never recorded. Stock goes
+// heavily negative, which is what appeared on the statement.
+const ENTERED_OPENING = 75000, CONSUMED = 802983, PHYSICAL = 1559100;
+const consumeHeavy = buildJournal({
+  ...sources,
+  jobParts: [{ id: 'big', created_at: '2026-08-10T00:00:00Z', quantity: 1,
+               price_at_time_lkr: 0, cost_at_time_lkr: CONSUMED, partName: 'Parts' }],
+  jobLabour: [], invoicesFull: [], manualFull: [], assets: [], depreciationByAsset: [],
+  periodEndISO: '2027-03-31',
+});
+const beforeRecon = trialBalance(consumeHeavy, FY_START, FY_END, [
+  { account: ACCOUNTS.STOCK, amount: ENTERED_OPENING },
+]);
+const negStock = beforeRecon.rows.find(r => r.account.code === '1100');
+assert.equal(negStock.credit, CONSUMED - ENTERED_OPENING, 'reproduces the negative stock');
+
+const recon = reconcileStock(PHYSICAL, consumeHeavy, ENTERED_OPENING, FY_END, '2027-03-31');
+assert.ok(recon, 'a reconciling entry is produced');
+assert.equal(recon.lines.reduce((t, l) => t + l.amount, 0), 0, 'and it balances');
+const afterRecon = trialBalance([...consumeHeavy, recon], FY_START, FY_END, [
+  { account: ACCOUNTS.STOCK, amount: ENTERED_OPENING },
+]);
+const fixed = afterRecon.rows.find(r => r.account.code === '1100');
+assert.equal(fixed.debit, PHYSICAL, 'stock now equals the shelf');
+assert.equal(fixed.credit, 0, 'and is never negative');
+const owed = afterRecon.rows.find(r => r.account.code === '2900');
+assert.equal(owed.credit, PHYSICAL - (ENTERED_OPENING - CONSUMED), 'the gap is named, not hidden');
+
+// Books that already agree need no entry at all.
+assert.equal(reconcileStock(ENTERED_OPENING - CONSUMED, consumeHeavy, ENTERED_OPENING, FY_END, '2027-03-31'), null);
 
 // ---- cash flow -------------------------------------------------------------
 const cf = cashFlow(journal, FY_START, FY_END, 100000, 5000);

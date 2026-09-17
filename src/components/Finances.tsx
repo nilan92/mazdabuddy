@@ -10,10 +10,10 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { downloadCSV } from '../lib/csv';
-import { fyStart, fyEnd, fyLabel, toISODate, describePeriod } from '../lib/fiscal';
+import { fyStart, fyEnd, fyLabel, toISODate, describePeriod, FY_START_MONTH } from '../lib/fiscal';
 import {
     buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
-    buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow,
+    buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow, reconcileStock,
     type LedgerEntry, type Asset, type AgedItem, type ProfitAndLoss,
 } from '../lib/finance';
 import { waMeUrl } from '../lib/whatsapp';
@@ -170,6 +170,10 @@ export const Finances = () => {
     const [customRange, setCustomRange] = useState({
         start: toISODate(fyStart()), end: toISODate(fyEnd()),
     });
+    // Which month / financial year is being looked at. Default to the current
+    // one, so the tab opens on "now" as it always did.
+    const [monthAnchor, setMonthAnchor] = useState(() => new Date());
+    const [fyAnchorYear, setFyAnchorYear] = useState(() => fyStart().getFullYear());
     const [search, setSearch] = useState('');
     const [catFilter, setCatFilter] = useState('all');
 
@@ -201,19 +205,27 @@ export const Finances = () => {
 
     /* ---------------------------------------------------------------- period */
     const period = useMemo(() => {
-        const now = new Date();
         if (periodKind === 'month') {
-            return { start: new Date(now.getFullYear(), now.getMonth(), 1),
-                     end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59) };
+            const y = monthAnchor.getFullYear(), m = monthAnchor.getMonth();
+            return { start: new Date(y, m, 1), end: new Date(y, m + 1, 0, 23, 59, 59) };
         }
-        if (periodKind === 'fy') return { start: fyStart(now), end: new Date(fyEnd(now).setHours(23, 59, 59, 999)) };
+        if (periodKind === 'fy') {
+            const anchor = new Date(fyAnchorYear, FY_START_MONTH, 1);
+            return { start: fyStart(anchor), end: new Date(fyEnd(anchor).setHours(23, 59, 59, 999)) };
+        }
         if (periodKind === 'all') return { start: new Date(2000, 0, 1), end: new Date(2999, 11, 31) };
         return { start: new Date(`${customRange.start}T00:00:00`), end: new Date(`${customRange.end}T23:59:59`) };
-    }, [periodKind, customRange]);
+    }, [periodKind, customRange, monthAnchor, fyAnchorYear]);
 
     const periodLabel = periodKind === 'all'
         ? 'All time'
         : describePeriod(toISODate(period.start), toISODate(period.end));
+
+    /* Opening balances are stored per financial year. "All time" starts in 2000,
+       so fyStart() resolved it to FY 1999/00 — a year with no figures — and the
+       balance sheet lost every entered value. The anchor is the year the period
+       ends in, which for "All time" is the current one. */
+    const fyAnchor = periodKind === 'all' ? new Date() : period.start;
 
     /* ------------------------------------------------------------------ data */
     const fetchAll = useCallback(async () => {
@@ -227,7 +239,7 @@ export const Finances = () => {
                 supabase.from('user_expenses').select('*, profiles!user_id(full_name)').order('date', { ascending: false }),
                 supabase.from('assets').select('*').order('purchase_date', { ascending: false }),
                 supabase.from('finance_categories').select('*'),
-                supabase.from('finance_positions').select('*').eq('fy_start', toISODate(fyStart(period.start))),
+                supabase.from('finance_positions').select('*').eq('fy_start', toISODate(fyStart(fyAnchor))),
                 supabase.from('parts').select('stock_quantity, cost_lkr'),
                 supabase.from('tenants').select('name, address, phone').eq('id', profile.tenant_id).single(),
             ]);
@@ -255,7 +267,8 @@ export const Finances = () => {
         } finally {
             setLoading(false);
         }
-    }, [profile?.tenant_id, period.start, toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [profile?.tenant_id, period.start, fyAnchor, toast]);
 
     useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -346,7 +359,18 @@ export const Finances = () => {
         ? (positionsMap.stock_opening || 0)
         : deriveOpeningStock(raw.stock, journal, period.start, period.end);
 
-    const trial = useMemo(() => trialBalance(journal, period.start, period.end, [
+    /* The shelf is the authority on stock. Without this the account only ever
+       receives credits — parts are fitted but never recorded as bought — and the
+       balance sheet reports inventory that cannot exist. */
+    const stockRecon = useMemo(
+        () => reconcileStock(raw.stock, journal, openingStock, period.end, toISODate(period.end)),
+        [raw.stock, journal, openingStock, period.end]);
+
+    const postedJournal = useMemo(
+        () => (stockRecon ? [...journal, stockRecon] : journal),
+        [journal, stockRecon]);
+
+    const trial = useMemo(() => trialBalance(postedJournal, period.start, period.end, [
         { account: ACCOUNTS.BANK, amount: positionsMap.bank || 0 },
         { account: ACCOUNTS.CASH, amount: positionsMap.cash || 0 },
         { account: ACCOUNTS.STOCK, amount: openingStock },
@@ -359,13 +383,13 @@ export const Finances = () => {
         { account: ACCOUNTS.RETAINED,
           amount: -((positionsMap.retained_earnings_bf || 0) + (stockOpeningEntered ? 0 : openingStock)) },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    ]), [journal, period, positionsMap, openingStock]);
+    ]), [postedJournal, period, positionsMap, openingStock]);
 
     const cash = useMemo(() => cashFlow(
-        journal, period.start, period.end,
+        postedJournal, period.start, period.end,
         positionsMap.bank || 0, positionsMap.cash || 0,
         !raw.positions.some(p => ['bank', 'cash'].includes(p.key)),
-    ), [journal, period, positionsMap, raw.positions]);
+    ), [postedJournal, period, positionsMap, raw.positions]);
 
     /* Closing bank and cash are computed — opening balance plus every receipt
        and payment the journal posted — rather than typed in. */
@@ -525,7 +549,7 @@ export const Finances = () => {
 
     const savePositions = async () => {
         setSubmitting(true);
-        const fy = toISODate(fyStart(period.start));
+        const fy = toISODate(fyStart(fyAnchor));
         const rows = POSITION_FIELDS.map(f => ({
             tenant_id: profile?.tenant_id, fy_start: fy, key: f.key, label: f.label,
             amount_lkr: parseFloat(positionsForm[f.key] ?? '') || 0, updated_at: new Date().toISOString(),
@@ -673,7 +697,7 @@ export const Finances = () => {
                     <button onClick={() => { setEntryModal('expense'); setEntryForm(f => ({ ...f, category: '' })); }}
                         title="Money the workshop spent, paid or on credit"
                         className="flex items-center justify-center gap-2 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-600/30 px-3 py-2.5 rounded-xl font-bold text-sm transition-colors">
-                        <Plus size={15} className="shrink-0" /> Expense
+                        <Plus size={15} className="shrink-0" /> Expenses
                     </button>
                     <button onClick={() => {
                         setPositionsForm(Object.fromEntries(POSITION_FIELDS.map(f =>
@@ -693,7 +717,8 @@ export const Finances = () => {
 
             {/* Period selector */}
             <div className="flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 sm:flex-wrap sm:overflow-visible sm:mx-0 sm:px-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {([['month', 'This month'], ['fy', fyLabel()], ['all', 'All time'], ['custom', 'Custom']] as [PeriodKind, string][])
+                {([['month', 'Month'], ['fy', fyLabel(new Date(fyAnchorYear, FY_START_MONTH, 1))],
+                   ['all', 'All time'], ['custom', 'Custom']] as [PeriodKind, string][])
                     .map(([k, label]) => (
                         <button key={k} onClick={() => setPeriodKind(k)}
                             className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
@@ -711,6 +736,60 @@ export const Finances = () => {
                     </div>
                 )}
             </div>
+
+            {/* A second line appears under the chips so a particular month or
+                financial year can be picked, rather than only ever showing the
+                current one. */}
+            {periodKind === 'month' && (
+                <div className="animate-reveal-strip flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button
+                        onClick={() => setMonthAnchor(d => new Date(d.getFullYear() - 1, d.getMonth(), 1))}
+                        title="Previous year"
+                        className="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 shrink-0">
+                        ‹ {monthAnchor.getFullYear() - 1}
+                    </button>
+                    {Array.from({ length: 12 }, (_, m) => {
+                        const active = monthAnchor.getMonth() === m;
+                        const inFuture = new Date(monthAnchor.getFullYear(), m, 1) > new Date();
+                        return (
+                            <button key={m} disabled={inFuture}
+                                onClick={() => setMonthAnchor(d => new Date(d.getFullYear(), m, 1))}
+                                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
+                                    active ? 'bg-cyan-600 text-white'
+                                    : inFuture ? 'bg-slate-900/40 text-slate-700 cursor-not-allowed'
+                                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'}`}>
+                                {new Date(2000, m, 1).toLocaleDateString('en-GB', { month: 'short' })}
+                            </button>
+                        );
+                    })}
+                    <span className="text-xs font-bold text-slate-500 px-1 shrink-0">{monthAnchor.getFullYear()}</span>
+                    <button
+                        onClick={() => setMonthAnchor(d => new Date(d.getFullYear() + 1, d.getMonth(), 1))}
+                        disabled={monthAnchor.getFullYear() >= new Date().getFullYear()}
+                        title="Next year"
+                        className="px-2 py-1.5 rounded-lg text-xs font-bold bg-slate-900 text-slate-400 hover:text-white border border-slate-800 shrink-0 disabled:opacity-30 disabled:hover:text-slate-400">
+                        {monthAnchor.getFullYear() + 1} ›
+                    </button>
+                </div>
+            )}
+
+            {periodKind === 'fy' && (
+                <div className="animate-reveal-strip flex items-center gap-2 overflow-x-auto -mx-2 px-2 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {/* Years run back from the one in progress. It follows the
+                        clock, so on 1 April the list rolls forward on its own. */}
+                    {Array.from({ length: 6 }, (_, i) => fyStart().getFullYear() - i).map(y => {
+                        const active = fyAnchorYear === y;
+                        return (
+                            <button key={y} onClick={() => setFyAnchorYear(y)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap shrink-0 transition-colors ${
+                                    active ? 'bg-cyan-600 text-white'
+                                    : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'}`}>
+                                {fyLabel(new Date(y, FY_START_MONTH, 1))}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Summary */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -824,12 +903,28 @@ export const Finances = () => {
                 </div>
             </div>
 
+            {stockRecon && (
+                <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
+                    <Package size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-sm text-amber-200/90">
+                        <span className="font-bold">
+                            {lkr(Math.abs(stockRecon.lines[0].amount))} of parts bought without being recorded.
+                        </span>{' '}
+                        Your shelf holds {lkr(raw.stock)} of stock, but the books only account for{' '}
+                        {lkr(round2(raw.stock - stockRecon.lines[0].amount))}. Restocking in the Inventory tab
+                        moves the parts but does not record the money, so the difference is sitting as
+                        "unrecorded parts purchases" on the balance sheet. Log those purchases as an expense
+                        under <span className="font-bold">Parts purchases</span> to clear it.
+                    </div>
+                </div>
+            )}
+
             {positionsIncomplete && (
                 <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
                     <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
                     <div className="text-sm text-amber-200/90">
                         <span className="font-bold">Balance sheet incomplete.</span>{' '}
-                        Your bank, cash, payables, loan and capital figures haven't been entered for {fyLabel(period.start)},
+                        Your bank, cash, loan and capital figures haven't been entered for {fyLabel(fyAnchor)},
                         so the statements can show a profit and loss account but not a balanced position.{' '}
                         <button onClick={() => { setPositionsForm({}); setPositionsModal(true); }} className="underline font-bold hover:text-amber-100">Enter them now</button>.
                     </div>
@@ -1393,7 +1488,7 @@ export const Finances = () => {
             </Modal>
 
             <Modal isOpen={positionsModal} onClose={() => setPositionsModal(false)}
-                title={`Balance sheet figures — ${fyLabel(period.start)}`}>
+                title={`Opening balances — ${fyLabel(fyAnchor)}`}>
                 <div className="space-y-3">
                     <p className="text-xs text-slate-500 -mt-1">
                         AutoPulse works out your assets, stock and debtors from the jobs and invoices it holds.
