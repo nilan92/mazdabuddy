@@ -1,0 +1,4 @@
+User-agent: *
+Disallow:
+
+Sitemap: https://nilan92.github.io/mazdabuddy/sitemap.xml

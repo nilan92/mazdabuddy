@@ -13,11 +13,53 @@
     <meta name="apple-mobile-web-app-title" content="AutoPulse" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <script>
-      // Aggressive error suppression for Chrome extensions that break the app
+      // Redirect unauthenticated visitors to the landing page
+      (function() {
+        var hash = window.location.hash;
+        var hasAppRoute = hash && hash.length > 2 && hash !== '#/';
+        // supabase-js v2 stores the session as "sb-<project-ref>-auth-token".
+        // The old check looked for "supabase", which never matches, so every
+        // signed-in visitor was bounced to the landing page.
+        var hasSession = Object.keys(localStorage).some(function(k) {
+          return k.indexOf('sb-') === 0 && k.indexOf('-auth-token') !== -1;
+        });
+        if (!hasAppRoute && !hasSession) {
+          window.location.replace('/mazdabuddy/about.html');
+        }
+      })();
+    </script>
+    <script>
+      // Recover from stale chunk errors (CDN propagation race on deploys)
+      function handleChunkError(msg) {
+        var isChunkError = (msg || '').includes('Importing a module script failed') ||
+                           (msg || '').includes('Failed to fetch dynamically imported module') ||
+                           (msg || '').includes('error loading dynamically imported module') ||
+                           (msg || '').includes('Unable to preload CSS');
+        if (isChunkError) {
+          var reloadedKey = 'chunk_reload_at';
+          var last = parseInt(localStorage.getItem(reloadedKey) || '0', 10);
+          if (Date.now() - last > 30000) {
+            localStorage.setItem(reloadedKey, String(Date.now()));
+            window.location.reload();
+          }
+          return true;
+        }
+        return false;
+      }
+      window.addEventListener('error', function(e) {
+        return handleChunkError(e.message);
+      }, true);
+      // Also catch dynamic import Promise rejections (lazy() components)
+      window.addEventListener('unhandledrejection', function(e) {
+        var msg = (e.reason && (e.reason.message || String(e.reason))) || '';
+        if (handleChunkError(msg)) e.preventDefault();
+      }, true);
+
+      // Suppress Chrome extension noise
       window.addEventListener('error', function(e) {
         var msg = e.message || '';
-        if (msg.includes('injectTMButton') || 
-            msg.includes('chrome-extension') || 
+        if (msg.includes('injectTMButton') ||
+            msg.includes('chrome-extension') ||
             msg.includes('message channel closed')) {
           e.stopImmediatePropagation();
           e.preventDefault();
@@ -59,8 +101,13 @@
         50% { opacity: 1; transform: scale(1); }
       }
     </style>
-    <script type="module" crossorigin src="/mazdabuddy/assets/index-cT8SiIdW.js"></script>
-    <link rel="stylesheet" crossorigin href="/mazdabuddy/assets/index-Dk_Swt92.css">
+    <script type="module" crossorigin src="/mazdabuddy/assets/index-B1FIkytB.js"></script>
+    <link rel="modulepreload" crossorigin href="/mazdabuddy/assets/vendor-react-BEJiIvd6.js">
+    <link rel="modulepreload" crossorigin href="/mazdabuddy/assets/vendor-query-DwxWvQ0t.js">
+    <link rel="modulepreload" crossorigin href="/mazdabuddy/assets/vendor-sentry-DRwd2YuM.js">
+    <link rel="modulepreload" crossorigin href="/mazdabuddy/assets/vendor-pdf-DJNlECgR.js">
+    <link rel="modulepreload" crossorigin href="/mazdabuddy/assets/vendor-supabase-CCwjp0t9.js">
+    <link rel="stylesheet" crossorigin href="/mazdabuddy/assets/index-CEcrq1Wt.css">
   </head>
   <body>
     <div id="root"></div>

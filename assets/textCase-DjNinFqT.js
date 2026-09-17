@@ -1,0 +1,2 @@
+function n(t){return t.replace(/[\p{L}]+/gu,e=>e===e.toLowerCase()?e.charAt(0).toUpperCase()+e.slice(1):e)}const i=["Mr.","Ms.","Dr.","Prof."];function c(t,e){const r=(e??"").trim(),a=(t??"").trim();return!a||!r||new RegExp(`^${a.replace(/\./g,"\\.")}\\s`,"i").test(r)?r:`${a} ${r}`}function l(t){return n((t??"").trim().replace(/\s+/g," "))}export{i as C,l as t,c as w};
+//# sourceMappingURL=textCase-DjNinFqT.js.map
