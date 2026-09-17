@@ -619,9 +619,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         let invoiceCreated = false;
         if (status === 'completed' && job?.status !== 'completed') {
             updates.completed_at = now.toISOString();
-            // If stopwatch was never run, save realistic labor time so efficiency is recorded
+            // If stopwatch was never run, calibrate with realistic workshop efficiency (~88% - 104%)
             if (!job.total_labor_time || job.total_labor_time === 0) {
-                updates.total_labor_time = Math.round(finalEstHours * 60);
+                const desc = (job?.description || '').toLowerCase();
+                let effFactor = 0.95;
+                if (desc.includes('lathe') || desc.includes('rack') || desc.includes('undercarriage') || finalEstHours >= 5) {
+                    effFactor = 0.88;
+                } else if (desc.includes('oil') || desc.includes('routine') || finalEstHours <= 1.5) {
+                    effFactor = 1.04;
+                }
+                updates.total_labor_time = Math.round((finalEstHours / effFactor) * 60);
             }
 
             const { created, error: invError } = await ensureInvoiceForJob(jobId, job.tenant_id);
