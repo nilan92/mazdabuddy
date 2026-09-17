@@ -278,7 +278,12 @@ export const Finances = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [profile?.tenant_id, period.start, fyAnchor, toast]);
 
-    useEffect(() => { fetchAll(); }, [fetchAll]);
+    useEffect(() => { 
+        fetchAll(); 
+        const handleAppRefresh = () => { fetchAll(); };
+        window.addEventListener('app:refresh', handleAppRefresh);
+        return () => window.removeEventListener('app:refresh', handleAppRefresh);
+    }, [fetchAll]);
 
     /* --------------------------------------------------------------- derived */
     const ledger = useMemo(() => buildLedger({

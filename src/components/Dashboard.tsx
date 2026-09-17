@@ -89,23 +89,24 @@ export const Dashboard = () => {
         .from('job_cards')
         .select('estimated_hours, total_labor_time')
         .eq('status', 'completed')
-        .not('total_labor_time', 'is', null) // Only where we have data
-        .not('estimated_hours', 'is', null)
         .order('completed_at', { ascending: false })
         .limit(20);
 
       let shopEfficiency: string = 'N/A';
       if (effJobs && effJobs.length > 0) {
           const validJobs = effJobs.filter((job: any) => {
-              const est = job.estimated_hours || 0;
-              const actual = (job.total_labor_time || 0) / 60;
-              return est > 0 && actual > 0;
+              const est = Number(job.estimated_hours) || 0;
+              return est > 0;
           });
           if (validJobs.length > 0) {
               const totalEff = validJobs.reduce((acc: number, job: any) => {
-                  const est = job.estimated_hours;
-                  const actual = (job.total_labor_time) / 60;
-                  return acc + Math.min((est / actual) * 100, 300); // cap outliers at 300%
+                  const est = Number(job.estimated_hours) || 0;
+                  let rawActual = (job.total_labor_time || 0) / 60;
+                  // If timer was never run, assume completed on target
+                  if (rawActual <= 0) rawActual = est;
+                  // Discard overnight timer accidents (>12h for single job)
+                  const actual = (rawActual > 12 && est < 8) ? est * 1.05 : rawActual;
+                  return acc + Math.min(Math.max((est / actual) * 100, 40), 200); // bound realistic 40% - 200%
               }, 0);
               shopEfficiency = `${Math.round(totalEff / validJobs.length)}%`;
           }

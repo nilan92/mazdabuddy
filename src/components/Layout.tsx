@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
+import { useQueryClient } from '@tanstack/react-query';
+import { PullToRefreshContainer } from './PullToRefreshContainer';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -23,9 +25,17 @@ export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut, profile } = useAuth();
+  const queryClient = useQueryClient();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
+
+  const handlePullRefresh = React.useCallback(async () => {
+    // 1. Invalidate all active React Query caches
+    await queryClient.invalidateQueries();
+    // 2. Broadcast custom refresh event for components like Finances
+    window.dispatchEvent(new CustomEvent('app:refresh'));
+  }, [queryClient]);
 
   if (!profile) return null; // Handled by AuthGuard, but safety first
   const role = profile.role;
@@ -285,7 +295,9 @@ export const Layout = ({ children }: LayoutProps) => {
          
          {/* CSS-only fade — no unmount, no Suspense flash */}
          <div key={location.pathname} className="relative z-10 animate-page-in">
-           {children}
+           <PullToRefreshContainer onRefresh={handlePullRefresh}>
+             {children}
+           </PullToRefreshContainer>
          </div>
       </main>
     </div>

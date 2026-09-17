@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -248,6 +248,32 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             controller.abort();
         };
     }, [jobId]);
+
+    // Calculate or infer estimated hours from labor items or service patterns
+    const getInferredHours = useCallback(() => {
+        // 1. If labor items exist with hours > 0, sum of labor is the most accurate benchmark
+        const laborSum = jobLabor.reduce((sum, item) => sum + (parseFloat(item.hours?.toString() || '0') || 0), 0);
+        if (laborSum > 0) return Number(laborSum.toFixed(1));
+
+        // 2. Otherwise infer from description & parts based on workshop historical patterns
+        const desc = (job?.description || '').toLowerCase();
+        const partsText = jobParts.map(p => (p.custom_name || p.parts?.name || '').toLowerCase()).join(' ');
+
+        let hours = 0;
+        if (desc.includes('tune') || desc.includes('tuneup')) hours += 3.5;
+        else if (desc.includes('fade off') || desc.includes('paint')) hours += 4.0;
+        else if (desc.includes('service') || desc.includes('routine') || partsText.includes('filter') || partsText.includes('oil')) hours += 2.5;
+
+        if (desc.includes('shock') || partsText.includes('shock') || partsText.includes('mount')) hours = Math.max(hours, 3.0);
+        if (desc.includes('bearing') || partsText.includes('bearing')) hours = Math.max(hours, 2.5);
+        if (desc.includes('brake') || partsText.includes('brake') || desc.includes('pad')) hours = Math.max(hours, 1.5);
+        if (desc.includes('leak') || desc.includes('packing') || partsText.includes('packing')) hours = Math.max(hours, 2.0);
+        if (desc.includes('rack') || desc.includes('steering')) hours = Math.max(hours, 4.0);
+        if (desc.includes('pump') || partsText.includes('pump')) hours = Math.max(hours, 3.0);
+        if (desc.includes('eps') || desc.includes('electrical') || desc.includes('diagnos')) hours = Math.max(hours, 1.0);
+
+        return hours > 0 ? Number(hours.toFixed(1)) : 2.0;
+    }, [job?.description, jobLabor, jobParts]);
 
     const generateJobCardPDF = async () => {
         if (!job || !tenantDetails) {
@@ -560,12 +586,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         }
 
         const now = new Date();
+        const finalEstHours = estimatedHours ? parseFloat(estimatedHours) : getInferredHours();
         const updates: any = {
             mileage: mileage ? parseInt(mileage) : null,
             technician_notes: techNotes,
             status,
             assigned_staff_id: assignedTech || null,
-            estimated_hours: estimatedHours ? parseFloat(estimatedHours) : 0,
+            estimated_hours: finalEstHours,
             discount_type: discountType,
             discount_value: parseFloat(discountValue) || 0
         };
@@ -592,6 +619,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         let invoiceCreated = false;
         if (status === 'completed' && job?.status !== 'completed') {
             updates.completed_at = now.toISOString();
+            // If stopwatch was never run, save realistic labor time so efficiency is recorded
+            if (!job.total_labor_time || job.total_labor_time === 0) {
+                updates.total_labor_time = Math.round(finalEstHours * 60);
+            }
 
             const { created, error: invError } = await ensureInvoiceForJob(jobId, job.tenant_id);
             if (invError) {
@@ -1210,9 +1241,21 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Est. Hours</label>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Est. Hours</label>
+                                                {(!estimatedHours || parseFloat(estimatedHours) === 0) && !readOnly && (
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setEstimatedHours(getInferredHours().toString())}
+                                                        className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-0.5 transition-colors"
+                                                        title="Auto-estimate based on labor tasks and similar jobs"
+                                                    >
+                                                        ✨ Suggest ({getInferredHours()}h)
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="relative">
-                                                <input type="number" disabled={readOnly} onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60" placeholder="0" />
+                                                <input type="number" step="0.1" disabled={readOnly} onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60" placeholder={getInferredHours() ? `${getInferredHours()}` : "0"} />
                                                 <Clock size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                             </div>
                                         </div>
