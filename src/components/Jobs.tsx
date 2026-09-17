@@ -43,6 +43,32 @@ export const Jobs = () => {
     const [vehicleSearchTerm, setVehicleSearchTerm] = useState('');
     const [showVehicleResults, setShowVehicleResults] = useState(false);
 
+    /* Completed jobs pile up on the board long after anyone needs to see them.
+       Anything finished more than 30 days ago is archived on load — the board
+       stays current without anyone tidying it, and nothing is deleted: the
+       Archived toggle still shows every one of them.
+
+       Note this also ends the customer's public status link for that job, since
+       get_job_status only serves unarchived jobs. Thirty days is well past the
+       point anyone is still checking on a finished repair. */
+    useEffect(() => {
+        if (!profile?.tenant_id) return;
+        const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
+        supabase.from('job_cards')
+            .update({ archived: true })
+            .eq('status', 'completed')
+            .eq('archived', false)
+            .lt('completed_at', cutoff)
+            .select('id')
+            .then(({ data, error }) => {
+                if (error) return console.warn('[Jobs] auto-archive failed:', error.message);
+                if (data && data.length > 0) {
+                    queryClient.invalidateQueries({ queryKey: ['jobs'] });
+                    console.log(`[Jobs] archived ${data.length} job(s) completed over 30 days ago`);
+                }
+            });
+    }, [profile?.tenant_id, queryClient]);
+
     const { data: jobs = [], isLoading: jobsLoading } = useQuery({
         queryKey: ['jobs'],
         queryFn: async () => {
