@@ -13,7 +13,7 @@ import { downloadCSV } from '../lib/csv';
 import { fyStart, fyEnd, fyLabel, toISODate, describePeriod, FY_START_MONTH } from '../lib/fiscal';
 import {
     buildLedger, profitAndLoss, depreciate, balanceSheet, round2, ageItems, AGE_BUCKETS,
-    buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow, reconcileStock,
+    buildJournal, trialBalance, ACCOUNTS, deriveOpeningStock, cashFlow, reconcileStock, STOCK_PURCHASE_CATEGORY,
     type LedgerEntry, type Asset, type AgedItem, type ProfitAndLoss,
 } from '../lib/finance';
 import { waMeUrl } from '../lib/whatsapp';
@@ -505,6 +505,9 @@ export const Finances = () => {
     const monthly = useMemo(() => {
         const buckets = new Map<string, { label: string; income: number; expense: number }>();
         for (const e of inPeriod) {
+            // Purchases of parts into stock are an asset purchase, not an operating expense;
+            // parts consumption on jobs (parts_cost) is already counted as the cost of sales.
+            if (e.category === STOCK_PURCHASE_CATEGORY) continue;
             const d = new Date(e.date);
             const key = `${d.getFullYear()}-${String(d.getMonth()).padStart(2, '0')}`;
             const b = buckets.get(key) || {

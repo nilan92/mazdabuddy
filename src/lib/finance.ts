@@ -185,6 +185,16 @@ export function buildLedger(src: LedgerSources): LedgerEntry[] {
 }
 
 /**
+ * Buying parts is not an operating cost — it is swapping cash for stock (an asset).
+ * The cost lands later, when the part is fitted to a job and moves from Stock
+ * to cost of sales (costOfParts). Perpetual inventory.
+ *
+ * Expenses filed under this category debit Stock rather than an operating expense
+ * account, and are excluded from operating expenses in the P&L to avoid double-counting.
+ */
+export const STOCK_PURCHASE_CATEGORY = 'Parts purchases';
+
+/**
  * Revenue is taken from invoices, never by summing the labour and parts lines:
  * the invoice is the authoritative figure and already carries the discount. The
  * labour/parts split is presented as the *composition* of that total, which is
@@ -209,7 +219,9 @@ export function profitAndLoss(
     const revenueOther = sum(e => e.kind === 'income' && e.source === 'manual');
     const costOfParts = sum(e => e.source === 'parts_cost');
 
-    const operatingEntries = inPeriod.filter(e => e.kind === 'expense' && e.source === 'manual');
+    const operatingEntries = inPeriod.filter(e =>
+        e.kind === 'expense' && e.source === 'manual' && e.category !== STOCK_PURCHASE_CATEGORY
+    );
     const operatingExpenses = round2(operatingEntries.reduce((t, e) => t + e.amount, 0));
     const expensesByCategory: Record<string, number> = {};
     for (const e of operatingEntries) {
@@ -409,16 +421,6 @@ const cr = (account: Account, amount: number): JournalLine => ({ account, amount
 const opexAccount = (category: string): Account =>
     ({ code: '6000', name: category, type: 'expense' });
 
-/**
- * Buying parts is not a cost — it is swapping cash for stock. The cost lands
- * later, when the part is fitted to a job and moves from Stock to cost of
- * sales. Perpetual inventory, which is what the parts table already maintains.
- *
- * Expenses filed under this category therefore debit Stock rather than an
- * expense account. Without it the Stock account only ever received credits as
- * parts were consumed, and ran negative.
- */
-export const STOCK_PURCHASE_CATEGORY = 'Parts purchases';
 
 export interface JournalSources extends LedgerSources {
     invoicesFull: {
