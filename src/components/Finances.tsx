@@ -947,21 +947,53 @@ export const Finances = () => {
                 </div>
             </div>
 
-            {stockRecon && (
-                <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
-                    <Package size={16} className="text-amber-400 shrink-0 mt-0.5" />
-                    <div className="text-sm text-amber-200/90">
-                        <span className="font-bold">
-                            {lkr(Math.abs(stockRecon.lines[0].amount))} of parts bought without being recorded.
-                        </span>{' '}
-                        Your shelf holds {lkr(raw.stock)} of stock, but the books only account for{' '}
-                        {lkr(round2(raw.stock - stockRecon.lines[0].amount))}. Restocking in the Inventory tab
-                        moves the parts but does not record the money, so the difference is sitting as
-                        "unrecorded parts purchases" on the balance sheet. Log those purchases as an expense
-                        under <span className="font-bold">Parts purchases</span> to clear it.
+            {stockRecon && (() => {
+                const diff = stockRecon.lines[0].amount;
+                const bookStock = round2(raw.stock - diff);
+                const isShelfHigher = diff > 0;
+                return (
+                    <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3.5">
+                        <Package size={18} className="text-amber-400 shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-200/90 space-y-1 flex-1">
+                            <div className="font-bold text-amber-100">
+                                {isShelfHigher
+                                    ? `Stock on shelf exceeds recorded purchases by ${lkr(Math.abs(diff))}`
+                                    : `Recorded parts purchases exceed shelf stock by ${lkr(Math.abs(diff))}`}
+                            </div>
+                            <p className="text-xs leading-relaxed text-amber-200/80">
+                                {isShelfHigher ? (
+                                    <>
+                                        Your shelf holds <strong>{lkr(raw.stock)}</strong> of parts, but purchase bills only account for <strong>{lkr(bookStock)}</strong>. If you restocked inventory, enter the supplier bill under <span className="font-semibold text-amber-100">Parts purchases</span> (or check that the purchase date matches this month).
+                                    </>
+                                ) : (
+                                    <>
+                                        Your books show <strong>{lkr(bookStock)}</strong> of parts, but your shelf count is <strong>{lkr(raw.stock)}</strong>. Check if parts were used without being added to a job card or if inventory counts need updating.
+                                    </>
+                                )}
+                            </p>
+                            {isShelfHigher && (
+                                <div className="pt-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setEntryModal('expense');
+                                            setEntryForm(f => ({
+                                                ...f,
+                                                category: 'Parts purchases',
+                                                amount_lkr: String(Math.abs(diff)),
+                                                description: 'Parts purchase',
+                                            }));
+                                        }}
+                                        className="inline-flex items-center gap-1 text-xs font-bold text-amber-300 hover:text-amber-100 underline"
+                                    >
+                                        + Record {lkr(Math.abs(diff))} bill now
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
 
             {positionsIncomplete && (
                 <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
