@@ -30,6 +30,19 @@ export interface Customer {
     address?: string;
 }
 
+export interface Supplier {
+    id: string;
+    tenant_id: string;
+    name: string;
+    contact_person?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    notes?: string | null;
+    payment_terms?: string | null;
+    created_at?: string;
+}
+
 export interface Vehicle {
     id: string;
     tenant_id: string;

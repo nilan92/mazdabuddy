@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import {
     DollarSign, TrendingUp, TrendingDown, Search, Plus, Trash2, FileText, Download,
     Wallet, Package, Wrench, Building2, Scale, AlertTriangle, Check, Layers,
@@ -163,6 +165,7 @@ export const Finances = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
     const confirm = useConfirm();
+    const queryClient = useQueryClient();
 
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState<Tab>('all');
@@ -180,7 +183,8 @@ export const Finances = () => {
     const [raw, setRaw] = useState<{
         invoices: any[]; labour: any[]; parts: any[]; manual: any[];
         assets: Asset[]; categories: any[]; positions: any[]; stock: number; debtors: any[];
-    }>({ invoices: [], labour: [], parts: [], manual: [], assets: [], categories: [], positions: [], stock: 0, debtors: [] });
+        suppliersList: string[];
+    }>({ invoices: [], labour: [], parts: [], manual: [], assets: [], categories: [], positions: [], stock: 0, debtors: [], suppliersList: [] });
 
     const [tenant, setTenant] = useState<any>(null);
     const [entryModal, setEntryModal] = useState<null | 'income' | 'expense'>(null);
@@ -240,7 +244,7 @@ export const Finances = () => {
         if (!profile?.tenant_id) return;
         setLoading(true);
         try {
-            const [inv, lab, prt, man, ast, cat, pos, stk, ten] = await Promise.all([
+            const [inv, lab, prt, man, ast, cat, pos, stk, ten, sup] = await Promise.all([
                 supabase.from('invoices').select('id, total_amount_lkr, discount_lkr, created_at, status, job_id, job_cards(vehicles(license_plate, customers(title, name, phone)))'),
                 supabase.from('job_labor').select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, mechanic_name, job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
                 supabase.from('job_parts').select('id, created_at, quantity, price_at_time_lkr, cost_at_time_lkr, is_custom, custom_name, parts(name, cost_lkr), job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
@@ -250,6 +254,7 @@ export const Finances = () => {
                 supabase.from('finance_positions').select('*').eq('fy_start', toISODate(fyStart(fyAnchor))),
                 supabase.from('parts').select('stock_quantity, cost_lkr'),
                 supabase.from('tenants').select('name, address, phone').eq('id', profile.tenant_id).single(),
+                supabase.from('suppliers').select('name').order('name'),
             ]);
 
             const firstError = [inv, lab, prt, man, ast, cat, pos, stk].find(r => r.error)?.error;
@@ -268,6 +273,7 @@ export const Finances = () => {
                 stock: round2((stk.data || []).reduce((t: number, p: any) =>
                     t + (Number(p.stock_quantity) || 0) * (Number(p.cost_lkr) || 0), 0)),
                 debtors: unpaid,
+                suppliersList: (sup.data || []).map((s: any) => s.name).filter(Boolean),
             });
         } catch (e: any) {
             console.error('[Finances]', e);
@@ -546,6 +552,7 @@ export const Finances = () => {
         if (!entryForm.category) return toast('Pick a category.', 'warning');
         setSubmitting(true);
         const unpaidBill = entryModal === 'expense' && !entryForm.paid;
+        const supName = entryForm.supplier ? entryForm.supplier.trim() : null;
         const { error } = await supabase.from('user_expenses').insert({
             user_id: profile?.id, tenant_id: profile?.tenant_id,
             amount_lkr: amount, description: entryForm.description || entryForm.category,
@@ -554,15 +561,26 @@ export const Finances = () => {
             // Income is never a payable, so it is always recorded as settled.
             paid: entryModal === 'income' ? true : entryForm.paid,
             paid_on: entryModal === 'income' || entryForm.paid ? entryForm.date : null,
-            supplier: unpaidBill ? (entryForm.supplier || null) : null,
+            supplier: supName,
             due_date: unpaidBill ? (entryForm.due_date || null) : null,
         });
+
+        // Ensure supplier profile exists in suppliers table
+        if (supName && profile?.tenant_id) {
+            await supabase.from('suppliers').insert({
+                tenant_id: profile.tenant_id,
+                name: supName
+            }).select('id').maybeSingle();
+        }
+
         setSubmitting(false);
         if (error) return toast(error.message, 'error');
         setEntryModal(null);
         setEntryForm({ amount: '', description: '', category: '', date: toISODate(new Date()),
             paid: true, supplier: '', due_date: '' });
         fetchAll();
+        queryClient.invalidateQueries({ queryKey: ['suppliers'] });
+        queryClient.invalidateQueries({ queryKey: ['supplier_bills'] });
         toast(unpaidBill ? 'Bill recorded — it now shows under what you owe.'
             : entryModal === 'income' ? 'Income recorded.' : 'Expense recorded.', 'success');
     };
@@ -1064,6 +1082,18 @@ export const Finances = () => {
 
                 {tab === 'suppliers' ? (
                     <div className="p-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-slate-800">
+                            <div>
+                                <h3 className="text-sm font-bold text-white">Vendor Balances & Purchases</h3>
+                                <p className="text-xs text-slate-400">Purchases and trade payables logged in your books.</p>
+                            </div>
+                            <Link
+                                to="/suppliers"
+                                className="inline-flex items-center gap-2 px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 rounded-xl text-xs font-bold transition-colors w-fit"
+                            >
+                                <Truck size={14} /> Open Supplier Directory
+                            </Link>
+                        </div>
                         {suppliers.length === 0 ? (
                             <div className="text-center py-10">
                                 <Truck size={30} className="mx-auto text-slate-700 mb-3" />
@@ -1460,26 +1490,37 @@ export const Finances = () => {
                                     </button>
                                 ))}
                             </div>
-                            {!entryForm.paid && (
-                                <div className="mt-3 space-y-3 bg-slate-950/40 border border-slate-800 rounded-xl p-3">
+                            <div className="mt-3 space-y-3 bg-slate-950/40 border border-slate-800 rounded-xl p-3">
+                                {!entryForm.paid && (
                                     <p className="text-[11px] text-slate-500">
                                         This becomes a trade payable — it shows under <span className="text-slate-300 font-bold">You owe</span>{' '}
                                         and carries into the balance sheet automatically.
                                     </p>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier</label>
-                                        <input value={entryForm.supplier} onChange={e => setEntryForm(f => ({ ...f, supplier: e.target.value }))}
-                                            placeholder="Lanka Auto Parts"
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm" />
-                                    </div>
+                                )}
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Supplier / Vendor</label>
+                                    <input 
+                                        list="finance-supplier-options"
+                                        value={entryForm.supplier} 
+                                        onChange={e => setEntryForm(f => ({ ...f, supplier: e.target.value }))}
+                                        placeholder="e.g. Cworks, Sterling Aftermarket"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm" 
+                                    />
+                                    <datalist id="finance-supplier-options">
+                                        {(raw.suppliersList || []).map((sName: string) => (
+                                            <option key={sName} value={sName} />
+                                        ))}
+                                    </datalist>
+                                </div>
+                                {!entryForm.paid && (
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Due date</label>
                                         <input type="date" value={entryForm.due_date}
                                             onChange={e => setEntryForm(f => ({ ...f, due_date: e.target.value }))}
                                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm" />
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     )}
                     {/* Sticky so it stays reachable once the on-screen keyboard

@@ -10,7 +10,8 @@ import {
     PieChart,
     HelpCircle,
     RefreshCw,
-    Users
+    Users,
+    Truck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
@@ -45,6 +46,7 @@ export const Layout = ({ children }: LayoutProps) => {
     { to: '/jobs', icon: Tool, label: 'Jobs Board', roles: ['admin', 'manager', 'technician'] },
     { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
+    { to: '/suppliers', icon: Truck, label: 'Suppliers', roles: ['admin', 'manager', 'accountant'] },
     { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
 
     { to: '/finances', icon: PieChart, label: 'Finance', roles: ['admin', 'manager', 'accountant'] },

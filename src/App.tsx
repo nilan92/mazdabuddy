@@ -13,6 +13,7 @@ const Inventory = lazy(() => import('./components/Inventory').then(module => ({ 
 const Invoices = lazy(() => import('./components/Invoices').then(module => ({ default: module.Invoices })));
 const SmartScan = lazy(() => import('./components/SmartScan').then(module => ({ default: module.SmartScan })));
 const Customers = lazy(() => import('./components/Customers').then(module => ({ default: module.Customers })));
+const Suppliers = lazy(() => import('./components/Suppliers').then(module => ({ default: module.Suppliers })));
 const Settings = lazy(() => import('./components/Settings').then(module => ({ default: module.Settings })));
 const Finances = lazy(() => import('./components/Finances').then(module => ({ default: module.Finances })));
 const Login = lazy(() => import('./components/Login').then(module => ({ default: module.Login })));
@@ -204,6 +205,7 @@ const App = () => {
                                 <Route path="/invoices" element={<Invoices />} />
                                 <Route path="/scan" element={<SmartScan />} />
                                 <Route path="/customers" element={<Customers />} />
+                                <Route path="/suppliers" element={<Suppliers />} />
                                 <Route path="/settings" element={<Settings />} />
                                 <Route path="/finances" element={<Finances />} />
                             </Routes>
