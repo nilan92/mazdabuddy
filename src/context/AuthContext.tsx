@@ -333,6 +333,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
     }, [signOut, fetchProfile]);
 
+    const refreshProfile = useCallback(async () => {
+        if (user) {
+            console.log('[Auth] Refreshing profile...');
+             const { data, error } = await supabase
+                .from('profiles')
+                .select(`
+                    *,
+                    tenants (
+                        id,
+                        name,
+                        brand_color,
+                        logo_url,
+                        address,
+                        phone,
+                        terms_and_conditions,
+                        default_labor_rate
+                    )
+                `)
+                .eq('id', user.id)
+                .single();
+            
+            if (error) console.error('[Auth] Error refreshing profile:', error);
+            if (data) setProfile(data as any);
+        }
+    }, [user]);
+
     if (isInactiveSignout) {
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -369,32 +395,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             </div>
         )
     }
-
-    const refreshProfile = useCallback(async () => {
-        if (user) {
-            console.log('[Auth] Refreshing profile...');
-             const { data, error } = await supabase
-                .from('profiles')
-                .select(`
-                    *,
-                    tenants (
-                        id,
-                        name,
-                        brand_color,
-                        logo_url,
-                        address,
-                        phone,
-                        terms_and_conditions,
-                        default_labor_rate
-                    )
-                `)
-                .eq('id', user.id)
-                .single();
-            
-            if (error) console.error('[Auth] Error refreshing profile:', error);
-            if (data) setProfile(data as any);
-        }
-    }, [user]);
 
     return (
         <AuthContext.Provider value={{ session, user, profile, loading, error, signOut, refreshProfile }}>

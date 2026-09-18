@@ -528,9 +528,9 @@ export const Invoices = () => {
 
         const firstName = (inv.customerDetails?.name || 'Customer').split(' ')[0].replace(/[^a-z0-9]/gi, '_');
         
-        const dateObj = inv.rawDate || new Date(); 
-        const day = String(dateObj.getDate()).padStart(2, '0');
-        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const dateObj = inv.rawDate instanceof Date ? inv.rawDate : new Date(inv.rawDate || Date.now());
+        const day = isNaN(dateObj.getTime()) ? '01' : String(dateObj.getDate()).padStart(2, '0');
+        const month = isNaN(dateObj.getTime()) ? '01' : String(dateObj.getMonth() + 1).padStart(2, '0');
         return { doc, filename: `Invoice-${inv.invoiceNumber}-${firstName}-${day}${month}.pdf` };
     };
 
