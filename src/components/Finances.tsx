@@ -246,9 +246,9 @@ export const Finances = () => {
         setLoading(true);
         try {
             const [inv, lab, prt, man, ast, cat, pos, stk, ten, sup] = await Promise.all([
-                supabase.from('invoices').select('id, total_amount_lkr, discount_lkr, created_at, status, job_id, job_cards(vehicles(license_plate, customers(title, name, phone)))'),
-                supabase.from('job_labor').select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, mechanic_name, job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
-                supabase.from('job_parts').select('id, created_at, quantity, price_at_time_lkr, cost_at_time_lkr, is_custom, custom_name, parts(name, cost_lkr), job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
+                supabase.from('invoices').select('id, total_amount_lkr, discount_lkr, created_at, status, paid_on, payment_method, job_id, job_cards(vehicles(license_plate, customers(title, name, phone)))'),
+                supabase.from('job_labor').select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, mechanic_name, job_id, job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
+                supabase.from('job_parts').select('id, created_at, quantity, price_at_time_lkr, cost_at_time_lkr, is_custom, custom_name, job_id, parts(name, cost_lkr), job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
                 supabase.from('user_expenses').select('*, profiles!user_id(full_name)').order('date', { ascending: false }),
                 supabase.from('assets').select('*').order('purchase_date', { ascending: false }),
                 supabase.from('finance_categories').select('*'),
@@ -262,11 +262,17 @@ export const Finances = () => {
             if (firstError) throw firstError;
 
             const unpaid = (inv.data || []).filter((i: any) => i.status === 'Unpaid');
+            const cancelledJobIds = new Set(
+                (inv.data || []).filter((i: any) => i.status === 'Cancelled').map((i: any) => i.job_id).filter(Boolean)
+            );
+            const validLabour = (lab.data || []).filter((l: any) => !cancelledJobIds.has(l.job_id || l.job_cards?.id));
+            const validParts = (prt.data || []).filter((p: any) => !cancelledJobIds.has(p.job_id || p.job_cards?.id));
+
             setTenant(ten.data);
             setRaw({
                 invoices: inv.data || [],
-                labour: lab.data || [],
-                parts: prt.data || [],
+                labour: validLabour,
+                parts: validParts,
                 manual: man.data || [],
                 assets: (ast.data || []) as Asset[],
                 categories: cat.data || [],

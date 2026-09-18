@@ -202,7 +202,7 @@ export const STOCK_PURCHASE_CATEGORY = 'Parts purchases';
  */
 export function profitAndLoss(
     entries: LedgerEntry[],
-    invoices: { total_amount_lkr: unknown; discount_lkr?: unknown; created_at: string }[],
+    invoices: { total_amount_lkr: unknown; discount_lkr?: unknown; created_at: string; status?: string | null }[],
     start: Date, end: Date,
     depreciationForPeriod = 0,
 ): ProfitAndLoss {
@@ -210,7 +210,7 @@ export function profitAndLoss(
     const sum = (pred: (e: LedgerEntry) => boolean) =>
         round2(inPeriod.filter(pred).reduce((t, e) => t + e.amount, 0));
 
-    const periodInvoices = invoices.filter(i => inRange(i.created_at, start, end));
+    const periodInvoices = invoices.filter(i => i.status !== 'Cancelled' && inRange(i.created_at, start, end));
     const revenueTotal = round2(periodInvoices.reduce((t, i) => t + n(i.total_amount_lkr), 0));
     const discounts = round2(periodInvoices.reduce((t, i) => t + n(i.discount_lkr), 0));
 
@@ -426,6 +426,7 @@ export interface JournalSources extends LedgerSources {
     invoicesFull: {
         id: string; created_at: string; total_amount_lkr: unknown;
         discount_lkr?: unknown; status?: string | null; paid_on?: string | null;
+        payment_method?: string | null;
     }[];
     manualFull: {
         id: string; date: string; description?: string | null; category?: string | null;
@@ -523,11 +524,12 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
         if (inv.status === 'Paid') {
             const amt = round2(n(inv.total_amount_lkr));
             if (amt !== 0) {
+                const isCash = (inv.payment_method || '').toLowerCase() === 'cash';
                 entries.push({
                     id: `j-rcpt-${inv.id}`,
                     date: inv.paid_on || inv.created_at,
                     narrative: 'Invoice settled',
-                    lines: [dr(ACCOUNTS.BANK, amt), cr(ACCOUNTS.RECEIVABLES, amt)],
+                    lines: [dr(isCash ? ACCOUNTS.CASH : ACCOUNTS.BANK, amt), cr(ACCOUNTS.RECEIVABLES, amt)],
                 });
             }
         }
