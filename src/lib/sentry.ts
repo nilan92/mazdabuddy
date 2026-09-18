@@ -20,6 +20,10 @@ export function initSentry() {
       'message channel closed',
       'Extension context invalidated',
       'ResizeObserver loop',
+      '__firefox__',
+      'window.__firefox__',
+      "Can't find variable: __firefox__",
+      "undefined is not an object (evaluating 'window.__firefox__.reader')",
     ],
   });
 }
