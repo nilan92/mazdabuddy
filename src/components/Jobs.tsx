@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, RefreshCcw, Archive, UserCheck, Download } from 'lucide-react';
+import { Plus, Search, RefreshCcw, Archive, UserCheck, Download, Clock, Trophy } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { ensureInvoiceForJob } from '../lib/invoices';
@@ -7,16 +7,19 @@ import { toSriLankanMsisdn } from '../lib/whatsapp';
 import { tidyName, withTitle, CUSTOMER_TITLES } from '../lib/textCase';
 import { JobDetails } from './JobDetails';
 import { Modal } from './Modal';
+import { TechnicianHoursModal } from './TechnicianHoursModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTechnicianProgress } from '../hooks/useTechnicianProgress';
 import type { JobCard, Vehicle } from '../types';
 
 export const Jobs = () => {
     const { profile } = useAuth();
     const { toast } = useToast();
     const queryClient = useQueryClient();
+    const { isTechnician, techData, adminTechData } = useTechnicianProgress();
     
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +29,7 @@ export const Jobs = () => {
     // Modals
     const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
     const [isNewJobModalOpen, setIsNewJobModalOpen] = useState(false);
+    const [showHoursModal, setShowHoursModal] = useState(false);
     const [intakeMode, setIntakeMode] = useState<'SELECT' | 'EXPRESS'>('SELECT');
     
     // New Job Form
@@ -347,6 +351,34 @@ export const Jobs = () => {
                          </button>
                      )}
 
+                     {/* Technician Monthly Hours / Bonus Target Button */}
+                     {isTechnician && (
+                         <button 
+                            onClick={() => setShowHoursModal(true)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all shadow-sm bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-300 border-amber-500/40 hover:border-amber-300 hover:from-amber-500/25 hover:to-orange-500/25 active:scale-95"
+                            title="View Monthly Hours & Bonus Progress"
+                         >
+                            <Clock size={16} className="text-amber-400" />
+                            <span>My Hours:</span>
+                            <span className="font-mono text-white font-bold">{techData?.totalHoursCompleted ?? 0} / 200h</span>
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono font-bold">
+                                {techData?.progressPercent ?? 0}%
+                            </span>
+                         </button>
+                     )}
+
+                     {/* Admin Technician Targets Button */}
+                     {profile?.role === 'admin' && (
+                         <button 
+                            onClick={() => setShowHoursModal(true)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all shadow-sm bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700 hover:border-amber-500/40 active:scale-95"
+                            title="View Technician Monthly Bonus Targets"
+                         >
+                            <Trophy size={16} className="text-amber-400" />
+                            <span>Tech Targets</span>
+                         </button>
+                     )}
+
                      {/* Archive Toggle */}
                      <button 
                         onClick={() => setShowArchived(!showArchived)}
@@ -618,6 +650,19 @@ export const Jobs = () => {
                     onUpdate={fetchJobs} 
                 />
             )}
+
+            {/* Technician Monthly Hours / Bonus Target Modal */}
+            <TechnicianHoursModal
+                isOpen={showHoursModal}
+                onClose={() => setShowHoursModal(false)}
+                isTechnician={isTechnician}
+                techData={techData}
+                adminTechData={adminTechData}
+                onSelectJob={(jobId) => {
+                    setShowHoursModal(false);
+                    setSelectedJobId(jobId);
+                }}
+            />
         </div>
     );
 };

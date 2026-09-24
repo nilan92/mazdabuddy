@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Sparkles } from 'lucide-react';
+import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Trophy, Target, TrendingUp, Clock, Flame, Calendar, ChevronRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,6 +34,8 @@ const SkeletonCard = () => (
         <div className="h-4 w-16 bg-slate-800 rounded"></div>
     </div>
 );
+
+import { useTechnicianProgress } from '../hooks/useTechnicianProgress';
 
 // --- Main Component ---
 export const Dashboard = () => {
@@ -126,18 +128,51 @@ export const Dashboard = () => {
     }
   });
 
-  const refreshDashboard = () => queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+  // Technician Monthly Progress & Bonus Target Hook
+  const { isTechnician, techData, adminTechData } = useTechnicianProgress();
 
-  const isTechnician = profile?.role === 'technician';
+  const refreshDashboard = () => {
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['technician_progress'] });
+  };
+
   const stats = dashboardData?.stats || { revenue: 0, activeJobs: 0, totalCustomers: 0, completedMonth: 0, efficiency: '0%' };
   const recentJobs = dashboardData?.recentJobs || [];
   const lowStock = dashboardData?.lowStock || [];
 
   const statCards = isTechnician ? [
-    { title: 'Active Jobs', value: stats.activeJobs, subtext: 'Currently on floor', icon: Briefcase, colorClass: 'text-brand', onClick: () => navigate('/jobs') },
-    { title: 'Completed This Month', value: stats.completedMonth, subtext: 'Finished workshop jobs', icon: CheckCircle2, colorClass: 'text-emerald-400', onClick: () => navigate('/jobs') },
-    { title: 'Shop Efficiency', value: stats.efficiency, subtext: stats.efficiency === 'N/A' ? 'No labor data yet' : 'Speed & accuracy rate', icon: Activity, colorClass: 'text-amber-400', onClick: handleEfficiencyClick },
-    { title: 'Vehicle Diagnostic', value: 'SmartScan', subtext: 'AI Vehicle Scanner', icon: Sparkles, colorClass: 'text-cyan-400', onClick: () => navigate('/scan') },
+    { 
+      title: 'Hours Covered', 
+      value: `${techData?.totalHoursCompleted ?? 0} / ${techData?.targetHours ?? 200}h`, 
+      subtext: `${techData?.progressPercent ?? 0}% of monthly bonus target`, 
+      icon: Clock, 
+      colorClass: 'text-brand', 
+      onClick: () => {} 
+    },
+    { 
+      title: 'Completed This Month', 
+      value: `${techData?.completedCount ?? stats.completedMonth} jobs`, 
+      subtext: `${techData?.avgHoursPerJob ?? '0'} hrs avg / completed job`, 
+      icon: CheckCircle2, 
+      colorClass: 'text-emerald-400', 
+      onClick: () => navigate('/jobs') 
+    },
+    { 
+      title: 'Active Floor Jobs', 
+      value: `${techData?.activeCount ?? stats.activeJobs} jobs`, 
+      subtext: `${techData?.pipelineHours ?? 0} hrs in active pipeline`, 
+      icon: Briefcase, 
+      colorClass: 'text-cyan-400', 
+      onClick: () => navigate('/jobs') 
+    },
+    { 
+      title: 'Monthly Bonus Status', 
+      value: techData?.hoursRemaining === 0 ? '🏆 Qualified!' : `${techData?.hoursRemaining ?? 0}h left`, 
+      subtext: `${techData?.daysLeft ?? 0} days remaining in ${techData?.monthName || 'month'}`, 
+      icon: Trophy, 
+      colorClass: 'text-amber-400', 
+      onClick: () => {} 
+    },
   ] : [
     { title: 'Monthly Revenue', value: `LKR ${(stats.revenue).toLocaleString()}`, subtext: 'Invoices this month', icon: DollarSign, colorClass: 'text-emerald-400', onClick: () => navigate('/finances') },
     { title: 'Active Jobs', value: stats.activeJobs, subtext: 'Currently on floor', icon: Briefcase, colorClass: 'text-brand', onClick: () => navigate('/jobs') },
@@ -210,6 +245,296 @@ export const Dashboard = () => {
               </div>
           </div>,
           document.body
+      )}
+
+      {/* ── TECHNICIAN MONTHLY PROGRESS & BONUS CARD ── */}
+      {isTechnician && techData && (
+        <div className="bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800/80 rounded-3xl p-5 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-xl space-y-6">
+          <div className="absolute -top-32 -right-32 w-80 h-80 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand/15 text-brand border border-brand/30 flex items-center gap-1.5">
+                  <Flame size={12} className="text-amber-400 animate-pulse" />
+                  Monthly Performance Target
+                </span>
+                <span className="text-xs text-slate-400 font-medium">
+                  {techData.monthName}
+                </span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2.5">
+                <span>{techData.totalHoursCompleted}</span>
+                <span className="text-slate-500 text-base md:text-lg font-normal">/ {techData.targetHours} Hours Covered</span>
+              </h2>
+              <p className="text-xs md:text-sm text-slate-400 mt-1">
+                Every job you complete credits hours to your profile. Cover <span className="text-amber-300 font-bold">{techData.targetHours} hrs</span> to qualify for the workshop monthly bonus!
+              </p>
+            </div>
+
+            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
+              {techData.hoursRemaining === 0 ? (
+                <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/10">
+                  <Trophy size={18} className="text-amber-400 animate-bounce" />
+                  <span>TARGET ACHIEVED!</span>
+                </div>
+              ) : (
+                <div className="px-4 py-2 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-white font-bold text-sm flex items-center gap-2">
+                  <Target size={16} className="text-brand" />
+                  <span><strong className="text-brand">{techData.hoursRemaining} hrs</strong> to bonus</span>
+                </div>
+              )}
+              <span className="text-[11px] text-slate-500 font-medium">
+                {techData.daysLeft} days remaining this month
+              </span>
+            </div>
+          </div>
+
+          {/* Visual Progress Bar with Milestones */}
+          <div className="space-y-2 relative z-10">
+            <div className="flex justify-between items-center text-xs font-bold">
+              <span className="text-slate-400 flex items-center gap-1.5">
+                <TrendingUp size={13} className="text-brand" />
+                Progress towards 200 hrs goal
+              </span>
+              <span className="text-brand font-mono font-bold text-sm">
+                {techData.progressPercent}% Completed
+              </span>
+            </div>
+
+            <div className="h-6 bg-slate-950/80 rounded-2xl p-1 border border-slate-800/90 relative overflow-hidden shadow-inner">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, Math.max(3, techData.progressPercent))}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full rounded-xl bg-gradient-to-r from-sky-500 via-brand to-emerald-400 relative flex items-center justify-end pr-2 text-[10px] font-black text-slate-950 shadow-md shadow-brand/20"
+              >
+                {techData.progressPercent >= 10 && `${techData.progressPercent}%`}
+              </motion.div>
+            </div>
+
+            {/* Checkpoint Milestones */}
+            <div className="grid grid-cols-4 text-center pt-1 text-[10px] text-slate-500 font-semibold border-t border-slate-800/60 mt-2">
+              <div className={techData.totalHoursCompleted >= 50 ? 'text-sky-400' : ''}>
+                <div className="font-bold">50 hrs</div>
+                <div className="text-[9px] text-slate-600">25% (Starter)</div>
+              </div>
+              <div className={techData.totalHoursCompleted >= 100 ? 'text-amber-400' : ''}>
+                <div className="font-bold">100 hrs</div>
+                <div className="text-[9px] text-slate-600">50% (Halfway)</div>
+              </div>
+              <div className={techData.totalHoursCompleted >= 150 ? 'text-orange-400' : ''}>
+                <div className="font-bold">150 hrs</div>
+                <div className="text-[9px] text-slate-600">75% (Home Stretch)</div>
+              </div>
+              <div className={techData.totalHoursCompleted >= 200 ? 'text-emerald-400 font-black' : ''}>
+                <div className="font-bold flex items-center justify-center gap-1">
+                  <Trophy size={11} className={techData.totalHoursCompleted >= 200 ? 'text-amber-400' : ''} />
+                  200 hrs
+                </div>
+                <div className="text-[9px] text-slate-600">100% (🏆 BONUS!)</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Two-Column Visual Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2 relative z-10">
+            {/* Weekly Momentum Chart (7 cols) */}
+            <div className="lg:col-span-7 bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 md:p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-brand/10 text-brand">
+                    <Calendar size={15} />
+                  </div>
+                  <h3 className="text-xs md:text-sm font-bold text-white uppercase tracking-wider">
+                    Weekly Hours Momentum
+                  </h3>
+                </div>
+                <span className="text-[11px] text-slate-400 font-mono">
+                  {techData.monthName}
+                </span>
+              </div>
+
+              {/* Bars */}
+              <div className="grid grid-cols-4 gap-3 items-end h-36 pt-6 pb-2 px-2">
+                {(() => {
+                  const maxHours = Math.max(10, ...techData.weeklyStats.map((w: any) => w.hours));
+                  return techData.weeklyStats.map((week: any, idx: number) => {
+                    const heightPercent = Math.max(12, Math.round((week.hours / maxHours) * 100));
+                    const isCurrentWeek = idx === Math.min(3, Math.floor((new Date().getDate() - 1) / 7));
+                    return (
+                      <div key={week.label} className="flex flex-col items-center h-full justify-end group">
+                        <span className="text-[10px] font-mono font-bold text-white mb-1.5 group-hover:text-brand transition-colors">
+                          {week.hours > 0 ? `${week.hours}h` : '0h'}
+                        </span>
+                        <div className="w-full max-w-[42px] bg-slate-900 rounded-t-xl overflow-hidden relative border border-slate-800 flex-1 flex items-end">
+                          <motion.div
+                            initial={{ height: 0 }}
+                            animate={{ height: `${heightPercent}%` }}
+                            transition={{ duration: 0.6, delay: idx * 0.1 }}
+                            className={`w-full rounded-t-lg transition-all ${
+                              week.hours > 0
+                                ? isCurrentWeek
+                                  ? 'bg-gradient-to-t from-brand to-amber-300 shadow-md shadow-brand/20'
+                                  : 'bg-gradient-to-t from-sky-600 to-cyan-400'
+                                : 'bg-slate-800'
+                            }`}
+                          />
+                        </div>
+                        <div className="text-center mt-2">
+                          <div className={`text-[10px] font-bold ${isCurrentWeek ? 'text-brand' : 'text-slate-400'}`}>
+                            {week.label}
+                          </div>
+                          <div className="text-[9px] text-slate-500 font-mono">
+                            {week.jobs} {week.jobs === 1 ? 'job' : 'jobs'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Performance Insights (5 cols) */}
+            <div className="lg:col-span-5 flex flex-col justify-between gap-3">
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
+                  <TrendingUp size={13} className="text-emerald-400" /> Daily Pace Needed
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-white">{techData.paceNeeded}</span>
+                  <span className="text-xs text-slate-400">hours / day</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  {techData.hoursRemaining > 0 
+                    ? `Maintain ${techData.paceNeeded}h daily across ${techData.daysLeft} days to hit bonus.`
+                    : 'Goal reached! Any extra hours count toward bonus overachievement!'}
+                </div>
+              </div>
+
+              <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
+                  <Briefcase size={13} className="text-cyan-400" /> In-Progress Pipeline
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-white">{techData.pipelineHours}</span>
+                  <span className="text-xs text-slate-400">hours waiting</span>
+                </div>
+                <div className="text-[11px] text-slate-500 mt-1">
+                  Across {techData.activeCount} active assigned jobs currently in the workshop.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Credited Jobs Feed (This Month) */}
+          <div className="pt-2 border-t border-slate-800/80 relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-emerald-400" />
+                Jobs Credited to Your Profile ({techData.completedJobs.length})
+              </h3>
+              <span className="text-[11px] text-slate-500 font-mono">
+                {techData.totalHoursCompleted} hrs earned
+              </span>
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {techData.completedJobs.map((job: any) => (
+                <div
+                  key={job.id}
+                  onClick={() => navigate('/jobs', { state: { openJobId: job.id } })}
+                  className="bg-slate-950/50 hover:bg-slate-800/60 border border-slate-800/60 hover:border-slate-700/80 p-3 rounded-xl flex items-center justify-between cursor-pointer transition-all group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-slate-800 group-hover:bg-slate-700 text-slate-300 font-bold text-xs flex items-center justify-center shrink-0">
+                      {job.vehicles?.make?.substring(0, 2).toUpperCase() || 'MZ'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs md:text-sm font-semibold text-white group-hover:text-brand transition-colors truncate">
+                        {job.vehicles?.make} {job.vehicles?.model}
+                        <span className="ml-2 font-mono text-[10px] text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                          {job.vehicles?.license_plate}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 truncate">
+                        Completed {new Date(job.completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {job.description ? ` • ${job.description}` : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      +{job.creditedHours} hrs
+                    </span>
+                    <ChevronRight size={14} className="text-slate-600 group-hover:text-slate-300 transition-colors" />
+                  </div>
+                </div>
+              ))}
+              {techData.completedJobs.length === 0 && (
+                <div className="text-center py-6 text-slate-500 text-xs italic">
+                  No jobs completed yet this month. When you complete an assigned job, credited hours will appear here!
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ADMIN: TECHNICIAN BONUS TARGET TRACKER ── */}
+      {!isTechnician && adminTechData && adminTechData.techSummaries && adminTechData.techSummaries.length > 0 && (
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <Trophy size={16} className="text-amber-400" />
+                <h3 className="text-base font-bold text-white">Technician Bonus Targets ({adminTechData.monthName})</h3>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Monthly performance target: <strong className="text-amber-300">{adminTechData.targetHours} hours</strong> per technician for bonus eligibility.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+            {adminTechData.techSummaries.map((tech: any) => (
+              <div key={tech.staffId} className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-white text-sm">{tech.name}</div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                    tech.isTargetMet 
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                      : 'bg-slate-800 text-slate-400 border border-slate-700'
+                  }`}>
+                    {tech.isTargetMet ? 'Bonus Qualified' : `${tech.hoursRemaining}h to target`}
+                  </span>
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-mono mb-1.5">
+                    <span className="text-slate-400">{tech.totalHours} / {tech.targetHours} hrs</span>
+                    <span className="text-brand font-bold">{tech.progressPercent}%</span>
+                  </div>
+                  <div className="h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                    <div 
+                      className={`h-full rounded-full ${tech.isTargetMet ? 'bg-emerald-400' : 'bg-gradient-to-r from-sky-500 to-brand'}`}
+                      style={{ width: `${Math.min(100, Math.max(3, tech.progressPercent))}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-slate-500 flex justify-between">
+                  <span>{tech.completedCount} jobs completed</span>
+                  <span className="text-slate-400 font-medium">Target: {tech.targetHours}h</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* BOTTOM SECTIONS */}

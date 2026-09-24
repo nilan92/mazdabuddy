@@ -6,11 +6,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface ModalProps {
     isOpen: boolean;
     onClose: () => void;
-    title: string;
+    title: React.ReactNode;
     children: React.ReactNode;
+    maxWidth?: string;
 }
 
-export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) => {
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         if (isOpen) window.addEventListener('keydown', handleEsc);
@@ -28,7 +29,7 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
                     transition={{ duration: 0.15 }}
                 >
                     <motion.div
-                        className="border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+                        className={`border border-slate-700/80 rounded-2xl w-full ${maxWidth} shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden`}
                         style={{ backgroundColor: '#0f172a' }}
                         initial={{ opacity: 0, scale: 0.94, y: 16 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}

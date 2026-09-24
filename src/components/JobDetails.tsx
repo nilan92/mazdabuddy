@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil } from 'lucide-react';
+import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil, Lock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -43,6 +43,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const confirm = useConfirm();
     const queryClient = useQueryClient();
     const [job, setJob] = useState<JobCard | null>(null);
+    const isCompletedOrCancelled = job?.status === 'completed' || job?.status === 'cancelled';
+    const isLocked = readOnly || isCompletedOrCancelled;
+    const canEditLineItems = !isLocked && !isTechnician;
     const [closing, setClosing] = useState(false);
     const isInitialLoad = useRef(true);
     const [jobParts, setJobParts] = useState<JobPart[]>([]);
@@ -724,6 +727,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
     const handleAddPart = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isLocked) return;
         
         // 1. Handle Custom Parts (No stock tracking)
         if (partForm.is_custom) {
@@ -772,6 +776,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
     const handleAddLabor = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isLocked) return;
         try {
             const isFixed = laborMode === 'fixed';
             const amount = parseFloat(laborForm.fixedAmount);
@@ -815,6 +820,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const handleRemovePart = async (id: string) => {
+        if (!canEditLineItems) return;
         const ok = await confirm({ message: "Remove this part? Stock will be returned to inventory.", confirmLabel: "Remove" });
         if (!ok) return;
 
@@ -877,12 +883,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const handleRemoveLabor = async (id: string) => {
+        if (!canEditLineItems) return;
         const { error } = await supabase.from('job_labor').delete().eq('id', id);
         if (error) toast("Error removing labor entry.", 'error');
         else fetchJobDetails();
     };
 
     const handleStartEditPart = (part: any) => {
+        if (!canEditLineItems) return;
         setEditingLaborId(null);
         setLineDiscount(null);
         setEditingPartId(part.id);
@@ -896,6 +904,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const handleSavePartEdit = async (partId: string) => {
+        if (!canEditLineItems) return;
         const qty = parseInt(String(editingPartForm.quantity), 10);
         if (!qty || qty <= 0) return toast("Quantity must be at least 1.", "warning");
         const price = parseFloat(editingPartForm.price_at_time_lkr);
@@ -943,6 +952,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const handleStartEditLabor = (labor: any) => {
+        if (!canEditLineItems) return;
         setEditingPartId(null);
         setLineDiscount(null);
         setEditingLaborId(labor.id);
@@ -957,6 +967,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const handleSaveLaborEdit = async (laborId: string) => {
+        if (!canEditLineItems) return;
         const desc = editingLaborForm.description.trim();
         if (!desc) return toast("Description is required.", "warning");
 
@@ -1049,7 +1060,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                         {Math.max(0, gross - off).toLocaleString()}
                     </span>
                 </div>
-                {!readOnly && (
+                {!isLocked && (
                     hasDiscount ? (
                         <button
                             type="button"
@@ -1086,7 +1097,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const LineDiscountEditor = ({ table, id }: { table: 'job_parts' | 'job_labor'; id: string }) => {
-        if (isTechnician || lineDiscount?.table !== table || lineDiscount?.id !== id) return null;
+        if (isTechnician || isLocked || lineDiscount?.table !== table || lineDiscount?.id !== id) return null;
         return (
             <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-700/60">
                 <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shrink-0">
@@ -1207,12 +1218,22 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                             {/* Single-scroll content — no tabs */}
                             <div className="flex-1 overflow-y-auto bg-slate-900 pb-40">
 
-                                {readOnly && (
+                                {readOnly ? (
                                     <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
                                         <Archive size={14} className="flex-shrink-0" />
                                         Past job — read-only record. Open it from the Jobs board to make changes.
                                     </div>
-                                )}
+                                ) : isCompletedOrCancelled ? (
+                                    <div className="px-4 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 text-emerald-300 text-xs flex items-center gap-2">
+                                        <Lock size={14} className="flex-shrink-0 text-emerald-400" />
+                                        <span>Job is {job.status}. Line items and vehicle service records are locked to protect vehicle history.</span>
+                                    </div>
+                                ) : isTechnician ? (
+                                    <div className="px-4 py-2 bg-sky-500/10 border-b border-sky-500/20 text-sky-300 text-xs flex items-center gap-2">
+                                        <Clock size={14} className="flex-shrink-0 text-sky-400" />
+                                        <span>Technician view — prices are hidden and existing line items cannot be modified.</span>
+                                    </div>
+                                ) : null}
 
                                 {/* ── JOB DETAILS ───────────────────────── */}
                                 <div className="p-4 space-y-4">
@@ -1322,7 +1343,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             <Package size={14} className="text-brand" /> Parts
                                             {jobParts.length > 0 && <span className="bg-brand-soft text-brand text-[10px] px-1.5 py-0.5 rounded font-bold">{jobParts.length}</span>}
                                         </h3>
-                                        {!readOnly && (
+                                        {!isLocked && (
                                         <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-700">
                                             <button onClick={() => setPartForm({...partForm, is_custom: false})}
                                                 className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${!partForm.is_custom ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}>Inventory</button>
@@ -1331,7 +1352,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                         </div>
                                         )}
                                     </div>
-                                    <div className={`px-4 pb-3 ${readOnly ? 'hidden' : ''}`}>
+                                    {isCompletedOrCancelled && (
+                                        <div className="mx-4 mb-2 p-2.5 bg-slate-800/60 border border-slate-700/60 rounded-xl flex items-center gap-2 text-xs text-slate-300 font-medium">
+                                            <Lock size={13} className="shrink-0 text-emerald-400" />
+                                            <span>Parts are locked for {job.status} job to protect vehicle records.</span>
+                                        </div>
+                                    )}
+                                    {!isLocked && (
+                                    <div className="px-4 pb-3">
                                         <form onSubmit={handleAddPart} className="space-y-2">
                                             {!partForm.is_custom ? (
                                                 <div className="flex gap-2 items-center">
@@ -1375,6 +1403,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             )}
                                         </form>
                                     </div>
+                                    )}
                                     <div className="px-4 pb-4 space-y-2">
                                         {jobParts.map(part => (
                                             <div key={part.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-800">
@@ -1473,7 +1502,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             <LineAmount row={part} gross={part.price_at_time_lkr * part.quantity} table="job_parts" />
-                                                            {!readOnly && (
+                                                            {canEditLineItems && (
                                                                 <>
                                                                     <button
                                                                         type="button"
@@ -1511,7 +1540,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             {jobLabor.length > 0 && <span className="bg-brand-soft text-brand text-[10px] px-1.5 py-0.5 rounded font-bold">{jobLabor.length}</span>}
                                         </h3>
                                     </div>
-                                    <div className={`px-4 pb-3 ${readOnly ? 'hidden' : ''}`}>
+                                    {isCompletedOrCancelled && (
+                                        <div className="mx-4 mb-2 p-2.5 bg-slate-800/60 border border-slate-700/60 rounded-xl flex items-center gap-2 text-xs text-slate-300 font-medium">
+                                            <Lock size={13} className="shrink-0 text-emerald-400" />
+                                            <span>Labor entries are locked for {job.status} job to protect vehicle records.</span>
+                                        </div>
+                                    )}
+                                    {!isLocked && (
+                                    <div className="px-4 pb-3">
                                         <form onSubmit={handleAddLabor} className="space-y-2">
                                             {!isTechnician && (
                                                 <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
@@ -1560,6 +1596,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             )}
                                         </form>
                                     </div>
+                                    )}
                                     <div className="px-4 pb-6 space-y-2">
                                         {jobLabor.map(labor => (
                                             <div key={labor.id} className="bg-slate-800/40 p-3 rounded-lg border border-slate-800">
@@ -1681,7 +1718,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
                                                             <LineAmount row={labor} gross={labor.hourly_rate_lkr * labor.hours} table="job_labor" />
-                                                            {!readOnly && (
+                                                            {canEditLineItems && (
                                                                 <>
                                                                     <button
                                                                         type="button"
