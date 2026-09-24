@@ -79,6 +79,7 @@ export const Settings = () => {
   const [editForm, setEditForm] = useState({ full_name: "", role: "" });
   const [isAddFloorTechOpen, setIsAddFloorTechOpen] = useState(false);
   const [createStaffPrefill, setCreateStaffPrefill] = useState<{
+    staffId?: string | null;
     fullName?: string;
     role?: 'technician' | 'manager' | 'accountant' | 'admin';
   }>({});
@@ -1229,7 +1230,7 @@ export const Settings = () => {
                               {/* 1-Click Upgrade Floor Tech to Full Login */}
                               <button
                                 onClick={() => {
-                                  setCreateStaffPrefill({ fullName: member.name, role: 'technician' });
+                                  setCreateStaffPrefill({ staffId: member.staffId, fullName: member.name, role: 'technician' });
                                   setIsCreateStaffOpen(true);
                                 }}
                                 className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 flex items-center gap-1.5 transition-all active:scale-95 shadow"
@@ -1556,6 +1557,7 @@ export const Settings = () => {
 
       <CreateStaffModal
         isOpen={isCreateStaffOpen}
+        initialStaffId={createStaffPrefill.staffId}
         initialFullName={createStaffPrefill.fullName}
         initialRole={createStaffPrefill.role}
         onClose={() => {

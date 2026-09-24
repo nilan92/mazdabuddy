@@ -8,6 +8,7 @@ interface CreateStaffModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialStaffId?: string | null;
   initialFullName?: string;
   initialRole?: 'technician' | 'manager' | 'accountant' | 'admin';
 }
@@ -16,6 +17,7 @@ export const CreateStaffModal = ({
   isOpen,
   onClose,
   onSuccess,
+  initialStaffId,
   initialFullName,
   initialRole,
 }: CreateStaffModalProps) => {
@@ -111,6 +113,7 @@ export const CreateStaffModal = ({
         p_password: cleanPw,
         p_role: role,
         p_email: email.trim() || null,
+        p_staff_id: initialStaffId || null,
       });
 
       if (rpcError) {
@@ -199,9 +202,18 @@ export const CreateStaffModal = ({
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Create a technician or staff login directly. No email address or invite link is needed.
-          </p>
+          {initialStaffId ? (
+            <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-xs flex items-center gap-2">
+              <Wrench size={16} className="shrink-0 text-cyan-400" />
+              <span>
+                Upgrading floor technician <strong>{initialFullName}</strong> to have full app login access. Existing job history will remain linked.
+              </span>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Create a technician or staff login directly. No email address or invite link is needed.
+            </p>
+          )}
 
           {error && (
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
