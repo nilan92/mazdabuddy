@@ -47,35 +47,34 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       title={
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400">
-            {isTechnician ? <Clock size={22} /> : <Trophy size={22} />}
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 pr-2">
+          <div className="p-2 sm:p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 shrink-0">
+            {isTechnician ? <Clock size={20} className="sm:w-5 sm:h-5" /> : <Trophy size={20} className="sm:w-5 sm:h-5" />}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-white">
-                {isTechnician ? 'My Monthly Hours & Milestones' : 'Technician Targets & Performance'}
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-sm sm:text-lg md:text-xl font-bold text-white truncate">
+                {isTechnician ? 'Hours & Milestones' : 'Technician Targets'}
               </span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
                 {techData?.monthName || adminTechData?.monthName || 'Current Month'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {TARGET_HOURS}h Monthly Target • Performance & Productivity Tracker
+            <p className="text-[11px] sm:text-xs text-slate-400 truncate mt-0.5">
+              {TARGET_HOURS}h Monthly Target • Performance Tracker
             </p>
           </div>
         </div>
       }
       maxWidth="max-w-3xl"
     >
-      <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
+      <div className="space-y-4 sm:space-y-6 max-h-[75vh] overflow-y-auto pr-1">
         {/* Monthly Reset Notice Callout */}
-        <div className="bg-slate-900/90 border border-amber-500/20 rounded-xl p-3.5 flex items-start gap-3 bg-gradient-to-r from-amber-950/20 via-slate-900/80 to-slate-900/80">
-          <RotateCcw size={18} className="text-amber-400 flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-slate-300 leading-relaxed">
+        <div className="bg-slate-900/90 border border-amber-500/20 rounded-xl p-3 sm:p-3.5 flex items-start gap-2.5 sm:gap-3 bg-gradient-to-r from-amber-950/20 via-slate-900/80 to-slate-900/80">
+          <RotateCcw size={16} className="text-amber-400 flex-shrink-0 mt-0.5 sm:w-[18px] sm:h-[18px]" />
+          <div className="text-[11px] sm:text-xs text-slate-300 leading-relaxed">
             <span className="font-semibold text-amber-300">Strict Monthly Reset: </span>
-            Target hours are tracked strictly within the current calendar month ({techData?.monthName || adminTechData?.monthName}). 
-            Hours reset automatically to <span className="font-mono font-bold text-white">0 hrs</span> on the 1st of every month at midnight.
+            Tracked strictly for {techData?.monthName || adminTechData?.monthName}. Resets to <span className="font-mono font-bold text-white">0 hrs</span> on the 1st of every month.
           </div>
         </div>
 
@@ -83,18 +82,18 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
         {isTechnician && techData && (
           <>
             {/* Visual Milestone Progress Bar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-inner">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <Award size={18} className="text-brand" />
-                  <span className="text-sm font-semibold text-white">Monthly Target Progress</span>
+            <div className="bg-slate-900 border border-slate-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-5 shadow-inner">
+              <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Award size={16} className="text-brand sm:w-[18px] sm:h-[18px]" />
+                  <span className="text-xs sm:text-sm font-semibold text-white">Monthly Target</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-mono font-bold text-white">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xl sm:text-2xl font-mono font-bold text-white">
                     {techData.totalHoursCompleted}
                   </span>
-                  <span className="text-slate-400 text-sm">/ {TARGET_HOURS} hrs</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-bold font-mono ${
+                  <span className="text-slate-400 text-xs sm:text-sm font-mono">/ {TARGET_HOURS}h</span>
+                  <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full font-bold font-mono ${
                     techData.progressPercent >= 100 
                       ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
                       : 'bg-brand/20 text-brand border border-brand/30'
@@ -105,7 +104,7 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
               </div>
 
               {/* Progress Track */}
-              <div className="relative w-full h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5 mb-2">
+              <div className="relative w-full h-3 sm:h-4 bg-slate-950 rounded-full overflow-hidden border border-slate-800 p-0.5 mb-2">
                 <div 
                   className={`h-full rounded-full transition-all duration-700 ${
                     techData.progressPercent >= 100
@@ -117,36 +116,42 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
               </div>
 
               {/* Milestones Indicator */}
-              <div className="grid grid-cols-4 text-center text-[11px] text-slate-400 pt-1 font-mono">
+              <div className="grid grid-cols-4 text-center text-[10px] sm:text-[11px] text-slate-400 pt-1 font-mono">
                 <div className={techData.totalHoursCompleted >= 50 ? 'text-cyan-400 font-semibold' : ''}>
-                  50h (Bronze 🥉)
+                  <div>50h</div>
+                  <div className="text-[9px] text-slate-500 truncate">🥉 Bronze</div>
                 </div>
                 <div className={techData.totalHoursCompleted >= 100 ? 'text-blue-400 font-semibold' : ''}>
-                  100h (Silver 🥈)
+                  <div>100h</div>
+                  <div className="text-[9px] text-slate-500 truncate">🥈 Silver</div>
                 </div>
                 <div className={techData.totalHoursCompleted >= 150 ? 'text-indigo-400 font-semibold' : ''}>
-                  150h (Gold 🥇)
+                  <div>150h</div>
+                  <div className="text-[9px] text-slate-500 truncate">🥇 Gold</div>
                 </div>
-                <div className={`flex items-center justify-end gap-1 ${
+                <div className={`flex flex-col items-center ${
                   techData.totalHoursCompleted >= TARGET_HOURS ? 'text-amber-300 font-bold' : 'text-slate-500'
                 }`}>
-                  <Trophy size={12} className={techData.totalHoursCompleted >= TARGET_HOURS ? 'text-amber-400' : ''} />
-                  <span>200h (Champion 🏆)</span>
+                  <div className="flex items-center gap-0.5">
+                    <Trophy size={10} className={techData.totalHoursCompleted >= TARGET_HOURS ? 'text-amber-400' : ''} />
+                    <span>200h</span>
+                  </div>
+                  <div className="text-[9px] text-slate-500 truncate">🏆 Champ</div>
                 </div>
               </div>
 
               {/* Status Message */}
-              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
+              <div className="mt-3 pt-2.5 sm:mt-4 sm:pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
                 {techData.totalHoursCompleted >= TARGET_HOURS ? (
-                  <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                    <Sparkles size={15} />
-                    <span>Outstanding! You achieved the Champion Tier (200h) for this month! 🏆</span>
+                  <div className="flex items-center gap-2 text-emerald-400 font-medium text-[11px] sm:text-xs">
+                    <Sparkles size={14} className="shrink-0" />
+                    <span>Outstanding! You achieved Champion Tier (200h) this month! 🏆</span>
                   </div>
                 ) : (
-                  <div className="flex items-start sm:items-center gap-2 text-slate-300">
-                    <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5 sm:mt-0" />
+                  <div className="flex items-start gap-1.5 sm:gap-2 text-slate-300 text-[11px] sm:text-xs leading-relaxed">
+                    <AlertCircle size={13} className="text-amber-400 shrink-0 mt-0.5" />
                     <span>
-                      <strong className="text-amber-300 font-mono">{techData.hoursRemaining}h remaining</strong> to reach Champion Tier ({TARGET_HOURS}h). {techData.smartPace.paceSubtext}
+                      <strong className="text-amber-300 font-mono">{techData.hoursRemaining}h to reach</strong> Champion Tier ({TARGET_HOURS}h). {techData.smartPace.paceSubtext}
                     </span>
                   </div>
                 )}
@@ -154,45 +159,45 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
             </div>
 
             {/* Quick KPI Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                <div className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
-                  <Clock size={13} className="text-brand" /> Credited Hours
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+              <div className="bg-slate-900/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl">
+                <div className="text-[10px] sm:text-xs text-slate-400 mb-0.5 flex items-center gap-1.5 truncate">
+                  <Clock size={12} className="text-brand shrink-0" /> Credited Hours
                 </div>
-                <div className="text-xl font-bold font-mono text-white">
+                <div className="text-lg sm:text-xl font-bold font-mono text-white">
                   {techData.totalHoursCompleted}h
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Tier: {techData.milestone.label} {techData.milestone.badge}</div>
+                <div className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">Tier: {techData.milestone.label}</div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                <div className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
-                  <CheckCircle2 size={13} className="text-emerald-400" /> Completed
+              <div className="bg-slate-900/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl">
+                <div className="text-[10px] sm:text-xs text-slate-400 mb-0.5 flex items-center gap-1.5 truncate">
+                  <CheckCircle2 size={12} className="text-emerald-400 shrink-0" /> Completed
                 </div>
-                <div className="text-xl font-bold font-mono text-emerald-400">
+                <div className="text-lg sm:text-xl font-bold font-mono text-emerald-400">
                   {techData.completedCount}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Finished jobs</div>
+                <div className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">Finished jobs</div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                <div className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
-                  <Wrench size={13} className="text-blue-400" /> Active Floor
+              <div className="bg-slate-900/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl">
+                <div className="text-[10px] sm:text-xs text-slate-400 mb-0.5 flex items-center gap-1.5 truncate">
+                  <Wrench size={12} className="text-blue-400 shrink-0" /> Active Floor
                 </div>
-                <div className="text-xl font-bold font-mono text-blue-400">
+                <div className="text-lg sm:text-xl font-bold font-mono text-blue-400">
                   {techData.activeCount}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{techData.pipelineHours}h in pipeline</div>
+                <div className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">{techData.pipelineHours}h waiting</div>
               </div>
 
-              <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
-                <div className="text-xs text-slate-400 mb-1 flex items-center gap-1.5">
-                  <TrendingUp size={13} className="text-amber-400" /> Daily Pace
+              <div className="bg-slate-900/80 border border-slate-800 p-2.5 sm:p-3 rounded-xl">
+                <div className="text-[10px] sm:text-xs text-slate-400 mb-0.5 flex items-center gap-1.5 truncate">
+                  <TrendingUp size={12} className="text-amber-400 shrink-0" /> Daily Pace
                 </div>
-                <div className="text-xl font-bold font-mono text-amber-300">
-                  {techData.smartPace.paceDisplay}
+                <div className="text-sm sm:text-base md:text-lg font-bold font-mono text-amber-300 truncate">
+                  {techData.smartPace.paceValue}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{techData.smartPace.workingDaysLeft} workdays left</div>
+                <div className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5 truncate">{techData.smartPace.workingDaysLeft} workdays left</div>
               </div>
             </div>
 
@@ -227,18 +232,18 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-brand/10 text-brand border border-brand/20">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
+                          <span className="font-mono text-[11px] sm:text-xs font-semibold px-2 py-0.5 rounded bg-brand/10 text-brand border border-brand/20 shrink-0">
                             {job.vehicles?.license_plate || 'No Plate'}
                           </span>
-                          <span className="text-sm font-medium text-white truncate">
+                          <span className="text-xs sm:text-sm font-medium text-white truncate">
                             {job.vehicles?.make} {job.vehicles?.model}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-400 truncate">
+                        <div className="text-[11px] sm:text-xs text-slate-400 truncate">
                           {job.description || 'General Service / Repair'}
                         </div>
-                        <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
+                        <div className="text-[10px] sm:text-[11px] text-slate-500 mt-1 flex items-center gap-1.5">
                           <Calendar size={11} />
                           <span>
                             Completed: {job.completed_at ? new Date(job.completed_at).toLocaleDateString(undefined, {
@@ -250,11 +255,11 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                         </div>
                       </div>
 
-                      <div className="text-right flex-shrink-0">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                          +{job.creditedHours} hrs
+                      <div className="text-right shrink-0">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                          +{job.creditedHours}h
                         </span>
-                        <div className="text-[10px] text-slate-500 mt-1">Credited</div>
+                        <div className="text-[9px] sm:text-[10px] text-slate-500 mt-0.5">Credited</div>
                       </div>
                     </div>
                   ))}

@@ -44,115 +44,111 @@ export const Performance = () => {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400">
-              <Award size={26} />
-            </div>
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
-                Team Performance & Productivity
-              </h1>
-              <p className="text-sm text-slate-400">
-                Monthly milestones, credited technician hours, and workshop throughput for {adminTechData?.monthName || 'this month'}.
-              </p>
-            </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 text-amber-400 shrink-0">
+            <Award size={22} className="sm:w-6 sm:h-6" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight truncate">
+              Team Performance
+            </h1>
+            <p className="text-[11px] sm:text-xs md:text-sm text-slate-400 truncate">
+              Monthly milestones & throughput for {adminTechData?.monthName || 'this month'}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => refetch()}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-sm font-semibold active:scale-95"
-            title="Refresh Performance Metrics"
-          >
-            <RefreshCcw size={16} className={isLoading ? 'animate-spin' : ''} />
-            <span>Refresh</span>
-          </button>
-        </div>
+        <button 
+          onClick={() => refetch()}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white transition-all text-xs font-semibold shrink-0 active:scale-95"
+          title="Refresh Performance Metrics"
+        >
+          <RefreshCcw size={14} className={isLoading ? 'animate-spin' : ''} />
+          <span className="hidden xs:inline">Refresh</span>
+        </button>
       </div>
 
       {/* KPI Overview Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-brand">
-            <Clock size={48} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="bg-slate-900/60 border border-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl relative overflow-hidden group shadow-sm">
+          <div className="absolute top-0 right-0 p-2 sm:p-3 opacity-10 group-hover:opacity-20 transition-opacity text-brand pointer-events-none">
+            <Clock size={36} className="sm:w-12 sm:h-12" />
           </div>
-          <div className="text-xs text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-            <Clock size={14} className="text-brand" /> Total Team Hours
+          <div className="text-[11px] sm:text-xs text-slate-400 font-medium mb-0.5 sm:mb-1 flex items-center gap-1.5 truncate">
+            <Clock size={12} className="text-brand shrink-0" /> Total Hours
           </div>
-          <div className="text-2xl font-bold font-mono text-white mb-1">
+          <div className="text-lg sm:text-2xl font-bold font-mono text-white mb-0.5">
             {teamStats.totalTeamHours}h
           </div>
-          <div className="text-xs text-slate-500">
-            Across {teamStats.totalCompletedJobs} completed repairs
+          <div className="text-[10px] sm:text-xs text-slate-500 truncate">
+            {teamStats.totalCompletedJobs} jobs finished
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-blue-400">
-            <Users size={48} />
+        <div className="bg-slate-900/60 border border-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl relative overflow-hidden group shadow-sm">
+          <div className="absolute top-0 right-0 p-2 sm:p-3 opacity-10 group-hover:opacity-20 transition-opacity text-blue-400 pointer-events-none">
+            <Users size={36} className="sm:w-12 sm:h-12" />
           </div>
-          <div className="text-xs text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-            <Users size={14} className="text-blue-400" /> Active Technicians
+          <div className="text-[11px] sm:text-xs text-slate-400 font-medium mb-0.5 sm:mb-1 flex items-center gap-1.5 truncate">
+            <Users size={12} className="text-blue-400 shrink-0" /> Floor Staff
           </div>
-          <div className="text-2xl font-bold font-mono text-white mb-1">
+          <div className="text-lg sm:text-2xl font-bold font-mono text-white mb-0.5">
             {teamStats.activeTechCount}
           </div>
-          <div className="text-xs text-slate-500">
-            Floor staff on active duty
+          <div className="text-[10px] sm:text-xs text-slate-500 truncate">
+            Active technicians
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-emerald-400">
-            <TrendingUp size={48} />
+        <div className="bg-slate-900/60 border border-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl relative overflow-hidden group shadow-sm">
+          <div className="absolute top-0 right-0 p-2 sm:p-3 opacity-10 group-hover:opacity-20 transition-opacity text-emerald-400 pointer-events-none">
+            <TrendingUp size={36} className="sm:w-12 sm:h-12" />
           </div>
-          <div className="text-xs text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-            <TrendingUp size={14} className="text-emerald-400" /> Average per Tech
+          <div className="text-[11px] sm:text-xs text-slate-400 font-medium mb-0.5 sm:mb-1 flex items-center gap-1.5 truncate">
+            <TrendingUp size={12} className="text-emerald-400 shrink-0" /> Avg per Tech
           </div>
-          <div className="text-2xl font-bold font-mono text-emerald-400 mb-1">
+          <div className="text-lg sm:text-2xl font-bold font-mono text-emerald-400 mb-0.5">
             {teamStats.avgHoursPerTech}h
           </div>
-          <div className="text-xs text-slate-500">
-            {teamStats.teamAttainmentPercent}% of {TARGET_HOURS}h monthly pace
+          <div className="text-[10px] sm:text-xs text-slate-500 truncate">
+            {teamStats.teamAttainmentPercent}% of {TARGET_HOURS}h pace
           </div>
         </div>
 
-        <div className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-2xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity text-amber-400">
-            <Trophy size={48} />
+        <div className="bg-slate-900/60 border border-slate-800/80 p-3 sm:p-4 rounded-xl sm:rounded-2xl relative overflow-hidden group shadow-sm">
+          <div className="absolute top-0 right-0 p-2 sm:p-3 opacity-10 group-hover:opacity-20 transition-opacity text-amber-400 pointer-events-none">
+            <Trophy size={36} className="sm:w-12 sm:h-12" />
           </div>
-          <div className="text-xs text-slate-400 font-medium mb-1 flex items-center gap-1.5">
-            <Trophy size={14} className="text-amber-400" /> Top Performer
+          <div className="text-[11px] sm:text-xs text-slate-400 font-medium mb-0.5 sm:mb-1 flex items-center gap-1.5 truncate">
+            <Trophy size={12} className="text-amber-400 shrink-0" /> Top Performer
           </div>
-          <div className="text-lg font-bold text-white mb-1 truncate">
+          <div className="text-sm sm:text-lg font-bold text-white mb-0.5 truncate">
             {teamStats.topPerformer?.name || 'In Progress'}
           </div>
-          <div className="text-xs text-amber-300 font-mono">
+          <div className="text-[10px] sm:text-xs text-amber-300 font-mono truncate">
             {teamStats.topPerformer ? `${teamStats.topPerformer.totalHours}h credited` : 'No data yet'}
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-2xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-slate-900/40 p-2 sm:p-3 rounded-xl sm:rounded-2xl border border-slate-800">
         <div className="relative flex-1">
-          <Search size={16} className="absolute left-3.5 top-3 text-slate-500" />
+          <Search size={15} className="absolute left-3 top-2.5 text-slate-500" />
           <input
             type="text"
-            placeholder="Search staff or technician by name..."
+            placeholder="Search staff or technician..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-2 pl-9 pr-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl py-1.5 pl-8 pr-3 text-xs sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-brand"
           />
         </div>
 
         {/* Tier filter pill buttons */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+        <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none -mx-1 px-1">
           {[
             { id: 'all', label: 'All' },
             { id: 'starter', label: 'Starter' },
@@ -164,10 +160,10 @@ export const Performance = () => {
             <button
               key={tab.id}
               onClick={() => setSelectedTier(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              className={`px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all shrink-0 ${
                 selectedTier === tab.id
                   ? 'bg-brand text-slate-950 shadow-md font-bold'
-                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800/80'
               }`}
             >
               {tab.label}

@@ -253,51 +253,51 @@ export const Dashboard = () => {
 
       {/* ── TECHNICIAN MONTHLY PROGRESS & MILESTONES CARD ── */}
       {isTechnician && techData && (
-        <div className="bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800/80 rounded-3xl p-5 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-xl space-y-6">
+        <div className="bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800/80 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-xl space-y-4 sm:space-y-6">
           <div className="absolute -top-32 -right-32 w-80 h-80 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
             <div>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand/15 text-brand border border-brand/30 flex items-center gap-1.5">
-                  <Flame size={12} className="text-amber-400 animate-pulse" />
-                  Monthly Performance Target
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-brand/15 text-brand border border-brand/30 flex items-center gap-1">
+                  <Flame size={11} className="text-amber-400 animate-pulse" />
+                  Monthly Target
                 </span>
                 <span className="text-xs text-slate-400 font-medium">
                   {techData.monthName}
                 </span>
               </div>
-              <h2 className="text-xl md:text-2xl font-black text-white flex items-center gap-2.5">
+              <h2 className="text-lg sm:text-xl md:text-2xl font-black text-white flex items-center gap-2">
                 <span>{techData.totalHoursCompleted}</span>
-                <span className="text-slate-500 text-base md:text-lg font-normal">/ {techData.targetHours} Hours Covered</span>
+                <span className="text-slate-500 text-sm sm:text-base font-normal">/ {techData.targetHours} Hours Covered</span>
               </h2>
-              <p className="text-xs md:text-sm text-slate-400 mt-1">
-                Every repair you complete credits hours to your profile. Cover <span className="text-amber-300 font-bold">{techData.targetHours} hrs</span> to reach the Champion Tier!
+              <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
+                Every repair completed credits hours. Reach <span className="text-amber-300 font-bold">{techData.targetHours} hrs</span> for Champion Tier!
               </p>
             </div>
 
-            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
+            <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center gap-1.5 shrink-0 bg-slate-950/40 sm:bg-transparent p-2 sm:p-0 rounded-xl border border-slate-800/50 sm:border-0">
               {techData.hoursRemaining === 0 ? (
-                <div className="px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-sm flex items-center gap-2 shadow-lg shadow-emerald-500/10">
-                  <Trophy size={18} className="text-amber-400 animate-bounce" />
+                <div className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-emerald-500/10">
+                  <Trophy size={16} className="text-amber-400 animate-bounce" />
                   <span>TARGET ACHIEVED!</span>
                 </div>
               ) : (
-                <div className="px-4 py-2 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-white font-bold text-sm flex items-center gap-2">
-                  <Target size={16} className="text-brand" />
-                  <span>
+                <div className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-slate-800/80 border border-slate-700/80 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5">
+                  <Target size={14} className="text-brand shrink-0" />
+                  <span className="truncate">
                     {techData.milestone.nextTierName ? (
                       <><strong className="text-brand">{techData.milestone.hoursToNextTier} hrs</strong> to {techData.milestone.nextTierName}</>
                     ) : (
-                      <><strong className="text-brand">{techData.hoursRemaining} hrs</strong> to 200h Tier</>
+                      <><strong className="text-brand">{techData.hoursRemaining} hrs</strong> to 200h</>
                     )}
                   </span>
                 </div>
               )}
-              <span className="text-[11px] text-slate-500 font-medium">
-                {techData.smartPace.workingDaysLeft} workdays remaining this month
+              <span className="text-[10px] sm:text-[11px] text-slate-400 sm:text-slate-500 font-medium font-mono">
+                {techData.smartPace.workingDaysLeft} workdays left
               </span>
             </div>
           </div>
@@ -305,46 +305,46 @@ export const Dashboard = () => {
           {/* Visual Progress Bar with Milestones */}
           <div className="space-y-2 relative z-10">
             <div className="flex justify-between items-center text-xs font-bold">
-              <span className="text-slate-400 flex items-center gap-1.5">
+              <span className="text-slate-400 flex items-center gap-1.5 text-[11px] sm:text-xs">
                 <TrendingUp size={13} className="text-brand" />
-                Progress towards 200 hrs goal
+                Progress to 200h
               </span>
-              <span className="text-brand font-mono font-bold text-sm">
-                {techData.progressPercent}% Completed ({techData.milestone.badge})
+              <span className="text-brand font-mono font-bold text-xs sm:text-sm">
+                {techData.progressPercent}% ({techData.milestone.badge})
               </span>
             </div>
 
-            <div className="h-6 bg-slate-950/80 rounded-2xl p-1 border border-slate-800/90 relative overflow-hidden shadow-inner">
+            <div className="h-5 sm:h-6 bg-slate-950/80 rounded-xl sm:rounded-2xl p-0.5 sm:p-1 border border-slate-800/90 relative overflow-hidden shadow-inner">
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${Math.min(100, Math.max(3, techData.progressPercent))}%` }}
                 transition={{ duration: 1, ease: 'easeOut' }}
-                className="h-full rounded-xl bg-gradient-to-r from-sky-500 via-brand to-emerald-400 relative flex items-center justify-end pr-2 text-[10px] font-black text-slate-950 shadow-md shadow-brand/20"
+                className="h-full rounded-lg sm:rounded-xl bg-gradient-to-r from-sky-500 via-brand to-emerald-400 relative flex items-center justify-end pr-2 text-[9px] sm:text-[10px] font-black text-slate-950 shadow-md shadow-brand/20"
               >
                 {techData.progressPercent >= 10 && `${techData.progressPercent}%`}
               </motion.div>
             </div>
 
             {/* Checkpoint Milestones */}
-            <div className="grid grid-cols-4 text-center pt-1 text-[10px] text-slate-500 font-semibold border-t border-slate-800/60 mt-2">
-              <div className={techData.totalHoursCompleted >= 50 ? 'text-amber-400' : ''}>
-                <div className="font-bold">50 hrs</div>
-                <div className="text-[9px] text-slate-600">🥉 Bronze (25%)</div>
+            <div className="grid grid-cols-4 text-center pt-1 text-[10px] text-slate-500 font-semibold border-t border-slate-800/60 mt-1.5">
+              <div className={techData.totalHoursCompleted >= 50 ? 'text-amber-400 font-bold' : ''}>
+                <div className="text-[11px]">50h</div>
+                <div className="text-[8px] sm:text-[9px] text-slate-500 truncate">🥉 Bronze</div>
               </div>
-              <div className={techData.totalHoursCompleted >= 100 ? 'text-slate-200' : ''}>
-                <div className="font-bold">100 hrs</div>
-                <div className="text-[9px] text-slate-600">🥈 Silver (50%)</div>
+              <div className={techData.totalHoursCompleted >= 100 ? 'text-slate-200 font-bold' : ''}>
+                <div className="text-[11px]">100h</div>
+                <div className="text-[8px] sm:text-[9px] text-slate-500 truncate">🥈 Silver</div>
               </div>
-              <div className={techData.totalHoursCompleted >= 150 ? 'text-yellow-300' : ''}>
-                <div className="font-bold">150 hrs</div>
-                <div className="text-[9px] text-slate-600">🥇 Gold (75%)</div>
+              <div className={techData.totalHoursCompleted >= 150 ? 'text-yellow-300 font-bold' : ''}>
+                <div className="text-[11px]">150h</div>
+                <div className="text-[8px] sm:text-[9px] text-slate-500 truncate">🥇 Gold</div>
               </div>
               <div className={techData.totalHoursCompleted >= 200 ? 'text-emerald-400 font-black' : ''}>
-                <div className="font-bold flex items-center justify-center gap-1">
-                  <Trophy size={11} className={techData.totalHoursCompleted >= 200 ? 'text-amber-400' : ''} />
-                  200 hrs
+                <div className="text-[11px] flex items-center justify-center gap-0.5">
+                  <Trophy size={10} className={techData.totalHoursCompleted >= 200 ? 'text-amber-400' : ''} />
+                  200h
                 </div>
-                <div className="text-[9px] text-slate-600">🏆 Champion (100%)</div>
+                <div className="text-[8px] sm:text-[9px] text-slate-500 truncate">🏆 Champ</div>
               </div>
             </div>
           </div>
@@ -480,9 +480,9 @@ export const Dashboard = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                      +{job.creditedHours} hrs
+                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[11px] sm:text-xs font-black font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      +{job.creditedHours}h
                     </span>
                     <ChevronRight size={14} className="text-slate-600 group-hover:text-slate-300 transition-colors" />
                   </div>

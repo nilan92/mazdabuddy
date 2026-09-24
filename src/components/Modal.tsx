@@ -37,8 +37,8 @@ export const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' 
                         transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.8 }}
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="flex items-center justify-between px-4 py-3.5 sm:px-6 sm:py-4 border-b border-slate-800 shrink-0">
-                            <h2 className="text-lg sm:text-xl font-bold text-white truncate pr-2">{title}</h2>
+                        <div className="flex items-center justify-between px-3.5 py-3 sm:px-6 sm:py-4 border-b border-slate-800 shrink-0">
+                            <div className="min-w-0 flex-1 pr-2">{title}</div>
                             <button
                                 onClick={onClose}
                                 className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800 shrink-0"

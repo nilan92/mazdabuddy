@@ -355,13 +355,13 @@ export const Jobs = () => {
                      {isTechnician && (
                          <button 
                             onClick={() => setShowHoursModal(true)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all shadow-sm bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-300 border-amber-500/40 hover:border-amber-300 hover:from-amber-500/25 hover:to-orange-500/25 active:scale-95"
+                            className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold border transition-all shadow-sm bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-300 border-amber-500/40 hover:border-amber-300 hover:from-amber-500/25 hover:to-orange-500/25 active:scale-95"
                             title="View Monthly Hours & Milestones"
                          >
-                            <Clock size={16} className="text-amber-400" />
-                            <span>My Hours:</span>
-                            <span className="font-mono text-white font-bold">{techData?.totalHoursCompleted ?? 0} / 200h</span>
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono font-bold">
+                            <Clock size={15} className="text-amber-400 shrink-0" />
+                            <span className="hidden xs:inline">My Hours:</span>
+                            <span className="font-mono text-white font-bold">{techData?.totalHoursCompleted ?? 0}<span className="text-slate-400 font-normal">/200h</span></span>
+                            <span className="text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded bg-amber-500/25 text-amber-300 font-mono font-bold">
                                 {techData?.progressPercent ?? 0}%
                             </span>
                          </button>
