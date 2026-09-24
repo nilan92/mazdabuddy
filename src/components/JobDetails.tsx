@@ -38,6 +38,7 @@ interface JobDetailsProps {
 
 export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDetailsProps) => {
     const { profile } = useAuth();
+    const isTechnician = profile?.role === 'technician';
     const { toast } = useToast();
     const confirm = useConfirm();
     const queryClient = useQueryClient();
@@ -1034,6 +1035,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     /** Amount column for a line: struck-through gross plus the net when the line
      *  carries its own discount, and a control to set one. */
     const LineAmount = ({ row, gross, table }: { row: any; gross: number; table: 'job_parts' | 'job_labor' }) => {
+        if (isTechnician) return null;
         const off = calcDiscount(gross, row.discount_type, row.discount_value);
         const editing = lineDiscount?.table === table && lineDiscount?.id === row.id;
         const hasDiscount = off > 0;
@@ -1084,7 +1086,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const LineDiscountEditor = ({ table, id }: { table: 'job_parts' | 'job_labor'; id: string }) => {
-        if (lineDiscount?.table !== table || lineDiscount?.id !== id) return null;
+        if (isTechnician || lineDiscount?.table !== table || lineDiscount?.id !== id) return null;
         return (
             <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-700/60">
                 <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shrink-0">
@@ -1346,6 +1348,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                 <div className="space-y-2">
                                                     <input required placeholder="Part name (e.g. Engine Oil 4L)" value={partForm.custom_name} onChange={e => setPartForm({...partForm, custom_name: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
                                                     <div className="flex gap-2">
+                                                        {!isTechnician && (
+                                                            <>
                                                         <div className="relative flex-1">
                                                             <span className="absolute left-2 top-2 text-[10px] text-slate-400">Sell</span>
                                                             <input required type="number" onFocus={(e) => e.target.select()} value={partForm.custom_price_lkr} onChange={e => {
@@ -1362,8 +1366,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             <span className="absolute left-2 top-2 text-[10px] text-slate-400">Cost</span>
                                                             <input required type="number" onFocus={(e) => e.target.select()} value={partForm.custom_cost_lkr} onChange={e => setPartForm({...partForm, custom_cost_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
                                                         </div>
-                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-12 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
-                                                        <button type="submit" className="btn-brand px-3 py-2 rounded-lg font-bold text-sm">Add</button>
+                                                            </>
+                                                        )}
+                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={partForm.quantity} onChange={e => setPartForm({...partForm, quantity: parseInt(e.target.value)})} className="w-16 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
+                                                        <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
                                                     </div>
                                                 </div>
                                             )}
@@ -1393,7 +1399,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                 {part.parts?.name}
                                                             </div>
                                                         )}
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                        <div className={`grid gap-2 ${isTechnician ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-3'}`}>
                                                             <div className="relative">
                                                                 <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Qty</span>
                                                                 <input
@@ -1405,28 +1411,32 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                     className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-9 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
                                                                 />
                                                             </div>
-                                                            <div className="relative">
-                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Sell</span>
-                                                                <input
-                                                                    required
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={editingPartForm.price_at_time_lkr}
-                                                                    onChange={e => setEditingPartForm({ ...editingPartForm, price_at_time_lkr: e.target.value })}
-                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono focus:border-brand focus:outline-none"
-                                                                />
-                                                            </div>
-                                                            {part.is_custom && (
-                                                                <div className="relative col-span-2 sm:col-span-1">
-                                                                    <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Cost</span>
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        value={editingPartForm.cost_at_time_lkr}
-                                                                        onChange={e => setEditingPartForm({ ...editingPartForm, cost_at_time_lkr: e.target.value })}
-                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono focus:border-brand focus:outline-none"
-                                                                    />
-                                                                </div>
+                                                            {!isTechnician && (
+                                                                <>
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Sell</span>
+                                                                        <input
+                                                                            required
+                                                                            type="number"
+                                                                            min="0"
+                                                                            value={editingPartForm.price_at_time_lkr}
+                                                                            onChange={e => setEditingPartForm({ ...editingPartForm, price_at_time_lkr: e.target.value })}
+                                                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                        />
+                                                                    </div>
+                                                                    {part.is_custom && (
+                                                                        <div className="relative col-span-2 sm:col-span-1">
+                                                                            <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Cost</span>
+                                                                            <input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                value={editingPartForm.cost_at_time_lkr}
+                                                                                onChange={e => setEditingPartForm({ ...editingPartForm, cost_at_time_lkr: e.target.value })}
+                                                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                </>
                                                             )}
                                                         </div>
                                                         <div className="flex items-center justify-end gap-2 pt-1">
@@ -1454,7 +1464,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                     {part.is_custom ? part.custom_name : part.parts?.name}
                                                                     {part.is_custom && <span className="ml-1 text-[8px] bg-amber-500/10 text-amber-500 px-1 rounded uppercase">Custom</span>}
                                                                 </div>
-                                                                <div className="text-xs text-slate-500">{part.quantity} × LKR {part.price_at_time_lkr.toLocaleString()}</div>
+                                                                <div className="text-xs text-slate-500">
+                                                                    {isTechnician
+                                                                        ? `Qty: ${part.quantity}`
+                                                                        : `${part.quantity} × LKR ${part.price_at_time_lkr.toLocaleString()}`}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
@@ -1499,24 +1513,34 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     </div>
                                     <div className={`px-4 pb-3 ${readOnly ? 'hidden' : ''}`}>
                                         <form onSubmit={handleAddLabor} className="space-y-2">
-                                            <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
-                                                {(['hourly', 'fixed'] as const).map(mode => (
-                                                    <button
-                                                        key={mode}
-                                                        type="button"
-                                                        onClick={() => setLaborMode(mode)}
-                                                        className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                                                            laborMode === mode ? 'bg-brand text-slate-950' : 'text-slate-400 hover:text-white'
-                                                        }`}
-                                                    >
-                                                        {mode === 'hourly' ? 'By hour' : 'Fixed price'}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            {!isTechnician && (
+                                                <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
+                                                    {(['hourly', 'fixed'] as const).map(mode => (
+                                                        <button
+                                                            key={mode}
+                                                            type="button"
+                                                            onClick={() => setLaborMode(mode)}
+                                                            className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                                                                laborMode === mode ? 'bg-brand text-slate-950' : 'text-slate-400 hover:text-white'
+                                                            }`}
+                                                        >
+                                                            {mode === 'hourly' ? 'By hour' : 'Fixed price'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
 
                                             <input required placeholder="Description" value={laborForm.description} onChange={e => setLaborForm({...laborForm, description: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
 
-                                            {laborMode === 'hourly' ? (
+                                            {isTechnician ? (
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="relative w-28">
+                                                        <span className="absolute left-2.5 top-2 text-[10px] text-slate-400">Hours</span>
+                                                        <input required type="number" step="0.5" min="0.1" onFocus={(e) => e.target.select()} placeholder="1.0" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-14 text-white text-sm font-mono text-center" />
+                                                    </div>
+                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add Labor</button>
+                                                </div>
+                                            ) : laborMode === 'hourly' ? (
                                                 <div className="flex gap-2 items-center">
                                                     <input required type="number" step="0.5" onFocus={(e) => e.target.select()} placeholder="Hrs" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-16 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
                                                     <div className="flex-1 relative">
@@ -1545,26 +1569,28 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             <span className="text-[11px] font-bold uppercase tracking-wider text-brand flex items-center gap-1.5">
                                                                 <Pencil size={11} /> Editing Labor
                                                             </span>
-                                                            <div className="flex gap-1 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: false })}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                                                                        !editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
-                                                                    }`}
-                                                                >
-                                                                    Hourly
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: true })}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                                                                        editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
-                                                                    }`}
-                                                                >
-                                                                    Fixed
-                                                                </button>
-                                                            </div>
+                                                            {!isTechnician && (
+                                                                <div className="flex gap-1 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: false })}
+                                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                                                            !editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
+                                                                        }`}
+                                                                    >
+                                                                        Hourly
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: true })}
+                                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                                                            editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
+                                                                        }`}
+                                                                    >
+                                                                        Fixed
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                         <input
                                                             required
@@ -1573,7 +1599,20 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             onChange={e => setEditingLaborForm({ ...editingLaborForm, description: e.target.value })}
                                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm focus:border-brand focus:outline-none"
                                                         />
-                                                        {!editingLaborForm.is_fixed ? (
+                                                        {isTechnician ? (
+                                                            <div className="relative">
+                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
+                                                                <input
+                                                                    required
+                                                                    type="number"
+                                                                    step="0.5"
+                                                                    min="0.1"
+                                                                    value={editingLaborForm.hours}
+                                                                    onChange={e => setEditingLaborForm({ ...editingLaborForm, hours: e.target.value })}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-14 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                />
+                                                            </div>
+                                                        ) : !editingLaborForm.is_fixed ? (
                                                             <div className="grid grid-cols-2 gap-2">
                                                                 <div className="relative">
                                                                     <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
@@ -1633,9 +1672,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                         <div className="min-w-0 flex-1">
                                                             <div className="font-medium text-white text-sm truncate">{labor.description}</div>
                                                             <div className="text-xs text-slate-500">
-                                                                {(labor as unknown as { is_fixed?: boolean }).is_fixed
-                                                                    ? 'Fixed price'
-                                                                    : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`}
+                                                                {isTechnician
+                                                                    ? `${labor.hours} hrs`
+                                                                    : ((labor as unknown as { is_fixed?: boolean }).is_fixed
+                                                                        ? 'Fixed price'
+                                                                        : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`)}
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1 shrink-0">
@@ -1745,6 +1786,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
                             {/* Footer */}
                             <div className="p-4 bg-slate-950 border-t border-slate-800 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+                                {!isTechnician && (
+                                    <>
                                 <div className={`items-center gap-2 mb-3 ${readOnly ? 'hidden' : 'flex'}`}>
                                     <span className="text-slate-400 text-xs font-bold uppercase flex-1">Discount</span>
                                     <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-800">
@@ -1795,6 +1838,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                         LKR {jobTotalAmount.toLocaleString()}
                                     </div>
                                 </div>
+                                    </>
+                                )}
                                 {readOnly || (savedSuccessfully && !isDirty) ? (
                                     <button
                                         onClick={generateJobCardPDF}
