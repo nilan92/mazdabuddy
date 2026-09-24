@@ -54,14 +54,14 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-white">
-                {isTechnician ? 'My Monthly Hours & Bonus' : 'Technician Bonus Targets'}
+                {isTechnician ? 'My Monthly Hours & Milestones' : 'Technician Targets & Performance'}
               </span>
               <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                 {techData?.monthName || adminTechData?.monthName || 'Current Month'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              {TARGET_HOURS}h Monthly Target • Performance & Salary Bonus Tracker
+              {TARGET_HOURS}h Monthly Target • Performance & Productivity Tracker
             </p>
           </div>
         </div>
@@ -119,19 +119,19 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
               {/* Milestones Indicator */}
               <div className="grid grid-cols-4 text-center text-[11px] text-slate-400 pt-1 font-mono">
                 <div className={techData.totalHoursCompleted >= 50 ? 'text-cyan-400 font-semibold' : ''}>
-                  50h (25%)
+                  50h (Bronze 🥉)
                 </div>
                 <div className={techData.totalHoursCompleted >= 100 ? 'text-blue-400 font-semibold' : ''}>
-                  100h (50%)
+                  100h (Silver 🥈)
                 </div>
                 <div className={techData.totalHoursCompleted >= 150 ? 'text-indigo-400 font-semibold' : ''}>
-                  150h (75%)
+                  150h (Gold 🥇)
                 </div>
                 <div className={`flex items-center justify-end gap-1 ${
                   techData.totalHoursCompleted >= TARGET_HOURS ? 'text-amber-300 font-bold' : 'text-slate-500'
                 }`}>
                   <Trophy size={12} className={techData.totalHoursCompleted >= TARGET_HOURS ? 'text-amber-400' : ''} />
-                  <span>200h (Bonus)</span>
+                  <span>200h (Champion 🏆)</span>
                 </div>
               </div>
 
@@ -140,13 +140,13 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                 {techData.totalHoursCompleted >= TARGET_HOURS ? (
                   <div className="flex items-center gap-2 text-emerald-400 font-medium">
                     <Sparkles size={15} />
-                    <span>Congratulations! You reached the 200h monthly target and qualified for the bonus!</span>
+                    <span>Outstanding! You achieved the Champion Tier (200h) for this month! 🏆</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <AlertCircle size={14} className="text-amber-400 flex-shrink-0" />
+                  <div className="flex items-start sm:items-center gap-2 text-slate-300">
+                    <AlertCircle size={14} className="text-amber-400 flex-shrink-0 mt-0.5 sm:mt-0" />
                     <span>
-                      <strong className="text-amber-300 font-mono">{techData.hoursRemaining} hrs</strong> needed in next {techData.daysLeft} days to qualify for the salary bonus.
+                      <strong className="text-amber-300 font-mono">{techData.hoursRemaining}h remaining</strong> to reach Champion Tier ({TARGET_HOURS}h). {techData.smartPace.paceSubtext}
                     </span>
                   </div>
                 )}
@@ -162,7 +162,7 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                 <div className="text-xl font-bold font-mono text-white">
                   {techData.totalHoursCompleted}h
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Covered this month</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Tier: {techData.milestone.label} {techData.milestone.badge}</div>
               </div>
 
               <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
@@ -190,9 +190,9 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                   <TrendingUp size={13} className="text-amber-400" /> Daily Pace
                 </div>
                 <div className="text-xl font-bold font-mono text-amber-300">
-                  {techData.paceNeeded}h
+                  {techData.smartPace.paceDisplay}
                 </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">Per remaining day</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{techData.smartPace.workingDaysLeft} workdays left</div>
               </div>
             </div>
 
@@ -213,7 +213,7 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                   <Clock size={32} className="text-slate-600 mx-auto mb-2" />
                   <p className="text-sm text-slate-400">No completed jobs yet for this month.</p>
                   <p className="text-xs text-slate-500 mt-1">
-                    When you complete assigned repairs, your hours are automatically credited here toward your 200h bonus!
+                    When you complete assigned repairs, your hours are automatically credited here toward your monthly milestones!
                   </p>
                 </div>
               ) : (
@@ -268,7 +268,7 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
         {!isTechnician && adminTechData && (
           <div className="space-y-4">
             <p className="text-xs text-slate-400">
-              Track technician progress toward their {TARGET_HOURS}h monthly bonus target. Hours reset automatically at the end of {adminTechData.monthName}.
+              Track technician progress toward their {TARGET_HOURS}h monthly milestones and peak capacity. Hours reset automatically at the end of {adminTechData.monthName}.
             </p>
 
             {adminTechData.techSummaries.length === 0 ? (
@@ -292,13 +292,16 @@ export const TechnicianHoursModal: React.FC<TechnicianHoursModalProps> = ({
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1.5">
                             <span className="font-bold text-white text-base">{tech.name}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                              {tech.milestone.badge} {tech.milestone.tier}
+                            </span>
                             {tech.isTargetMet ? (
                               <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                                <Trophy size={11} /> 200h Bonus Met
+                                <Trophy size={11} /> Champion Met 🏆
                               </span>
                             ) : (
                               <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-slate-800 text-slate-400">
-                                {tech.hoursRemaining}h remaining
+                                {tech.smartPace.paceDisplay} • {tech.hoursRemaining}h to 200h
                               </span>
                             )}
                           </div>

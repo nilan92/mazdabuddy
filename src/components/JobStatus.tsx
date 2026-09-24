@@ -85,7 +85,7 @@ export const JobStatus = () => {
             ]);
             if (cancelled) return;
             if (status.error) console.warn('status lookup failed', status.error.message);
-            // Photos are a bonus — a failure here must not blank the status page.
+            // Photos are optional — a failure here must not blank the status page.
             if (pics.error) console.warn('photo lookup failed', pics.error.message);
             setRow((status.data as StatusRow[] | null)?.[0] ?? null);
             setPhotos((pics.data as StatusPhoto[] | null) ?? []);

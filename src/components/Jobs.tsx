@@ -351,12 +351,12 @@ export const Jobs = () => {
                          </button>
                      )}
 
-                     {/* Technician Monthly Hours / Bonus Target Button */}
+                     {/* Technician Monthly Hours / Milestones Target Button */}
                      {isTechnician && (
                          <button 
                             onClick={() => setShowHoursModal(true)}
                             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all shadow-sm bg-gradient-to-r from-amber-500/15 to-orange-500/15 text-amber-300 border-amber-500/40 hover:border-amber-300 hover:from-amber-500/25 hover:to-orange-500/25 active:scale-95"
-                            title="View Monthly Hours & Bonus Progress"
+                            title="View Monthly Hours & Milestones"
                          >
                             <Clock size={16} className="text-amber-400" />
                             <span>My Hours:</span>
@@ -372,7 +372,7 @@ export const Jobs = () => {
                          <button 
                             onClick={() => setShowHoursModal(true)}
                             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border transition-all shadow-sm bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700 hover:border-amber-500/40 active:scale-95"
-                            title="View Technician Monthly Bonus Targets"
+                            title="View Technician Targets & Milestones"
                          >
                             <Trophy size={16} className="text-amber-400" />
                             <span>Tech Targets</span>
@@ -651,7 +651,7 @@ export const Jobs = () => {
                 />
             )}
 
-            {/* Technician Monthly Hours / Bonus Target Modal */}
+            {/* Technician Monthly Hours / Milestones Target Modal */}
             <TechnicianHoursModal
                 isOpen={showHoursModal}
                 onClose={() => setShowHoursModal(false)}

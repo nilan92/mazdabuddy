@@ -35,7 +35,8 @@ const SkeletonCard = () => (
     </div>
 );
 
-import { useTechnicianProgress } from '../hooks/useTechnicianProgress';
+import { useTechnicianProgress, type AdminTechnicianSummary } from '../hooks/useTechnicianProgress';
+import { StaffPerformanceModal } from './StaffPerformanceModal';
 
 // --- Main Component ---
 export const Dashboard = () => {
@@ -44,6 +45,7 @@ export const Dashboard = () => {
   const { profile } = useAuth();
   const [showQuote, setShowQuote] = useState(false);
   const [currentQuote, setCurrentQuote] = useState('');
+  const [selectedStaff, setSelectedStaff] = useState<AdminTechnicianSummary | null>(null);
 
   const quotes = [
       "Process is the foundation of freedom. The tighter the system, the more creative you can be.",
@@ -128,7 +130,7 @@ export const Dashboard = () => {
     }
   });
 
-  // Technician Monthly Progress & Bonus Target Hook
+  // Technician Monthly Progress & Milestones Hook
   const { isTechnician, techData, adminTechData } = useTechnicianProgress();
 
   const refreshDashboard = () => {
@@ -144,7 +146,7 @@ export const Dashboard = () => {
     { 
       title: 'Hours Covered', 
       value: `${techData?.totalHoursCompleted ?? 0} / ${techData?.targetHours ?? 200}h`, 
-      subtext: `${techData?.progressPercent ?? 0}% of monthly bonus target`, 
+      subtext: `${techData?.progressPercent ?? 0}% of monthly milestone target`, 
       icon: Clock, 
       colorClass: 'text-brand', 
       onClick: () => {} 
@@ -166,9 +168,11 @@ export const Dashboard = () => {
       onClick: () => navigate('/jobs') 
     },
     { 
-      title: 'Monthly Bonus Status', 
-      value: techData?.hoursRemaining === 0 ? '🏆 Qualified!' : `${techData?.hoursRemaining ?? 0}h left`, 
-      subtext: `${techData?.daysLeft ?? 0} days remaining in ${techData?.monthName || 'month'}`, 
+      title: 'Monthly Milestone', 
+      value: techData?.milestone.badge || '🌱 Starter', 
+      subtext: techData?.hoursRemaining === 0 
+        ? 'Top tier achieved! (200h+)' 
+        : `${techData?.milestone.hoursToNextTier ?? 0}h to ${techData?.milestone.nextTierName || 'Goal'}`, 
       icon: Trophy, 
       colorClass: 'text-amber-400', 
       onClick: () => {} 
@@ -247,7 +251,7 @@ export const Dashboard = () => {
           document.body
       )}
 
-      {/* ── TECHNICIAN MONTHLY PROGRESS & BONUS CARD ── */}
+      {/* ── TECHNICIAN MONTHLY PROGRESS & MILESTONES CARD ── */}
       {isTechnician && techData && (
         <div className="bg-gradient-to-b from-slate-900/90 to-slate-900/40 border border-slate-800/80 rounded-3xl p-5 md:p-8 relative overflow-hidden shadow-2xl backdrop-blur-xl space-y-6">
           <div className="absolute -top-32 -right-32 w-80 h-80 bg-brand/10 rounded-full blur-3xl pointer-events-none" />
@@ -270,7 +274,7 @@ export const Dashboard = () => {
                 <span className="text-slate-500 text-base md:text-lg font-normal">/ {techData.targetHours} Hours Covered</span>
               </h2>
               <p className="text-xs md:text-sm text-slate-400 mt-1">
-                Every job you complete credits hours to your profile. Cover <span className="text-amber-300 font-bold">{techData.targetHours} hrs</span> to qualify for the workshop monthly bonus!
+                Every repair you complete credits hours to your profile. Cover <span className="text-amber-300 font-bold">{techData.targetHours} hrs</span> to reach the Champion Tier!
               </p>
             </div>
 
@@ -283,11 +287,17 @@ export const Dashboard = () => {
               ) : (
                 <div className="px-4 py-2 rounded-2xl bg-slate-800/80 border border-slate-700/80 text-white font-bold text-sm flex items-center gap-2">
                   <Target size={16} className="text-brand" />
-                  <span><strong className="text-brand">{techData.hoursRemaining} hrs</strong> to bonus</span>
+                  <span>
+                    {techData.milestone.nextTierName ? (
+                      <><strong className="text-brand">{techData.milestone.hoursToNextTier} hrs</strong> to {techData.milestone.nextTierName}</>
+                    ) : (
+                      <><strong className="text-brand">{techData.hoursRemaining} hrs</strong> to 200h Tier</>
+                    )}
+                  </span>
                 </div>
               )}
               <span className="text-[11px] text-slate-500 font-medium">
-                {techData.daysLeft} days remaining this month
+                {techData.smartPace.workingDaysLeft} workdays remaining this month
               </span>
             </div>
           </div>
@@ -300,7 +310,7 @@ export const Dashboard = () => {
                 Progress towards 200 hrs goal
               </span>
               <span className="text-brand font-mono font-bold text-sm">
-                {techData.progressPercent}% Completed
+                {techData.progressPercent}% Completed ({techData.milestone.badge})
               </span>
             </div>
 
@@ -317,24 +327,24 @@ export const Dashboard = () => {
 
             {/* Checkpoint Milestones */}
             <div className="grid grid-cols-4 text-center pt-1 text-[10px] text-slate-500 font-semibold border-t border-slate-800/60 mt-2">
-              <div className={techData.totalHoursCompleted >= 50 ? 'text-sky-400' : ''}>
+              <div className={techData.totalHoursCompleted >= 50 ? 'text-amber-400' : ''}>
                 <div className="font-bold">50 hrs</div>
-                <div className="text-[9px] text-slate-600">25% (Starter)</div>
+                <div className="text-[9px] text-slate-600">🥉 Bronze (25%)</div>
               </div>
-              <div className={techData.totalHoursCompleted >= 100 ? 'text-amber-400' : ''}>
+              <div className={techData.totalHoursCompleted >= 100 ? 'text-slate-200' : ''}>
                 <div className="font-bold">100 hrs</div>
-                <div className="text-[9px] text-slate-600">50% (Halfway)</div>
+                <div className="text-[9px] text-slate-600">🥈 Silver (50%)</div>
               </div>
-              <div className={techData.totalHoursCompleted >= 150 ? 'text-orange-400' : ''}>
+              <div className={techData.totalHoursCompleted >= 150 ? 'text-yellow-300' : ''}>
                 <div className="font-bold">150 hrs</div>
-                <div className="text-[9px] text-slate-600">75% (Home Stretch)</div>
+                <div className="text-[9px] text-slate-600">🥇 Gold (75%)</div>
               </div>
               <div className={techData.totalHoursCompleted >= 200 ? 'text-emerald-400 font-black' : ''}>
                 <div className="font-bold flex items-center justify-center gap-1">
                   <Trophy size={11} className={techData.totalHoursCompleted >= 200 ? 'text-amber-400' : ''} />
                   200 hrs
                 </div>
-                <div className="text-[9px] text-slate-600">100% (🏆 BONUS!)</div>
+                <div className="text-[9px] text-slate-600">🏆 Champion (100%)</div>
               </div>
             </div>
           </div>
@@ -401,17 +411,20 @@ export const Dashboard = () => {
             {/* Performance Insights (5 cols) */}
             <div className="lg:col-span-5 flex flex-col justify-between gap-3">
               <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center gap-1.5">
-                  <TrendingUp size={13} className="text-emerald-400" /> Daily Pace Needed
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-emerald-400">
+                    <TrendingUp size={13} /> Workday Pace & Capacity
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Velocity: {techData.smartPace.currentVelocity}h/day
+                  </span>
                 </div>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-white">{techData.paceNeeded}</span>
-                  <span className="text-xs text-slate-400">hours / day</span>
+                  <span className="text-2xl font-black text-white">{techData.smartPace.paceValue}</span>
+                  <span className="text-xs text-slate-400">{techData.smartPace.paceUnit}</span>
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  {techData.hoursRemaining > 0 
-                    ? `Maintain ${techData.paceNeeded}h daily across ${techData.daysLeft} days to hit bonus.`
-                    : 'Goal reached! Any extra hours count toward bonus overachievement!'}
+                <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                  {techData.smartPace.paceSubtext}
                 </div>
               </div>
 
@@ -485,32 +498,42 @@ export const Dashboard = () => {
         </div>
       )}
 
-      {/* ── ADMIN: TECHNICIAN BONUS TARGET TRACKER ── */}
+      {/* ── ADMIN: TECHNICIAN PERFORMANCE & MILESTONES ── */}
       {!isTechnician && adminTechData && adminTechData.techSummaries && adminTechData.techSummaries.length > 0 && (
         <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <Trophy size={16} className="text-amber-400" />
-                <h3 className="text-base font-bold text-white">Technician Bonus Targets ({adminTechData.monthName})</h3>
+                <Trophy size={18} className="text-amber-400" />
+                <h3 className="text-base font-bold text-white">Technician Monthly Milestones ({adminTechData.monthName})</h3>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Monthly performance target: <strong className="text-amber-300">{adminTechData.targetHours} hours</strong> per technician for bonus eligibility.
+                Monthly performance target: <strong className="text-amber-300">{adminTechData.targetHours} hours</strong> per technician. Click any technician to view full dossier.
               </p>
             </div>
+            <button
+              onClick={() => navigate('/performance')}
+              className="text-xs font-semibold text-brand hover:underline flex items-center gap-1 self-start sm:self-auto"
+            >
+              <span>Open Team Performance Tab</span>
+              <ChevronRight size={14} />
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
-            {adminTechData.techSummaries.map((tech: any) => (
-              <div key={tech.staffId} className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-4 space-y-3">
+            {adminTechData.techSummaries.map((tech) => (
+              <div 
+                key={tech.staffId} 
+                onClick={() => setSelectedStaff(tech)}
+                className="bg-slate-950/60 hover:bg-slate-850/80 border border-slate-800/80 hover:border-slate-700 p-4 rounded-xl space-y-3 cursor-pointer transition-all group"
+              >
                 <div className="flex items-center justify-between">
-                  <div className="font-bold text-white text-sm">{tech.name}</div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                    tech.isTargetMet 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
-                      : 'bg-slate-800 text-slate-400 border border-slate-700'
-                  }`}>
-                    {tech.isTargetMet ? 'Bonus Qualified' : `${tech.hoursRemaining}h to target`}
+                  <div className="font-bold text-white text-sm group-hover:text-brand transition-colors flex items-center gap-2">
+                    <span>{tech.name}</span>
+                    <span className="text-[10px] text-slate-500 font-normal">({tech.completedCount} jobs)</span>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${tech.milestone.bgClass} ${tech.milestone.colorClass} ${tech.milestone.borderClass}`}>
+                    {tech.milestone.badge}
                   </span>
                 </div>
 
@@ -521,15 +544,21 @@ export const Dashboard = () => {
                   </div>
                   <div className="h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
                     <div 
-                      className={`h-full rounded-full ${tech.isTargetMet ? 'bg-emerald-400' : 'bg-gradient-to-r from-sky-500 to-brand'}`}
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        tech.isTargetMet 
+                          ? 'bg-gradient-to-r from-emerald-400 to-amber-300' 
+                          : 'bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-500'
+                      }`}
                       style={{ width: `${Math.min(100, Math.max(3, tech.progressPercent))}%` }}
                     />
                   </div>
                 </div>
 
-                <div className="text-[11px] text-slate-500 flex justify-between">
-                  <span>{tech.completedCount} jobs completed</span>
-                  <span className="text-slate-400 font-medium">Target: {tech.targetHours}h</span>
+                <div className="text-[11px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-900">
+                  <span>Velocity: <strong className="text-emerald-400 font-mono">{tech.smartPace.currentVelocity}h/day</strong></span>
+                  <span className="text-brand group-hover:underline flex items-center gap-0.5">
+                    View Dossier <ChevronRight size={12} />
+                  </span>
                 </div>
               </div>
             ))}
@@ -602,6 +631,15 @@ export const Dashboard = () => {
             )}
         </div>
       </div>
+
+      {/* Staff Performance Dossier Modal */}
+      <StaffPerformanceModal
+        isOpen={!!selectedStaff}
+        onClose={() => setSelectedStaff(null)}
+        staff={selectedStaff}
+        monthName={adminTechData?.monthName || 'Current Month'}
+        onSelectJob={(jobId) => navigate('/jobs', { state: { openJobId: jobId } })}
+      />
     </div>
   );
 };

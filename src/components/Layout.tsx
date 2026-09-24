@@ -12,7 +12,8 @@ import {
     RefreshCw,
     Users,
     Truck,
-    KeyRound
+    KeyRound,
+    Award
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
@@ -47,6 +48,7 @@ export const Layout = ({ children }: LayoutProps) => {
   const allLinks = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'technician', 'accountant'] },
     { to: '/jobs', icon: Tool, label: 'Jobs Board', roles: ['admin', 'manager', 'technician'] },
+    { to: '/performance', icon: Award, label: 'Performance', roles: ['admin', 'manager'] },
     { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
     { to: '/suppliers', icon: Truck, label: 'Suppliers', roles: ['admin', 'manager', 'accountant'] },

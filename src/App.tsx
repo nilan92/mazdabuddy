@@ -22,6 +22,7 @@ const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(mod
 const ResetPassword = lazy(() => import('./components/ResetPassword').then(module => ({ default: module.ResetPassword })));
 const JobStatus = lazy(() => import('./components/JobStatus').then(module => ({ default: module.JobStatus })));
 const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
+const Performance = lazy(() => import('./components/Performance').then(module => ({ default: module.Performance })));
 
 // Reusable Loading Screen
 const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) => (
@@ -210,6 +211,11 @@ const App = () => {
                             <Routes>
                                 <Route path="/" element={<Dashboard />} />
                                 <Route path="/jobs" element={<Jobs />} />
+                                <Route path="/performance" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager']}>
+                                        <Performance />
+                                    </RoleRoute>
+                                } />
                                 <Route path="/inventory" element={
                                     <RoleRoute allowedRoles={['admin', 'manager']}>
                                         <Inventory />
