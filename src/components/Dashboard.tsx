@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X } from 'lucide-react';
+import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -128,9 +128,22 @@ export const Dashboard = () => {
 
   const refreshDashboard = () => queryClient.invalidateQueries({ queryKey: ['dashboard'] });
 
-  const stats = dashboardData?.stats || { revenue: 0, activeJobs: 0, totalCustomers: 0, efficiency: '0%' };
+  const isTechnician = profile?.role === 'technician';
+  const stats = dashboardData?.stats || { revenue: 0, activeJobs: 0, totalCustomers: 0, completedMonth: 0, efficiency: '0%' };
   const recentJobs = dashboardData?.recentJobs || [];
   const lowStock = dashboardData?.lowStock || [];
+
+  const statCards = isTechnician ? [
+    { title: 'Active Jobs', value: stats.activeJobs, subtext: 'Currently on floor', icon: Briefcase, colorClass: 'text-brand', onClick: () => navigate('/jobs') },
+    { title: 'Completed This Month', value: stats.completedMonth, subtext: 'Finished workshop jobs', icon: CheckCircle2, colorClass: 'text-emerald-400', onClick: () => navigate('/jobs') },
+    { title: 'Shop Efficiency', value: stats.efficiency, subtext: stats.efficiency === 'N/A' ? 'No labor data yet' : 'Speed & accuracy rate', icon: Activity, colorClass: 'text-amber-400', onClick: handleEfficiencyClick },
+    { title: 'Vehicle Diagnostic', value: 'SmartScan', subtext: 'AI Vehicle Scanner', icon: Sparkles, colorClass: 'text-cyan-400', onClick: () => navigate('/scan') },
+  ] : [
+    { title: 'Monthly Revenue', value: `LKR ${(stats.revenue).toLocaleString()}`, subtext: 'Invoices this month', icon: DollarSign, colorClass: 'text-emerald-400', onClick: () => navigate('/finances') },
+    { title: 'Active Jobs', value: stats.activeJobs, subtext: 'Currently on floor', icon: Briefcase, colorClass: 'text-brand', onClick: () => navigate('/jobs') },
+    { title: 'Total Customers', value: stats.totalCustomers, subtext: 'Registered clients', icon: Users, colorClass: 'text-violet-400', onClick: () => navigate('/customers') },
+    { title: 'Efficiency', value: stats.efficiency, subtext: stats.efficiency === 'N/A' ? 'No labor data yet' : 'Last 20 completed jobs', icon: Activity, colorClass: 'text-amber-400', onClick: handleEfficiencyClick },
+  ];
 
   return (
     <div className="p-2 space-y-6">
@@ -168,12 +181,7 @@ export const Dashboard = () => {
             </>
         ) : (
             <>
-                {[
-                  { title: 'Monthly Revenue', value: `LKR ${(stats.revenue).toLocaleString()}`, subtext: 'Invoices this month', icon: DollarSign, colorClass: 'text-emerald-400', onClick: () => navigate('/finances') },
-                  { title: 'Active Jobs', value: stats.activeJobs, subtext: 'Currently on floor', icon: Briefcase, colorClass: 'text-brand', onClick: () => navigate('/jobs') },
-                  { title: 'Total Customers', value: stats.totalCustomers, subtext: 'Registered clients', icon: Users, colorClass: 'text-violet-400', onClick: () => navigate('/customers') },
-                  { title: 'Efficiency', value: stats.efficiency, subtext: stats.efficiency === 'N/A' ? 'No labor data yet' : 'Last 20 completed jobs', icon: Activity, colorClass: 'text-amber-400', onClick: handleEfficiencyClick },
-                ].map((card, i) => (
+                {statCards.map((card, i) => (
                   <motion.div key={card.title}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -252,8 +260,8 @@ export const Dashboard = () => {
                      {lowStock.map((part: any) => (
                        <div
                            key={part.id}
-                           onClick={() => navigate('/inventory')}
-                           className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-slate-800/30 cursor-pointer hover:bg-slate-800 transition-colors group"
+                           onClick={isTechnician ? undefined : () => navigate('/inventory')}
+                           className={`flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-slate-800/30 ${isTechnician ? '' : 'cursor-pointer hover:bg-slate-800'} transition-colors group`}
                        >
                           <div className="min-w-0">
                               <div className="text-sm font-medium text-slate-200 group-hover:text-cyan-400 transition-colors truncate">{part.name}</div>

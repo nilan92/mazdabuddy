@@ -133,6 +133,15 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     return <>{children}</>;
 };
 
+const RoleRoute = ({ allowedRoles, children }: { allowedRoles: string[]; children: React.ReactNode }) => {
+    const { profile } = useAuth();
+    if (!profile) return null;
+    if (!allowedRoles.includes(profile.role)) {
+        return <Navigate to="/" replace />;
+    }
+    return <>{children}</>;
+};
+
 const App = () => {
   // Register SW on app load (needed for push to work later)
   useEffect(() => { registerServiceWorker(); }, []);
@@ -201,13 +210,33 @@ const App = () => {
                             <Routes>
                                 <Route path="/" element={<Dashboard />} />
                                 <Route path="/jobs" element={<Jobs />} />
-                                <Route path="/inventory" element={<Inventory />} />
-                                <Route path="/invoices" element={<Invoices />} />
+                                <Route path="/inventory" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager']}>
+                                        <Inventory />
+                                    </RoleRoute>
+                                } />
+                                <Route path="/invoices" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
+                                        <Invoices />
+                                    </RoleRoute>
+                                } />
                                 <Route path="/scan" element={<SmartScan />} />
-                                <Route path="/customers" element={<Customers />} />
-                                <Route path="/suppliers" element={<Suppliers />} />
+                                <Route path="/customers" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
+                                        <Customers />
+                                    </RoleRoute>
+                                } />
+                                <Route path="/suppliers" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
+                                        <Suppliers />
+                                    </RoleRoute>
+                                } />
                                 <Route path="/settings" element={<Settings />} />
-                                <Route path="/finances" element={<Finances />} />
+                                <Route path="/finances" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
+                                        <Finances />
+                                    </RoleRoute>
+                                } />
                             </Routes>
                         </Layout>
                     </AuthGuard>

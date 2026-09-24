@@ -11,10 +11,12 @@ import {
     HelpCircle,
     RefreshCw,
     Users,
-    Truck
+    Truck,
+    KeyRound
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { useQueryClient } from '@tanstack/react-query';
 import { PullToRefreshContainer } from './PullToRefreshContainer';
 
@@ -30,6 +32,7 @@ export const Layout = ({ children }: LayoutProps) => {
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isHelpOpen, setIsHelpOpen] = React.useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = React.useState(false);
 
   const handlePullRefresh = React.useCallback(async () => {
     // 1. Invalidate all active React Query caches
@@ -50,7 +53,7 @@ export const Layout = ({ children }: LayoutProps) => {
     { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
 
     { to: '/finances', icon: PieChart, label: 'Finance', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager'] },
+    { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager', 'technician', 'accountant'] },
   ];
 
   const allowedLinks = allLinks.filter(link => link.roles.includes(role));
@@ -145,18 +148,27 @@ export const Layout = ({ children }: LayoutProps) => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800">
-              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-700/50">
-                  <Users size={16} />
+          <div className="flex items-center justify-between bg-slate-950/40 p-2.5 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 border border-slate-700/50 shrink-0">
+                      <Users size={16} />
+                  </div>
+                  <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-200 truncate leading-none mb-1">
+                          {profile?.full_name?.split(' ')[0]}
+                      </p>
+                      <p className="uppercase font-black text-[9px] tracking-widest leading-none" style={{ color: brandPrimary }}>
+                          {role}
+                      </p>
+                  </div>
               </div>
-              <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-200 truncate leading-none mb-1">
-                      {profile?.full_name?.split(' ')[0]}
-                  </p>
-                  <p className="uppercase font-black text-[9px] tracking-widest leading-none" style={{ color: brandPrimary }}>
-                      {role}
-                  </p>
-              </div>
+              <button
+                onClick={() => setIsChangePasswordOpen(true)}
+                className="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800/80 rounded-lg transition-colors"
+                title="Change Password"
+              >
+                <KeyRound size={15} />
+              </button>
           </div>
         </div>
 
@@ -182,6 +194,14 @@ export const Layout = ({ children }: LayoutProps) => {
         </nav>
 
         <div className="p-4 border-t border-slate-800 space-y-2">
+          <button 
+            onClick={() => setIsChangePasswordOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors group"
+          >
+            <KeyRound size={20} className="group-hover:scale-110 transition-transform" />
+            <span>Change Password</span>
+          </button>
+
           <button 
             onClick={() => setIsHelpOpen(true)}
             className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors group"
@@ -266,6 +286,16 @@ export const Layout = ({ children }: LayoutProps) => {
               <div className="h-px bg-slate-700 my-1" />
               <button 
                 onClick={() => {
+                    setIsChangePasswordOpen(true);
+                    setIsMobileMenuOpen(false);
+                }} 
+                className="flex items-center gap-3 px-4 py-3 rounded-xl w-full text-slate-300 hover:bg-slate-700"
+              >
+                  <KeyRound size={20} />
+                  <span className="font-medium">Change Password</span>
+              </button>
+              <button 
+                onClick={() => {
                     setIsHelpOpen(true);
                     setIsMobileMenuOpen(false);
                 }} 
@@ -285,6 +315,7 @@ export const Layout = ({ children }: LayoutProps) => {
       )}
       
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
       
       {/* Overlay to close menu */}
       {isMobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)} />}

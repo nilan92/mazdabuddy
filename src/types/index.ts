@@ -15,6 +15,7 @@ export interface UserProfile {
     full_name: string;
     role: 'admin' | 'manager' | 'technician' | 'accountant';
     tenant_id: string;
+    username?: string;
     tenants?: Tenant;
 }
 

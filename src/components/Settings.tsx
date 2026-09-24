@@ -10,6 +10,18 @@ import {
   Shield,
   Plus,
   RotateCcw,
+  UserPlus,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Wrench,
+  Search,
+  Users,
+  Copy,
+  Briefcase,
+  FileSpreadsheet,
+  Power,
+  Info,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -17,6 +29,9 @@ import { useToast } from "../context/ToastContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { checkSMSBalance } from "../lib/sms";
 import { tidyName } from "../lib/textCase";
+import { CreateStaffModal } from "./CreateStaffModal";
+import { AddFloorTechModal } from "./AddFloorTechModal";
+import { AdminResetPasswordModal } from "./AdminResetPasswordModal";
 
 export const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -24,9 +39,13 @@ export const Settings = () => {
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const isAdmin = profile?.role === "admin";
+  const isManager = profile?.role === "manager";
+  const canManageGeneral = isAdmin || isManager;
   const [activeTab, setActiveTab] = useState<
-    "general" | "users" | "ai" | "troubleshoot"
-  >("general");
+    "general" | "users" | "ai" | "troubleshoot" | "mfa" | "audit"
+  >(canManageGeneral ? "general" : "mfa");
+  const [isCreateStaffOpen, setIsCreateStaffOpen] = useState(false);
+  const [resetPasswordTarget, setResetPasswordTarget] = useState<any>(null);
   const [aiApiKey, setAiApiKey] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [smsApiKey, setSmsApiKey] = useState("");
@@ -57,9 +76,16 @@ export const Settings = () => {
   const [usersLoading, setUsersLoading] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [staff, setStaff] = useState<{ id: string; name: string; profile_id: string | null; active: boolean }[]>([]);
-  const [newStaffName, setNewStaffName] = useState("");
-  const [savingStaff, setSavingStaff] = useState(false);
   const [editForm, setEditForm] = useState({ full_name: "", role: "" });
+  const [isAddFloorTechOpen, setIsAddFloorTechOpen] = useState(false);
+  const [createStaffPrefill, setCreateStaffPrefill] = useState<{
+    fullName?: string;
+    role?: 'technician' | 'manager' | 'accountant' | 'admin';
+  }>({});
+  const [staffSearch, setStaffSearch] = useState("");
+  const [staffFilter, setStaffFilter] = useState<'all' | 'login' | 'floor' | 'admin'>('all');
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [editingStaffName, setEditingStaffName] = useState("");
 
   const fetchTenantData = async () => {
     if (!profile?.tenant_id) return;
@@ -160,33 +186,6 @@ export const Settings = () => {
       .select("id, name, profile_id, active")
       .order("name");
     if (data) setStaff(data);
-  };
-
-  const handleAddStaff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = tidyName(newStaffName);
-    if (!name) return;
-    setSavingStaff(true);
-    const { error } = await supabase
-      .from("staff")
-      .insert({ tenant_id: profile?.tenant_id, name });
-    setSavingStaff(false);
-    if (error) { toast(error.message, 'error'); return; }
-    setNewStaffName("");
-    toast(`${name} added.`, 'success');
-    fetchStaff();
-  };
-
-  // Soft-delete: a name-only technician may still be on old job cards, so the
-  // row has to survive. Inactive staff drop out of the assignment dropdown.
-  const handleToggleStaff = async (member: { id: string; name: string; active: boolean }) => {
-    const { error } = await supabase
-      .from("staff")
-      .update({ active: !member.active })
-      .eq("id", member.id);
-    if (error) { toast(error.message, 'error'); return; }
-    toast(member.active ? `${member.name} deactivated.` : `${member.name} reactivated.`, 'info');
-    fetchStaff();
   };
 
   const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -317,31 +316,187 @@ export const Settings = () => {
   };
 
   const saveEditUser = async (id: string) => {
+    const clean = tidyName(editForm.full_name);
+    if (!clean) {
+      toast("Name cannot be empty.", 'error');
+      return;
+    }
     const { error } = await supabase
       .from("profiles")
-      .update(editForm)
+      .update({ full_name: clean, role: editForm.role })
       .eq("id", id);
     if (error) {
       toast("Failed to update user: " + error.message, 'error');
     } else {
+      await supabase.from("staff").update({ name: clean }).eq("profile_id", id);
       setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, ...editForm } : u)),
+        prev.map((u) => (u.id === id ? { ...u, full_name: clean, role: editForm.role } : u)),
       );
       setEditingUserId(null);
+      fetchStaff();
       toast("User updated.", 'success');
     }
   };
 
   const deleteUser = async (id: string, name: string) => {
-    if (!await confirm({ title: 'Remove User', message: `Remove ${name} from the workshop?`, confirmLabel: 'Remove' })) return;
+    if (!await confirm({ title: 'Remove User', message: `Remove ${name} from the workshop? They will lose access to sign in.`, confirmLabel: 'Remove' })) return;
     const { error } = await supabase.from("profiles").delete().eq("id", id);
     if (error) {
       toast("Failed to delete user: " + error.message, 'error');
     } else {
       setUsers((prev) => prev.filter((u) => u.id !== id));
+      fetchStaff();
       toast("User removed.", 'info');
     }
   };
+
+  const startEditStaff = (member: { id: string; name: string }) => {
+    setEditingStaffId(member.id);
+    setEditingStaffName(member.name);
+  };
+
+  const cancelEditStaff = () => {
+    setEditingStaffId(null);
+    setEditingStaffName("");
+  };
+
+  const saveEditStaff = async (id: string) => {
+    const clean = tidyName(editingStaffName);
+    if (!clean) {
+      toast("Name cannot be empty.", 'error');
+      return;
+    }
+    const { error } = await supabase.from("staff").update({ name: clean }).eq("id", id);
+    if (error) {
+      toast("Failed to update technician: " + error.message, 'error');
+    } else {
+      toast("Technician updated.", 'success');
+      setEditingStaffId(null);
+      fetchStaff();
+    }
+  };
+
+  const handleToggleStaffActive = async (staffId: string, currentActive: boolean, name: string) => {
+    const { error } = await supabase
+      .from("staff")
+      .update({ active: !currentActive })
+      .eq("id", staffId);
+    if (error) {
+      toast(error.message, 'error');
+      return;
+    }
+    toast(!currentActive ? `${name} enabled for job assignment.` : `${name} paused from job assignment.`, 'info');
+    fetchStaff();
+  };
+
+  const deleteStaff = async (staffMember: { id: string; name: string }) => {
+    if (!await confirm({
+      title: 'Remove Technician',
+      message: `Remove ${staffMember.name} from technicians? If they have completed job cards in the past, their history will be preserved and they will be marked inactive.`,
+      confirmLabel: 'Remove'
+    })) return;
+
+    const { error } = await supabase.from("staff").delete().eq("id", staffMember.id);
+    if (error) {
+      if (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('referenced')) {
+        const { error: deactError } = await supabase.from("staff").update({ active: false }).eq("id", staffMember.id);
+        if (deactError) {
+          toast("Failed to update technician: " + deactError.message, 'error');
+        } else {
+          toast(`${staffMember.name} has past job history, so they have been marked inactive.`, 'info');
+          fetchStaff();
+        }
+        return;
+      }
+      toast("Failed to delete technician: " + error.message, 'error');
+    } else {
+      toast(`${staffMember.name} removed.`, 'info');
+      fetchStaff();
+    }
+  };
+
+  // Unified Team List: Combines users (profiles) and floor-only staff
+  const unifiedTeam = React.useMemo(() => {
+    const list: Array<{
+      key: string;
+      staffId: string | null;
+      profileId: string | null;
+      name: string;
+      username: string | null;
+      role: 'admin' | 'manager' | 'accountant' | 'technician';
+      hasLogin: boolean;
+      isStaffActive: boolean;
+      isFloorOnly: boolean;
+      userObj?: any;
+      staffObj?: any;
+    }> = [];
+
+    // 1. Add all profiles (users with login credentials)
+    for (const u of users) {
+      const matched = staff.find((s) => s.profile_id === u.id);
+      list.push({
+        key: `profile-${u.id}`,
+        staffId: matched ? matched.id : null,
+        profileId: u.id,
+        name: u.full_name || u.username || 'Unnamed Staff',
+        username: u.username || null,
+        role: (u.role as any) || 'technician',
+        hasLogin: true,
+        isStaffActive: matched ? matched.active : true,
+        isFloorOnly: false,
+        userObj: u,
+        staffObj: matched,
+      });
+    }
+
+    // 2. Add unlinked staff (floor-only technicians with no profile)
+    for (const s of staff) {
+      if (!s.profile_id || !users.some((u) => u.id === s.profile_id)) {
+        list.push({
+          key: `staff-${s.id}`,
+          staffId: s.id,
+          profileId: null,
+          name: s.name || 'Technician',
+          username: null,
+          role: 'technician',
+          hasLogin: false,
+          isStaffActive: s.active,
+          isFloorOnly: true,
+          staffObj: s,
+        });
+      }
+    }
+
+    return list;
+  }, [users, staff]);
+
+  // Filtered team list
+  const filteredTeam = React.useMemo(() => {
+    const query = staffSearch.trim().toLowerCase();
+    return unifiedTeam.filter((member) => {
+      // Tab filter
+      if (staffFilter === 'login' && !member.hasLogin) return false;
+      if (staffFilter === 'floor' && !member.isFloorOnly) return false;
+      if (staffFilter === 'admin' && member.role !== 'admin' && member.role !== 'manager') return false;
+
+      // Search query
+      if (query) {
+        const matchesName = member.name.toLowerCase().includes(query);
+        const matchesUsername = member.username?.toLowerCase().includes(query);
+        const matchesRole = member.role.toLowerCase().includes(query);
+        return matchesName || matchesUsername || matchesRole;
+      }
+      return true;
+    });
+  }, [unifiedTeam, staffFilter, staffSearch]);
+
+  const teamStats = React.useMemo(() => {
+    const total = unifiedTeam.length;
+    const loginCount = unifiedTeam.filter((m) => m.hasLogin).length;
+    const floorOnlyCount = unifiedTeam.filter((m) => m.isFloorOnly).length;
+    const adminCount = unifiedTeam.filter((m) => m.role === 'admin' || m.role === 'manager').length;
+    return { total, loginCount, floorOnlyCount, adminCount };
+  }, [unifiedTeam]);
 
   const handleSaveAiKey = async () => {
     setAiLoading(true);
@@ -416,17 +571,19 @@ export const Settings = () => {
       </div>
 
       <div className="flex border-b border-slate-800 mb-6 overflow-x-auto scrollbar-none whitespace-nowrap">
-        <button
-          onClick={() => setActiveTab("general")}
-          className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}
-          style={{
-            borderBottomColor:
-              activeTab === "general" ? brandColor : "transparent",
-            color: activeTab === "general" ? brandColor : undefined,
-          }}
-        >
-          Identity & Logo
-        </button>
+        {canManageGeneral && (
+          <button
+            onClick={() => setActiveTab("general")}
+            className={`px-6 py-3 font-bold text-sm transition-colors border-b-2`}
+            style={{
+              borderBottomColor:
+                activeTab === "general" ? brandColor : "transparent",
+              color: activeTab === "general" ? brandColor : undefined,
+            }}
+          >
+            Identity & Logo
+          </button>
+        )}
         {isAdmin && (
           <button
             onClick={() => setActiveTab("users")}
@@ -718,91 +875,19 @@ export const Settings = () => {
 
         {activeTab === "users" && isAdmin && (
           <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
-            {/* Two different things, routinely confused: someone you assign work
-                to, versus someone who signs in. */}
-            <div className="mb-6 p-4 rounded-xl bg-slate-950/60 border border-slate-800">
-              <p className="text-xs text-slate-300 font-bold mb-2">Adding someone — which do you need?</p>
-              <ul className="text-xs text-slate-400 space-y-1.5 leading-relaxed">
-                <li>
-                  <span className="text-white font-semibold">Just to assign jobs to them</span> — type
-                  their name under <span className="text-brand">Technicians</span> below and press Add.
-                  No account, no email, nothing for them to do.
-                </li>
-                <li>
-                  <span className="text-white font-semibold">They need to sign in</span> — press
-                  <span className="text-brand"> Copy Invite Link</span> and send it to them. They set
-                  their own password and join this workshop. The link works once and expires after 7 days.
-                </li>
-                <li className="pt-1 text-slate-500">
-                  The <span className="text-slate-300">Workshop ID</span> below does not add anyone. It
-                  used to, but a plain ID could not be revoked or expired, so anyone who saw it could
-                  join. Use the invite link instead — the ID is only for support and reference.
-                </li>
-              </ul>
-            </div>
-
-            <div className="mb-6 pb-6 border-b border-slate-800">
-              <h3 className="text-lg font-semibold text-white mb-1">Technicians</h3>
-              <p className="text-xs text-slate-500 mb-4">
-                People you assign jobs to. They do not need an account — a name is enough.
-              </p>
-
-              <form onSubmit={handleAddStaff} className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  value={newStaffName}
-                  onChange={(e) => setNewStaffName(e.target.value)}
-                  placeholder="Technician name"
-                  className="flex-1 min-w-0 bg-slate-800 border border-slate-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-brand"
-                />
-                <button
-                  type="submit"
-                  disabled={savingStaff || !newStaffName.trim()}
-                  className="btn-brand px-4 py-2.5 rounded-lg font-bold text-sm disabled:opacity-40 flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <Plus size={15} /> {savingStaff ? "Adding…" : "Add"}
-                </button>
-              </form>
-
-              <div className="space-y-2">
-                {staff.length === 0 && (
-                  <p className="text-sm text-slate-600 italic">No technicians yet.</p>
-                )}
-                {staff.map((member) => (
-                  <div
-                    key={member.id}
-                    className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
-                      member.active
-                        ? "bg-slate-800/40 border-slate-800"
-                        : "bg-slate-900/40 border-slate-800/60 opacity-60"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="text-white text-sm font-medium truncate">{member.name}</div>
-                      <div className="text-[10px] uppercase tracking-wider text-slate-500">
-                        {member.profile_id ? "Has a login" : "Name only"}
-                        {!member.active && " · inactive"}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleToggleStaff(member)}
-                      className="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 transition-colors flex-shrink-0"
-                    >
-                      {member.active ? "Deactivate" : "Reactivate"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
+            {/* Top Header & Quick Actions */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6 pb-6 border-b border-slate-800">
               <div>
-                <h3 className="text-lg font-semibold text-white">
-                  Staff Management
+                <h3 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                  <Users size={22} className="text-brand" />
+                  Staff & Access Control
                 </h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-[10px] text-slate-400 uppercase font-black" title="Reference only — this does not let anyone join">
-                    Workshop ID (reference):
+                <p className="text-xs text-slate-400 mt-1">
+                  Manage workshop mechanics, role permissions, and system logins in one unified place.
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                    Workshop ID:
                   </span>
                   <code
                     className="text-[10px] bg-slate-950 px-2 py-0.5 rounded font-mono border border-slate-800"
@@ -817,21 +902,37 @@ export const Settings = () => {
                         toast("Workshop ID copied!", 'success');
                       }
                     }}
-                    className="p-1 hover:bg-slate-800 rounded transition-colors text-slate-500"
+                    className="p-1 hover:bg-slate-800 rounded transition-colors text-slate-500 hover:text-slate-300"
                     title="Copy Workshop ID"
                   >
-                    <span className="text-[9px] font-bold underline">
-                      COPY ID
-                    </span>
+                    <Copy size={12} />
                   </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 w-full md:w-auto">
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+                <button
+                  onClick={() => setIsAddFloorTechOpen(true)}
+                  className="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow"
+                >
+                  <Wrench size={15} className="text-cyan-400" />
+                  <span>+ ADD FLOOR TECH</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setCreateStaffPrefill({});
+                    setIsCreateStaffOpen(true);
+                  }}
+                  className="btn-brand px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-lg whitespace-nowrap"
+                >
+                  <UserPlus size={15} />
+                  <span>+ ADD STAFF ACCOUNT</span>
+                </button>
+
                 <button
                   onClick={async () => {
-                    // Was: the workshop's raw UUID in the URL, with the browser
-                    // setting its own tenant_id. Never expired, could not be
-                    // revoked, and anyone holding a workshop id could join.
                     const { data: token, error } = await supabase.rpc('create_invite', { p_role: 'technician' });
                     if (error || !token) {
                       toast(error?.message || 'Could not create an invite.', 'error');
@@ -841,98 +942,396 @@ export const Settings = () => {
                     await navigator.clipboard.writeText(registerUrl);
                     toast("Invite link copied — single use, expires in 7 days.", 'success');
                   }}
-                  className="text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-500"
+                  className="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-300 hover:text-white bg-slate-950 hover:bg-slate-800 border border-slate-800 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                  title="Generate a 7-day single use registration invite"
                 >
-                  <Plus size={14} /> COPY INVITE LINK
+                  <Copy size={13} />
+                  <span>INVITE LINK</span>
                 </button>
-                <p className="text-[9px] text-slate-500 text-center italic">
-                  Single use · expires in 7 days
-                </p>
               </div>
             </div>
 
-            <div className="grid gap-3">
-              {users.map((user) => (
-                <div
-                  key={user.id}
-                  className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-xl flex items-center justify-between group"
-                >
-                  {editingUserId === user.id ? (
-                    <div className="flex-1 flex gap-3 items-center">
-                      <input
-                        value={editForm.full_name}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            full_name: e.target.value,
-                          })
-                        }
-                        className="bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm flex-1 focus:outline-none"
-                      />
-                      <select
-                        value={editForm.role}
-                        onChange={(e) =>
-                          setEditForm({
-                            ...editForm,
-                            role: e.target.value as any,
-                          })
-                        }
-                        className="bg-slate-950 border border-slate-700 rounded p-2 text-white text-sm focus:outline-none"
-                      >
-                        <option value="technician">Technician</option>
-                        <option value="manager">Manager</option>
-                        <option value="admin">Admin</option>
-                        <option value="accountant">Accountant</option>
-                      </select>
-                      <button
-                        onClick={() => saveEditUser(user.id)}
-                        className="p-2 text-green-400 hover:bg-green-500/10 rounded-lg transition-colors"
-                      >
-                        <Check size={18} />
-                      </button>
-                      <button
-                        onClick={cancelEditUser}
-                        className="p-2 text-slate-400 hover:bg-slate-700 rounded-lg transition-colors"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-slate-300 font-bold uppercase border border-slate-600">
-                          {user.full_name?.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="font-bold text-white text-sm">
-                            {user.full_name}
-                          </div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-1 uppercase tracking-widest font-black">
-                            {user.role === "admin" && (
-                              <Shield size={10} style={{ color: brandColor }} />
-                            )}
-                            {user.role}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => startEditUser(user)}
-                          className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-all"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => deleteUser(user.id, user.full_name)}
-                          className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </>
+            {/* Stats Overview */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Team</span>
+                  <Users size={15} className="text-cyan-400" />
+                </div>
+                <div className="text-2xl font-black text-white">{teamStats.total}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Active personnel</div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Login Accounts</span>
+                  <Shield size={15} className="text-emerald-400" />
+                </div>
+                <div className="text-2xl font-black text-emerald-400">{teamStats.loginCount}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Can sign in</div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Floor Only</span>
+                  <Wrench size={15} className="text-amber-400" />
+                </div>
+                <div className="text-2xl font-black text-amber-400">{teamStats.floorOnlyCount}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">Assigned to jobs</div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Admins & Mgrs</span>
+                  <Briefcase size={15} className="text-sky-400" />
+                </div>
+                <div className="text-2xl font-black text-sky-400">{teamStats.adminCount}</div>
+                <div className="text-[10px] text-slate-500 mt-0.5">System management</div>
+              </div>
+            </div>
+
+            {/* Quick Guidance Info Callout */}
+            <div className="mb-6 p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 flex items-start gap-3">
+              <Info size={16} className="text-cyan-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-400 leading-relaxed">
+                <span className="text-white font-semibold">How it works:</span> Mechanics working solely on the shop floor can be added as <span className="text-cyan-300 font-semibold">Floor Techs</span> without an email or login. Anyone who logs into the tablet or computer needs a <span className="text-emerald-300 font-semibold">Staff Account</span>. You can upgrade any floor technician to a login account with 1-click at any time.
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between mb-5">
+              <div className="relative flex-1 max-w-md">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type="text"
+                  value={staffSearch}
+                  onChange={(e) => setStaffSearch(e.target.value)}
+                  placeholder="Search by name, @username, or role..."
+                  className="w-full pl-9 pr-8 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-brand transition-colors"
+                />
+                {staffSearch && (
+                  <button
+                    onClick={() => setStaffSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 p-1 bg-slate-950/80 border border-slate-800 rounded-xl overflow-x-auto">
+                {[
+                  { id: 'all', label: 'All Team', count: teamStats.total },
+                  { id: 'login', label: 'Login Accounts', count: teamStats.loginCount },
+                  { id: 'floor', label: 'Floor Only', count: teamStats.floorOnlyCount },
+                  { id: 'admin', label: 'Admins & Mgrs', count: teamStats.adminCount },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setStaffFilter(tab.id as any)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                      staffFilter === tab.id
+                        ? 'bg-brand text-slate-950 font-bold shadow'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        staffFilter === tab.id ? 'bg-slate-900/30 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Unified Team Roster List */}
+            <div className="space-y-3">
+              {filteredTeam.length === 0 && (
+                <div className="text-center py-12 px-4 rounded-xl border border-dashed border-slate-800 bg-slate-950/30">
+                  <Users size={32} className="mx-auto text-slate-600 mb-3" />
+                  <h4 className="text-sm font-bold text-white">No team members found</h4>
+                  <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                    {staffSearch ? `No team members match "${staffSearch}". Try clearing your search or filter.` : 'No team members in this category.'}
+                  </p>
+                  {(staffSearch || staffFilter !== 'all') && (
+                    <button
+                      onClick={() => { setStaffSearch(''); setStaffFilter('all'); }}
+                      className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold text-brand hover:underline"
+                    >
+                      Clear search & filters
+                    </button>
                   )}
                 </div>
-              ))}
+              )}
+
+              {filteredTeam.map((member) => {
+                const isEditingUser = !!member.profileId && editingUserId === member.profileId;
+                const isEditingStaff = !!member.staffId && editingStaffId === member.staffId && member.isFloorOnly;
+
+                return (
+                  <div
+                    key={member.key}
+                    className={`p-4 rounded-xl border transition-all ${
+                      member.hasLogin
+                        ? 'bg-slate-800/40 border-slate-800 hover:border-slate-700'
+                        : 'bg-slate-950/40 border-slate-800/70 hover:border-slate-700/80'
+                    } ${!member.isStaffActive ? 'opacity-70' : ''}`}
+                  >
+                    {isEditingUser ? (
+                      /* Inline Profile Edit Form */
+                      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                        <input
+                          value={editForm.full_name}
+                          onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+                          placeholder="Full Name"
+                          className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm flex-1 focus:outline-none focus:border-brand"
+                        />
+                        <select
+                          value={editForm.role}
+                          onChange={(e) => setEditForm({ ...editForm, role: e.target.value as any })}
+                          className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand"
+                        >
+                          <option value="technician">Technician</option>
+                          <option value="manager">Manager</option>
+                          <option value="accountant">Accountant</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => saveEditUser(member.profileId!)}
+                            className="p-2 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl transition-colors"
+                            title="Save Changes"
+                          >
+                            <Check size={18} />
+                          </button>
+                          <button
+                            onClick={cancelEditUser}
+                            className="p-2 text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+                            title="Cancel"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : isEditingStaff ? (
+                      /* Inline Floor Staff Edit Form */
+                      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                        <input
+                          value={editingStaffName}
+                          onChange={(e) => setEditingStaffName(e.target.value)}
+                          placeholder="Technician Name"
+                          className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm flex-1 focus:outline-none focus:border-brand"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => saveEditStaff(member.staffId!)}
+                            className="p-2 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-xl transition-colors"
+                            title="Save Changes"
+                          >
+                            <Check size={18} />
+                          </button>
+                          <button
+                            onClick={cancelEditStaff}
+                            className="p-2 text-slate-400 bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+                            title="Cancel"
+                          >
+                            <X size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Normal Display Row */
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        {/* Member Identity & Badges */}
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div
+                            className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm uppercase shrink-0 border ${
+                              member.role === 'admin'
+                                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                : member.role === 'manager'
+                                ? 'bg-sky-500/10 text-sky-400 border-sky-500/30'
+                                : member.role === 'accountant'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                : 'bg-slate-800 text-cyan-400 border-slate-700'
+                            }`}
+                          >
+                            {member.name?.charAt(0) || 'T'}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-white text-sm truncate">{member.name}</span>
+                              {member.username && (
+                                <span className="text-[11px] font-mono text-cyan-400 bg-slate-950/80 px-2 py-0.5 rounded border border-slate-800">
+                                  @{member.username}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {/* Role Badge */}
+                              {member.role === 'admin' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                  <Shield size={10} /> Admin
+                                </span>
+                              )}
+                              {member.role === 'manager' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                                  <Briefcase size={10} /> Manager
+                                </span>
+                              )}
+                              {member.role === 'accountant' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                  <FileSpreadsheet size={10} /> Accountant
+                                </span>
+                              )}
+                              {member.role === 'technician' && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+                                  <Wrench size={10} /> Technician
+                                </span>
+                              )}
+
+                              {/* Access Badge */}
+                              {member.hasLogin ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  Login Active
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                  Floor Only · No Login
+                                </span>
+                              )}
+
+                              {/* Job assignment status */}
+                              {member.staffId && !member.isStaffActive ? (
+                                <span className="text-[10px] text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                                  Assignment Paused
+                                </span>
+                              ) : member.staffId ? (
+                                <span className="text-[10px] text-slate-400">
+                                  Job Assignable
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions Area */}
+                        <div className="flex items-center gap-1.5 self-end md:self-center shrink-0">
+                          {member.isFloorOnly ? (
+                            <>
+                              {/* 1-Click Upgrade Floor Tech to Full Login */}
+                              <button
+                                onClick={() => {
+                                  setCreateStaffPrefill({ fullName: member.name, role: 'technician' });
+                                  setIsCreateStaffOpen(true);
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 flex items-center gap-1.5 transition-all active:scale-95 shadow"
+                                title="Create login username & password for this floor technician"
+                              >
+                                <UserPlus size={13} />
+                                <span>Create Login</span>
+                              </button>
+
+                              {/* Toggle active / paused assignment */}
+                              <button
+                                onClick={() => handleToggleStaffActive(member.staffId!, member.isStaffActive, member.name)}
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 ${
+                                  member.isStaffActive
+                                    ? 'text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700'
+                                    : 'text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20'
+                                }`}
+                                title={member.isStaffActive ? "Pause job assignments for this technician" : "Resume job assignments for this technician"}
+                              >
+                                <Power size={13} />
+                                <span>{member.isStaffActive ? "Pause" : "Resume"}</span>
+                              </button>
+
+                              {/* Edit Floor Tech Name */}
+                              <button
+                                onClick={() => startEditStaff({ id: member.staffId!, name: member.name })}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                                title="Edit Name"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+
+                              {/* Remove Floor Tech */}
+                              <button
+                                onClick={() => deleteStaff({ id: member.staffId!, name: member.name })}
+                                className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
+                                title="Remove Floor Technician"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {/* Reset Password */}
+                              <button
+                                onClick={() => setResetPasswordTarget(member.userObj)}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 flex items-center gap-1.5 transition-all active:scale-95 shadow"
+                                title="Reset this user's password directly"
+                              >
+                                <KeyRound size={13} />
+                                <span>Reset Pass</span>
+                              </button>
+
+                              {/* Edit Profile & Role */}
+                              <button
+                                onClick={() => startEditUser(member.userObj)}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"
+                                title="Edit User Name & Role"
+                              >
+                                <Edit2 size={15} />
+                              </button>
+
+                              {/* Toggle job assignment capability if linked to staff */}
+                              {member.staffId && (
+                                <button
+                                  onClick={() => handleToggleStaffActive(member.staffId!, member.isStaffActive, member.name)}
+                                  className={`p-2 rounded-xl transition-colors ${
+                                    member.isStaffActive
+                                      ? 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                      : 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
+                                  }`}
+                                  title={member.isStaffActive ? "Pause job assignment for this user" : "Resume job assignment for this user"}
+                                >
+                                  <Power size={15} />
+                                </button>
+                              )}
+
+                              {/* Remove User */}
+                              {member.profileId === profile?.id ? (
+                                <span
+                                  className="p-2 text-slate-700 cursor-not-allowed"
+                                  title="You cannot remove your own active login"
+                                >
+                                  <Trash2 size={15} />
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => deleteUser(member.profileId!, member.name)}
+                                  className="p-2 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors"
+                                  title="Remove user from workshop"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1154,11 +1553,38 @@ export const Settings = () => {
           <AuditLogTab tenantId={profile?.tenant_id} />
         )}
       </div>
+
+      <CreateStaffModal
+        isOpen={isCreateStaffOpen}
+        initialFullName={createStaffPrefill.fullName}
+        initialRole={createStaffPrefill.role}
+        onClose={() => {
+          setIsCreateStaffOpen(false);
+          setCreateStaffPrefill({});
+        }}
+        onSuccess={() => {
+          fetchUsers();
+          fetchStaff();
+        }}
+      />
+      <AddFloorTechModal
+        isOpen={isAddFloorTechOpen}
+        onClose={() => setIsAddFloorTechOpen(false)}
+        onSuccess={() => {
+          fetchStaff();
+        }}
+      />
+      <AdminResetPasswordModal
+        isOpen={!!resetPasswordTarget}
+        targetUser={resetPasswordTarget}
+        onClose={() => setResetPasswordTarget(null)}
+      />
     </div>
   );
 };
 
 function MFATab() {
+  const { profile } = useAuth();
   const [factors, setFactors] = React.useState<any[]>([]);
   const [enrolling, setEnrolling] = React.useState(false);
   const [qrCode, setQrCode] = React.useState('');
@@ -1167,6 +1593,40 @@ function MFATab() {
   const [code, setCode] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [msg, setMsg] = React.useState('');
+
+  // Password change state
+  const [newPassword, setNewPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [pwLoading, setPwLoading] = React.useState(false);
+  const [pwMsg, setPwMsg] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwMsg(null);
+    const clean = newPassword.trim();
+    if (clean.length < 4) {
+      setPwMsg({ text: 'Password must be at least 4 characters long.', type: 'error' });
+      return;
+    }
+    if (clean !== confirmPassword.trim()) {
+      setPwMsg({ text: 'Passwords do not match. Please verify.', type: 'error' });
+      return;
+    }
+    setPwLoading(true);
+    try {
+      const { supabase } = await import('../lib/supabase');
+      const { error } = await supabase.rpc('change_my_password', { p_new_password: clean });
+      if (error) throw error;
+      setPwMsg({ text: 'Password updated successfully! No email or SMS needed.', type: 'success' });
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err: any) {
+      setPwMsg({ text: err.message || 'Failed to update password.', type: 'error' });
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   React.useEffect(() => {
     import('../lib/supabase').then(({ supabase }) => {
@@ -1210,6 +1670,81 @@ function MFATab() {
 
   return (
     <div className="max-w-lg space-y-6">
+      {/* Change Password Card */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+            <KeyRound size={20} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Change Password</h3>
+            <p className="text-xs text-slate-400">Update your account password. No email or SMS required.</p>
+          </div>
+        </div>
+
+        {pwMsg && (
+          <div className={`mb-4 p-3 rounded-xl text-xs font-medium ${pwMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+            {pwMsg.text}
+          </div>
+        )}
+
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 text-xs text-slate-400">
+            Account: <strong className="text-white">{profile?.full_name}</strong> · Username: <span className="text-cyan-400 font-mono">@{profile?.username || profile?.full_name?.toLowerCase()}</span> · Role: <span className="uppercase text-amber-400 font-bold">{profile?.role}</span>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                New Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min. 4 characters)"
+                  required
+                  minLength={4}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 pr-10 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
+                Confirm New Password
+              </label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Repeat new password"
+                required
+                minLength={4}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3.5 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={pwLoading || !newPassword || !confirmPassword}
+            className="btn-brand px-5 py-2.5 rounded-xl font-bold text-xs disabled:opacity-40 flex items-center gap-2"
+          >
+            <KeyRound size={14} />
+            {pwLoading ? 'Updating…' : 'Save New Password'}
+          </button>
+        </form>
+      </div>
+
       <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6">
         <h3 className="text-lg font-bold text-white mb-1">Two-Factor Authentication</h3>
         <p className="text-sm text-slate-400 mb-6">Add an authenticator app (Google Authenticator, Authy) for extra login security.</p>

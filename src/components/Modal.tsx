@@ -21,14 +21,15 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
         <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm"
+                    className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
                 >
                     <motion.div
-                        className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+                        className="border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[92dvh] overflow-hidden"
+                        style={{ backgroundColor: '#0f172a' }}
                         initial={{ opacity: 0, scale: 0.94, y: 16 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.96, y: 8 }}
