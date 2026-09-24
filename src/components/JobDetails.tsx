@@ -11,7 +11,7 @@ import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import { ensureInvoiceForJob } from '../lib/invoices';
-import { calcDiscount, type DiscountType } from '../lib/totals';
+import { calcDiscount, calcInvoiceSummary, type DiscountType } from '../lib/totals';
 import { uploadJobPhoto, deleteJobPhotoObject } from '../lib/photos';
 import { withTitle } from '../lib/textCase';
 import { waMeUrl } from '../lib/whatsapp';
@@ -813,10 +813,6 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         toast(value > 0 ? 'Discount applied to this line.' : 'Line discount removed.', 'success');
     };
 
-    /** What a line is worth after its own discount, floored at zero. */
-    const netOf = (gross: number, row: any) =>
-        Math.max(0, gross - calcDiscount(gross, row?.discount_type, row?.discount_value));
-
     const handleRemovePart = async (id: string) => {
         const ok = await confirm({ message: "Remove this part? Stock will be returned to inventory.", confirmLabel: "Remove" });
         if (!ok) return;
@@ -1019,12 +1015,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     // Calculations
-    // Net of each line's own discount, the same way recalc_invoice_total does it,
-    // so the footer agrees with the invoice the customer receives.
-    const totalParts = jobParts.reduce((sum, p) => sum + netOf(p.price_at_time_lkr * p.quantity, p), 0);
-    const totalLabor = jobLabor.reduce((sum, l) => sum + netOf(l.hourly_rate_lkr * l.hours, l), 0);
-    const subtotal = totalParts + totalLabor;
-    const discountAmount = calcDiscount(subtotal, discountType, discountValue);
+    const invoiceSummary = calcInvoiceSummary(
+        jobParts,
+        jobLabor,
+        { type: discountType, value: discountValue }
+    );
+    const subtotal = invoiceSummary.grossSubtotal;
+    const totalDiscountAmount = invoiceSummary.totalDiscount;
+    const jobTotalAmount = invoiceSummary.totalAmount;
     // const totalHours = jobLabor.reduce((sum, l) => sum + l.hours, 0); // Removed unused
     // const estHours = parseFloat(estimatedHours) || 0; // Removed unused
     
@@ -1775,26 +1773,26 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                         className="w-24 bg-slate-900 border border-slate-800 rounded-lg p-2 text-white text-sm font-mono text-right"
                                     />
                                 </div>
-                                {discountAmount > 0 && (
+                                {totalDiscountAmount > 0 && (
                                     <>
                                         <div className="flex justify-between items-center mb-1 text-xs">
-                                            <span className="text-slate-500 uppercase font-bold">Subtotal</span>
+                                            <span className="text-slate-500 uppercase font-bold">Subtotal (Normal Price)</span>
                                             <span className="font-mono text-slate-400 line-through">LKR {subtotal.toLocaleString()}</span>
                                         </div>
-                                        {readOnly && (
-                                            <div className="flex justify-between items-center mb-1 text-xs">
-                                                <span className="text-slate-500 uppercase font-bold">
-                                                    Discount{discountType === 'percent' ? ` (${discountValue}%)` : ''}
-                                                </span>
-                                                <span className="font-mono text-amber-400">- {discountAmount.toLocaleString()}</span>
-                                            </div>
-                                        )}
+                                        <div className="flex justify-between items-center mb-1 text-xs">
+                                            <span className="text-slate-500 uppercase font-bold">
+                                                {invoiceSummary.jobDiscountAmount > 0 && invoiceSummary.linesDiscount === 0
+                                                    ? `Discount${discountType === 'percent' ? ` (${discountValue}%)` : ''}`
+                                                    : 'Total Savings'}
+                                            </span>
+                                            <span className="font-mono text-emerald-400 font-bold">- LKR {totalDiscountAmount.toLocaleString()}</span>
+                                        </div>
                                     </>
                                 )}
                                 <div className="flex justify-between items-center mb-2">
                                     <div className="text-slate-400 text-xs font-bold uppercase">{readOnly ? 'Job Total' : 'Estimated Total'}</div>
                                     <div className="text-xl font-black text-brand font-mono">
-                                        LKR {(subtotal - discountAmount).toLocaleString()}
+                                        LKR {jobTotalAmount.toLocaleString()}
                                     </div>
                                 </div>
                                 {readOnly || (savedSuccessfully && !isDirty) ? (

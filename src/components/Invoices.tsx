@@ -17,7 +17,7 @@ import { useAuth } from '../context/AuthContext';
 import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
 import { shareInvoice, invoiceMessage } from '../lib/whatsapp';
 import { withTitle } from '../lib/textCase';
-import { calcDiscount } from '../lib/totals';
+import { calcDiscount, calcInvoiceSummary } from '../lib/totals';
 import { downloadCSV } from '../lib/csv';
 import { useConfirm } from '../context/ConfirmContext';
 
@@ -25,6 +25,8 @@ type ShareableInvoice = {
     invoiceNumber: string;
     vehicle: string;
     total: number;
+    subtotal?: number;
+    discount?: number;
     customerDetails?: { phone?: string | null } | null;
 };
 
@@ -60,27 +62,45 @@ export const Invoices = () => {
             
             if (error) throw error;
 
-            return data?.map((inv: any) => ({
-                id: inv.id,
-                invoiceNumber: `INV-${inv.id.slice(0, 8).toUpperCase()}`,
-                customer: withTitle(inv.job_cards?.vehicles?.customers?.title, inv.job_cards?.vehicles?.customers?.name) || 'Unknown',
-                customerDetails: inv.job_cards?.vehicles?.customers,
-                vehicle: `${inv.job_cards?.vehicles?.make} ${inv.job_cards?.vehicles?.model} (${inv.job_cards?.vehicles?.license_plate})`,
-                vehicleDetails: inv.job_cards?.vehicles,
-                mileage: inv.job_cards?.mileage,
-                total: Number(inv.total_amount_lkr) || 0,
-                subtotal: Number(inv.subtotal_lkr) || 0,
-                discount: Number(inv.discount_lkr) || 0,
-                discountLabel: inv.job_cards?.discount_type === 'percent'
-                    ? `Discount (${Number(inv.job_cards?.discount_value) || 0}%)`
-                    : 'Discount',
-                status: inv.status || 'Unpaid',
-                date: new Date(inv.created_at).toLocaleDateString('en-GB', { 
-                day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                rawDate: new Date(inv.created_at),
-                parts: inv.job_cards?.job_parts || [],
-                labor: inv.job_cards?.job_labor || []
-            })) || [];
+            return data?.map((inv: any) => {
+                const parts = inv.job_cards?.job_parts || [];
+                const labor = inv.job_cards?.job_labor || [];
+                const summary = calcInvoiceSummary(
+                    parts,
+                    labor,
+                    inv.job_cards ? { type: inv.job_cards.discount_type, value: inv.job_cards.discount_value } : null,
+                    Number(inv.tax_lkr) || 0
+                );
+
+                const discountLabel = summary.jobDiscountAmount > 0 && summary.linesDiscount === 0
+                    ? (inv.job_cards?.discount_type === 'percent' ? `Discount (${Number(inv.job_cards?.discount_value) || 0}%)` : 'Discount')
+                    : 'Discount';
+
+                return {
+                    id: inv.id,
+                    invoiceNumber: `INV-${inv.id.slice(0, 8).toUpperCase()}`,
+                    customer: withTitle(inv.job_cards?.vehicles?.customers?.title, inv.job_cards?.vehicles?.customers?.name) || 'Unknown',
+                    customerDetails: inv.job_cards?.vehicles?.customers,
+                    vehicle: `${inv.job_cards?.vehicles?.make} ${inv.job_cards?.vehicles?.model} (${inv.job_cards?.vehicles?.license_plate})`,
+                    vehicleDetails: inv.job_cards?.vehicles,
+                    mileage: inv.job_cards?.mileage,
+                    total: Number(inv.total_amount_lkr) || summary.totalAmount,
+                    subtotal: summary.grossSubtotal || Number(inv.subtotal_lkr) || 0,
+                    discount: summary.totalDiscount || Number(inv.discount_lkr) || 0,
+                    linesDiscount: summary.linesDiscount,
+                    jobDiscount: summary.jobDiscountAmount,
+                    jobDiscountType: inv.job_cards?.discount_type,
+                    jobDiscountValue: inv.job_cards?.discount_value,
+                    discountLabel,
+                    status: inv.status || 'Unpaid',
+                    date: new Date(inv.created_at).toLocaleDateString('en-GB', { 
+                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+                    }),
+                    rawDate: new Date(inv.created_at),
+                    parts,
+                    labor,
+                };
+            }) || [];
         }
     });
 
@@ -229,78 +249,70 @@ export const Invoices = () => {
         if (tEmail) { doc.text(tEmail, marginLeft, leftColumnY); leftColumnY += 5; }
 
         // 4. Customer Details (Right side, below Invoice #)
-        let customerY = 55;
+        let customerY = 47;
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text('Bill To:', pageWidth - marginRight, customerY, { align: 'right' });
         
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(60);
-        customerY += 6;
+        customerY += 5;
 
         const cName = withTitle(inv.customerDetails?.title, inv.customerDetails?.name) || 'Cash Customer';
         const cPhone = inv.customerDetails?.phone || '';
         const cAddress = inv.customerDetails?.address || '';
         
         doc.text(cName, pageWidth - marginRight, customerY, { align: 'right' });
-        customerY += 5;
+        customerY += 4.5;
 
         if (cAddress) {
             const splitCAddress = doc.splitTextToSize(cAddress, 80);
             splitCAddress.forEach((line: string) => {
                 doc.text(line, pageWidth - marginRight, customerY, { align: 'right' });
-                customerY += 5;
+                customerY += 4.5;
             });
         }
         if (cPhone) {
             doc.text(cPhone, pageWidth - marginRight, customerY, { align: 'right' });
-            customerY += 5;
+            customerY += 4.5;
         }
         
         // 5. Vehicle — the customer's first check is that the bill is for their car.
-        let yPos = Math.max(leftColumnY, customerY) + 12;
+        let yPos = Math.max(leftColumnY, customerY) + 6;
         const veh = inv.vehicleDetails;
         if (veh) {
             doc.setFillColor(245, 247, 250);
-            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 18, 'F');
+            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 16, 'F');
             doc.setFontSize(8.5);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
-            doc.text('VEHICLE', marginLeft + 5, yPos + 6);
+            doc.text('VEHICLE', marginLeft + 5, yPos + 5.5);
 
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
             doc.setTextColor(60);
             doc.text(
                 `${[veh.year, veh.make, veh.model].filter(Boolean).join(' ')} — ${veh.license_plate || 'No plate'}`,
-                marginLeft + 40, yPos + 6,
+                marginLeft + 40, yPos + 5.5,
             );
             const vehExtra = [
                 veh.color && `Colour: ${veh.color}`,
                 veh.vin && `VIN: ${veh.vin}`,
                 inv.mileage && `Mileage: ${Number(inv.mileage).toLocaleString()} km`,
             ].filter(Boolean).join('    ');
-            if (vehExtra) doc.text(vehExtra, marginLeft + 40, yPos + 13);
+            if (vehExtra) doc.text(vehExtra, marginLeft + 40, yPos + 11.5);
             doc.setTextColor(0);
-            yPos += 26;
+            yPos += 20;
         }
 
         // 6. Items Table
-        // Labour and materials are shown as separate sections, each with its own
-        // rate/quantity columns, rather than one flat list — a customer reading
-        // "3 hrs" and "Qty 2" in the same column has to work out which is which.
         const colTotal = pageWidth - marginRight - 5;   // right edge
         const colQty   = colTotal - 26;                 // hours / qty
         const colUnit  = colQty - 26;                   // unit price
         const descWidth = colUnit - (marginLeft + 5) - 4;
 
-        // jsPDF does not paginate: anything drawn past the page height is silently
-        // discarded, which is how a long invoice came out as a single page with
-        // its later items missing. Every block that advances yPos asks for its
-        // space first, and a section that spills repeats its column header so
-        // page two is not a grid of unlabelled numbers.
         const pageHeight = doc.internal.pageSize.getHeight();
-        const bottomLimit = pageHeight - 25; // clear of the footer line
+        const bottomLimit = pageHeight - 20; // clear of the footer line
         let repeatHeader: (() => void) | null = null;
 
         const ensureSpace = (needed: number) => {
@@ -312,15 +324,15 @@ export const Invoices = () => {
 
         const drawSectionHeader = (label: string, unitLabel?: string, qtyLabel?: string) => {
             doc.setFillColor(245, 247, 250);
-            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 9, 'F');
+            doc.rect(marginLeft, yPos, pageWidth - (marginLeft * 2), 8, 'F');
             doc.setFontSize(8.5);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
-            doc.text(label.toUpperCase(), marginLeft + 5, yPos + 6);
-            if (unitLabel) doc.text(unitLabel, colUnit, yPos + 6, { align: 'right' });
-            if (qtyLabel) doc.text(qtyLabel, colQty, yPos + 6, { align: 'right' });
-            doc.text('TOTAL', colTotal, yPos + 6, { align: 'right' });
-            yPos += 14;
+            doc.text(label.toUpperCase(), marginLeft + 5, yPos + 5.5);
+            if (unitLabel) doc.text(unitLabel, colUnit, yPos + 5.5, { align: 'right' });
+            if (qtyLabel) doc.text(qtyLabel, colQty, yPos + 5.5, { align: 'right' });
+            doc.text('TOTAL', colTotal, yPos + 5.5, { align: 'right' });
+            yPos += 11.5;
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
             doc.setTextColor(50);
@@ -335,15 +347,69 @@ export const Invoices = () => {
             drawSectionHeader(label, unitLabel, qtyLabel);
         };
 
-        const row = (desc: string, total: number, unit?: number, qty?: number | string) => {
+        const row = (
+            desc: string,
+            netTotal: number,
+            unit?: number,
+            qty?: number | string,
+            discount?: {
+                off: number;
+                gross: number;
+                type?: string | null;
+                value?: number | string | null;
+            }
+        ) => {
+            const hasLineDiscount = !!discount && discount.off > 0;
             const width = unit === undefined ? colTotal - (marginLeft + 5) - 6 : descWidth;
             const lines = doc.splitTextToSize(desc, width);
-            const height = Math.max(8, lines.length * 5 + 3);
+            const lineBaseHeight = lines.length * 4.6;
+            const height = hasLineDiscount ? Math.max(10, lineBaseHeight + 5) : Math.max(7.5, lineBaseHeight + 2.5);
             ensureSpace(height);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(50);
             doc.text(lines, marginLeft + 5, yPos);
-            if (unit !== undefined) doc.text(Number(unit).toLocaleString(), colUnit, yPos, { align: 'right' });
-            if (qty !== undefined) doc.text(String(qty), colQty, yPos, { align: 'right' });
-            doc.text(total.toLocaleString(), colTotal, yPos, { align: 'right' });
+
+            if (unit !== undefined) {
+                doc.text(Number(unit).toLocaleString(), colUnit, yPos, { align: 'right' });
+            }
+            if (qty !== undefined) {
+                doc.text(String(qty), colQty, yPos, { align: 'right' });
+            }
+
+            if (hasLineDiscount) {
+                // Top line: Normal Gross Total in gray with clean strikethrough (Rate * Qty matches this!)
+                const grossStr = discount.gross.toLocaleString();
+                doc.setFontSize(8.5);
+                doc.setTextColor(130);
+                doc.text(grossStr, colTotal, yPos, { align: 'right' });
+                const grossWidth = doc.getTextWidth(grossStr);
+                doc.setDrawColor(130);
+                doc.setLineWidth(0.3);
+                doc.line(colTotal - grossWidth, yPos - 1.1, colTotal, yPos - 1.1);
+
+                // Sub-line: Savings note on left, Net Discounted Total on right in bold
+                const discY = yPos + 4.2;
+                const discNote = discount.type === 'percent'
+                    ? `${discount.value}% discount applied (-LKR ${discount.off.toLocaleString()})`
+                    : `Discount applied (-LKR ${discount.off.toLocaleString()})`;
+                
+                doc.setFontSize(7.5);
+                doc.setTextColor(16, 149, 105); // Emerald green for customer appreciation
+                doc.text(discNote, marginLeft + 7, discY);
+
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(0);
+                doc.text(netTotal.toLocaleString(), colTotal, discY, { align: 'right' });
+            } else {
+                doc.setFontSize(9);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(50);
+                doc.text(netTotal.toLocaleString(), colTotal, yPos, { align: 'right' });
+            }
+
             yPos += height;
         };
 
@@ -356,13 +422,14 @@ export const Invoices = () => {
                 const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
                 const off = calcDiscount(gross, l.discount_type, l.discount_value);
                 row(
-                    off > 0 ? `${l.description || 'Service'}  (less ${off.toLocaleString()} discount)` : (l.description || 'Service'),
+                    l.description || 'Service',
                     Math.max(0, gross - off),
                     anyHourly && !l.is_fixed ? Number(l.hourly_rate_lkr) || 0 : undefined,
                     anyHourly && !l.is_fixed ? l.hours : undefined,
+                    off > 0 ? { off, gross, type: l.discount_type, value: l.discount_value } : undefined,
                 );
             });
-            yPos += 3;
+            yPos += 2;
         }
 
         if (inv.parts.length) {
@@ -371,15 +438,14 @@ export const Invoices = () => {
                 const gross = (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0);
                 const off = calcDiscount(gross, p.discount_type, p.discount_value);
                 row(
-                    off > 0
-                        ? `${p.custom_name || p.parts?.name || 'Part'}  (less ${off.toLocaleString()} discount)`
-                        : (p.custom_name || p.parts?.name || 'Part'),
+                    p.custom_name || p.parts?.name || 'Part',
                     Math.max(0, gross - off),
                     Number(p.price_at_time_lkr) || 0,
                     p.quantity,
+                    off > 0 ? { off, gross, type: p.discount_type, value: p.discount_value } : undefined,
                 );
             });
-            yPos += 3;
+            yPos += 2;
         }
 
         if (!inv.labor.length && !inv.parts.length) {
@@ -394,33 +460,65 @@ export const Invoices = () => {
         // Totals must not be separated from the rule above them, so the whole
         // block is placed as one unit.
         repeatHeader = null;
-        ensureSpace(inv.discount > 0 ? 32 : 17);
+        const totalDiscount = Number(inv.discount) || 0;
+        const linesDiscount = Number(inv.linesDiscount) || 0;
+        const jobDiscountAmount = Number(inv.jobDiscount) || 0;
+        const hasBothDiscounts = linesDiscount > 0 && jobDiscountAmount > 0;
+
+        ensureSpace(totalDiscount > 0 ? (hasBothDiscounts ? 36 : 28) : 16);
 
         // Draw Line
         doc.setDrawColor(220);
         doc.line(marginLeft, yPos + 2, pageWidth - marginRight, yPos + 2);
 
         // 7. Totals
-        yPos += 10;
-        if (inv.discount > 0) {
+        yPos += 8;
+        if (totalDiscount > 0) {
             doc.setFontSize(9.5);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(80);
-            doc.text('Subtotal', pageWidth - marginRight - 50, yPos);
+            doc.text('Subtotal (Normal Price)', pageWidth - marginRight - 65, yPos);
             doc.text(inv.subtotal.toLocaleString(), pageWidth - marginRight, yPos, { align: 'right' });
-            yPos += 6;
-            doc.text(inv.discountLabel, pageWidth - marginRight - 50, yPos);
-            doc.text(`- ${inv.discount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
-            yPos += 9;
+            yPos += 5.5;
+
+            if (hasBothDiscounts) {
+                doc.setTextColor(16, 149, 105);
+                doc.text('Line Discounts', pageWidth - marginRight - 65, yPos);
+                doc.text(`- ${linesDiscount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+                yPos += 5.5;
+
+                const jobLabel = inv.jobDiscountType === 'percent'
+                    ? `Discount (${inv.jobDiscountValue}%)`
+                    : 'Discount';
+                doc.text(jobLabel, pageWidth - marginRight - 65, yPos);
+                doc.text(`- ${jobDiscountAmount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+                yPos += 6;
+            } else {
+                const label = jobDiscountAmount > 0
+                    ? (inv.jobDiscountType === 'percent' ? `Discount (${inv.jobDiscountValue}%)` : 'Discount')
+                    : 'Discount (You Save)';
+                doc.setTextColor(16, 149, 105);
+                doc.text(label, pageWidth - marginRight - 65, yPos);
+                doc.text(`- ${totalDiscount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+                yPos += 6;
+            }
         }
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0);
         
-        doc.text('TOTAL', pageWidth - marginRight - 50, yPos);
+        doc.text('TOTAL', pageWidth - marginRight - 65, yPos);
         doc.setTextColor(6, 182, 212); // Cyan color
         const totalStr = `LKR ${inv.total.toLocaleString()}`;
         doc.text(totalStr, pageWidth - marginRight, yPos, { align: 'right' });
+
+        if (totalDiscount > 0) {
+            yPos += 5;
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(16, 149, 105);
+            doc.text(`Total savings on this bill: LKR ${totalDiscount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+        }
         
         // Payment QR / link — above Terms, since it's what the customer acts on
         if (tenant?.payment_qr_url || tenant?.payment_link) {
@@ -459,12 +557,12 @@ export const Invoices = () => {
         // workshop a reconciliation.
         if (tenant?.bank_details?.trim()) {
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             const bankLines = doc.splitTextToSize(tenant.bank_details.trim(), pageWidth - (marginLeft * 2) - 12);
-            const boxHeight = 9 + (bankLines.length * 4.6) + 5;
+            const boxHeight = 7 + (bankLines.length * 4) + 3;
 
-            yPos += 10;
-            ensureSpace(boxHeight + 4);
+            yPos += 6;
+            ensureSpace(boxHeight + 3);
 
             doc.setFillColor(232, 246, 249);
             doc.setDrawColor(6, 182, 212);
@@ -475,14 +573,14 @@ export const Invoices = () => {
             doc.rect(marginLeft, yPos, 1.6, boxHeight, 'F');
 
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8.5);
+            doc.setFontSize(8);
             doc.setTextColor(8, 108, 125);
-            doc.text('BANK TRANSFER DETAILS', marginLeft + 6, yPos + 6);
+            doc.text('BANK TRANSFER DETAILS', marginLeft + 6, yPos + 5.5);
 
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(9);
+            doc.setFontSize(8.5);
             doc.setTextColor(20);
-            doc.text(bankLines, marginLeft + 6, yPos + 12);
+            doc.text(bankLines, marginLeft + 6, yPos + 10.5);
 
             doc.setTextColor(0);
             doc.setLineWidth(0.2);
@@ -491,20 +589,19 @@ export const Invoices = () => {
 
         // Terms & Conditions
         if (tenant?.terms_and_conditions) {
-            yPos += 20;
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
             const splitTerms = doc.splitTextToSize(tenant.terms_and_conditions, pageWidth - marginLeft - marginRight);
-            ensureSpace(6 + splitTerms.length * 4);
+            const termsHeight = 5 + (splitTerms.length * 3.5);
+            ensureSpace(termsHeight + 5);
 
-            doc.setFontSize(10);
+            yPos += 5;
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0);
             doc.text('Terms & Conditions:', marginLeft, yPos);
-            yPos += 6;
+            yPos += 4.5;
 
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(8);
+            doc.setFontSize(7.5);
             doc.setTextColor(80);
             doc.text(splitTerms, marginLeft, yPos);
         }
@@ -549,6 +646,8 @@ export const Invoices = () => {
                 invoiceNumber: inv.invoiceNumber,
                 vehicle: inv.vehicle,
                 total: inv.total,
+                subtotal: inv.subtotal,
+                discount: inv.discount,
                 shopName: tenant?.name,
                 paymentLink: tenant?.payment_link,
             });
@@ -721,30 +820,37 @@ export const Invoices = () => {
                                                 <th className="px-3 py-2.5 md:px-6 text-right">Total</th>
                                             </tr>
                                         )}
-                                        {selectedInvoice.labor.map((l: any, i: number) => (
-                                            <tr key={`l-${i}`} className="hover:bg-slate-900/50">
-                                                <td className="px-3 py-3 md:px-6 md:py-4">
-                                                    <div className="font-medium text-white text-sm">{l.description}</div>
-                                                    {!l.is_fixed && (
-                                                        <div className="text-[10px] md:text-xs text-slate-500">
-                                                            {l.hours} hrs &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}
+                                        {selectedInvoice.labor.map((l: any, i: number) => {
+                                            const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
+                                            const off = calcDiscount(gross, l.discount_type, l.discount_value);
+                                            return (
+                                                <tr key={`l-${i}`} className="hover:bg-slate-900/50">
+                                                    <td className="px-3 py-3 md:px-6 md:py-4">
+                                                        <div className="font-medium text-white text-sm">{l.description}</div>
+                                                        <div className="flex flex-wrap items-center gap-2 text-[10px] md:text-xs text-slate-400 mt-0.5">
+                                                            {!l.is_fixed && (
+                                                                <span>{l.hours} hrs &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}</span>
+                                                            )}
+                                                            {off > 0 && (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                                    {l.discount_type === 'percent' ? `${l.discount_value}% discount applied` : 'Discount applied'} (-LKR {off.toLocaleString()})
+                                                                </span>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
-                                                    {(() => {
-                                                        const gross = l.hours * l.hourly_rate_lkr;
-                                                        const off = calcDiscount(gross, l.discount_type, l.discount_value);
-                                                        return off > 0 ? (
+                                                    </td>
+                                                    <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
+                                                        {off > 0 ? (
                                                             <>
-                                                                <span className="block text-[10px] text-slate-500 line-through">{gross.toLocaleString()}</span>
-                                                                <span className="text-emerald-400">{Math.max(0, gross - off).toLocaleString()}</span>
+                                                                <span className="block text-[11px] text-slate-500 line-through">{gross.toLocaleString()}</span>
+                                                                <span className="text-emerald-400 font-bold">{Math.max(0, gross - off).toLocaleString()}</span>
                                                             </>
-                                                        ) : gross.toLocaleString();
-                                                    })()}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                        ) : (
+                                                            gross.toLocaleString()
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
 
                                         {selectedInvoice.parts.length > 0 && (
                                             <tr className="bg-slate-900 text-slate-400 text-xs uppercase font-bold">
@@ -752,28 +858,35 @@ export const Invoices = () => {
                                                 <th className="px-3 py-2.5 md:px-6 text-right">Total</th>
                                             </tr>
                                         )}
-                                        {selectedInvoice.parts.map((p: any, i: number) => (
-                                            <tr key={`p-${i}`} className="hover:bg-slate-900/50">
-                                                <td className="px-3 py-3 md:px-6 md:py-4">
-                                                    <div className="font-medium text-white text-sm">{p.custom_name || p.parts?.name}</div>
-                                                    <div className="text-[10px] md:text-xs text-slate-500">
-                                                        {Number(p.price_at_time_lkr).toLocaleString()} &times; {p.quantity}
-                                                    </div>
-                                                </td>
-                                                <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
-                                                    {(() => {
-                                                        const gross = p.quantity * p.price_at_time_lkr;
-                                                        const off = calcDiscount(gross, p.discount_type, p.discount_value);
-                                                        return off > 0 ? (
+                                        {selectedInvoice.parts.map((p: any, i: number) => {
+                                            const gross = (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0);
+                                            const off = calcDiscount(gross, p.discount_type, p.discount_value);
+                                            return (
+                                                <tr key={`p-${i}`} className="hover:bg-slate-900/50">
+                                                    <td className="px-3 py-3 md:px-6 md:py-4">
+                                                        <div className="font-medium text-white text-sm">{p.custom_name || p.parts?.name}</div>
+                                                        <div className="flex flex-wrap items-center gap-2 text-[10px] md:text-xs text-slate-400 mt-0.5">
+                                                            <span>{Number(p.price_at_time_lkr).toLocaleString()} &times; {p.quantity}</span>
+                                                            {off > 0 && (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                                    {p.discount_type === 'percent' ? `${p.discount_value}% discount applied` : 'Discount applied'} (-LKR {off.toLocaleString()})
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-3 md:px-6 md:py-4 text-right font-mono text-sm">
+                                                        {off > 0 ? (
                                                             <>
-                                                                <span className="block text-[10px] text-slate-500 line-through">{gross.toLocaleString()}</span>
-                                                                <span className="text-emerald-400">{Math.max(0, gross - off).toLocaleString()}</span>
+                                                                <span className="block text-[11px] text-slate-500 line-through">{gross.toLocaleString()}</span>
+                                                                <span className="text-emerald-400 font-bold">{Math.max(0, gross - off).toLocaleString()}</span>
                                                             </>
-                                                        ) : gross.toLocaleString();
-                                                    })()}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                        ) : (
+                                                            gross.toLocaleString()
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
 
                                         {selectedInvoice.parts.length === 0 && selectedInvoice.labor.length === 0 && (
                                             <tr>
@@ -786,13 +899,30 @@ export const Invoices = () => {
                                         {selectedInvoice.discount > 0 && (
                                             <>
                                                 <tr className="text-slate-400 font-normal">
-                                                    <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">Subtotal</td>
+                                                    <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">Subtotal (Normal Price)</td>
                                                     <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">{selectedInvoice.subtotal.toLocaleString()}</td>
                                                 </tr>
-                                                <tr className="text-amber-400 font-normal">
-                                                    <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">{selectedInvoice.discountLabel}</td>
-                                                    <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">- {selectedInvoice.discount.toLocaleString()}</td>
-                                                </tr>
+                                                {selectedInvoice.linesDiscount > 0 && selectedInvoice.jobDiscount > 0 ? (
+                                                    <>
+                                                        <tr className="text-emerald-400 font-normal">
+                                                            <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">Line Discounts</td>
+                                                            <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">- {selectedInvoice.linesDiscount.toLocaleString()}</td>
+                                                        </tr>
+                                                        <tr className="text-amber-400 font-normal">
+                                                            <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">
+                                                                {selectedInvoice.jobDiscountType === 'percent' ? `Discount (${selectedInvoice.jobDiscountValue}%)` : 'Discount'}
+                                                            </td>
+                                                            <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">- {selectedInvoice.jobDiscount.toLocaleString()}</td>
+                                                        </tr>
+                                                    </>
+                                                ) : (
+                                                    <tr className="text-emerald-400 font-normal">
+                                                        <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">
+                                                            {selectedInvoice.jobDiscount > 0 ? selectedInvoice.discountLabel : 'Discount (You Save)'}
+                                                        </td>
+                                                        <td className="px-3 py-2 md:px-6 text-right font-mono text-sm">- {selectedInvoice.discount.toLocaleString()}</td>
+                                                    </tr>
+                                                )}
                                             </>
                                         )}
                                         <tr>
@@ -801,6 +931,13 @@ export const Invoices = () => {
                                                 LKR {selectedInvoice.total.toLocaleString()}
                                             </td>
                                         </tr>
+                                        {selectedInvoice.discount > 0 && (
+                                            <tr className="border-t border-slate-800/80 bg-emerald-950/20">
+                                                <td colSpan={2} className="px-3 py-2 md:px-6 text-right text-xs text-emerald-400 font-medium">
+                                                    Customer saves LKR {selectedInvoice.discount.toLocaleString()} on this bill
+                                                </td>
+                                            </tr>
+                                        )}
                                     </tfoot>
                                 </table>
                             </div>

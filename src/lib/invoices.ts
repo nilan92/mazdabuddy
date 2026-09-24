@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { calcDiscount, calcInvoiceTotal } from './totals';
+import { calcInvoiceSummary } from './totals';
 
 /**
  * Creates the invoice for a completed job, unless one already exists.
@@ -23,24 +23,27 @@ export async function ensureInvoiceForJob(
     if (existing) return { created: false };
 
     const [partsRes, laborRes, jobRes] = await Promise.all([
-        supabase.from('job_parts').select('quantity, price_at_time_lkr').eq('job_id', jobId),
-        supabase.from('job_labor').select('hours, hourly_rate_lkr').eq('job_id', jobId),
+        supabase.from('job_parts').select('quantity, price_at_time_lkr, discount_type, discount_value').eq('job_id', jobId),
+        supabase.from('job_labor').select('hours, hourly_rate_lkr, discount_type, discount_value').eq('job_id', jobId),
         supabase.from('job_cards').select('discount_type, discount_value').eq('id', jobId).single(),
     ]);
 
     const readError = partsRes.error ?? laborRes.error;
     if (readError) return { created: false, error: readError.message };
 
-    const subtotal = calcInvoiceTotal(partsRes.data ?? [], laborRes.data ?? []);
-    const discount = calcDiscount(subtotal, jobRes.data?.discount_type, jobRes.data?.discount_value);
+    const summary = calcInvoiceSummary(
+        partsRes.data ?? [],
+        laborRes.data ?? [],
+        jobRes.data ? { type: jobRes.data.discount_type, value: jobRes.data.discount_value } : null
+    );
 
     const { error } = await supabase.from('invoices').insert({
         job_id: jobId,
         tenant_id: tenantId,
-        subtotal_lkr: subtotal,
+        subtotal_lkr: summary.grossSubtotal,
         tax_lkr: 0,
-        discount_lkr: discount,
-        total_amount_lkr: subtotal - discount,
+        discount_lkr: summary.totalDiscount,
+        total_amount_lkr: summary.totalAmount,
         created_at: new Date().toISOString(),
         status: 'Unpaid',
     });

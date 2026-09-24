@@ -67,15 +67,21 @@ export function invoiceMessage(opts: {
     invoiceNumber: string;
     vehicle: string;
     total: number;
+    subtotal?: number;
+    discount?: number;
     shopName?: string | null;
     paymentLink?: string | null;
 }): string {
-    const { invoiceNumber, vehicle, total, shopName, paymentLink } = opts;
+    const { invoiceNumber, vehicle, total, subtotal, discount, shopName, paymentLink } = opts;
     const lines = [
         `Invoice ${invoiceNumber}`,
         vehicle,
-        `Total: LKR ${total.toLocaleString()}`,
     ];
+    if (discount && discount > 0 && subtotal) {
+        lines.push(`Subtotal: LKR ${subtotal.toLocaleString()}`);
+        lines.push(`Discount: -LKR ${discount.toLocaleString()} (You save!)`);
+    }
+    lines.push(`Total Due: LKR ${total.toLocaleString()}`);
     if (paymentLink) lines.push('', `Pay here: ${paymentLink}`);
     if (shopName) lines.push('', `— ${shopName}`);
     return lines.join('\n');
