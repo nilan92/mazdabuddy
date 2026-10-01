@@ -20,6 +20,7 @@ import { withTitle } from '../lib/textCase';
 import { calcDiscount, calcInvoiceSummary } from '../lib/totals';
 import { downloadCSV } from '../lib/csv';
 import { useConfirm } from '../context/ConfirmContext';
+import { useToast } from '../context/ToastContext';
 
 type ShareableInvoice = {
     invoiceNumber: string;
@@ -33,6 +34,7 @@ type ShareableInvoice = {
 export const Invoices = () => {
     const queryClient = useQueryClient();
     const { profile } = useAuth();
+    const { toast } = useToast();
     const confirm = useConfirm();
     const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -637,6 +639,44 @@ export const Invoices = () => {
         doc.save(filename);
     };
 
+    const printInvoice = async (inv: unknown) => {
+        try {
+            const { doc } = await buildInvoicePdf(inv);
+            const blob = doc.output('blob');
+            const blobUrl = URL.createObjectURL(blob);
+
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.right = '0';
+            iframe.style.bottom = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+            iframe.src = blobUrl;
+
+            iframe.onload = () => {
+                setTimeout(() => {
+                    try {
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
+                    } catch (e) {
+                        // Fallback if cross-origin or iframe print blocked
+                        window.open(blobUrl, '_blank')?.print();
+                    }
+                    setTimeout(() => {
+                        document.body.removeChild(iframe);
+                        URL.revokeObjectURL(blobUrl);
+                    }, 60000);
+                }, 300);
+            };
+
+            document.body.appendChild(iframe);
+        } catch (err: any) {
+            console.error('Invoice print failed:', err);
+            toast('Failed to print invoice: ' + (err.message || 'unknown error'), 'error');
+        }
+    };
+
     const shareOnWhatsApp = async (inv: ShareableInvoice) => {
         setSharing(true);
         try {
@@ -957,7 +997,7 @@ export const Invoices = () => {
                                 <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
                                     <Download size={20} /> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span>
                                 </button>
-                                <button onClick={() => window.print()} className="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold active:scale-95 transition-all">
+                                <button onClick={() => printInvoice(selectedInvoice)} title="Print Invoice" className="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold active:scale-95 transition-all">
                                     <Printer size={20} />
                                 </button>
                             </div>

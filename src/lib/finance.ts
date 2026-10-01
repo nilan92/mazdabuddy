@@ -118,13 +118,17 @@ export function depreciate(asset: Asset, periodStart: Date, periodEnd: Date): As
     };
 }
 
+import { calcDiscount, type DiscountType } from './totals';
+
 export interface LedgerSources {
     invoices: { total_amount_lkr: unknown; discount_lkr?: unknown; created_at: string }[];
     jobLabour: { id: string; created_at: string; description?: string | null; hours: unknown;
-        hourly_rate_lkr: unknown; is_fixed?: boolean; jobRef?: string; mechanic_name?: string | null }[];
+        hourly_rate_lkr: unknown; is_fixed?: boolean; jobRef?: string; mechanic_name?: string | null;
+        discount_type?: DiscountType | null; discount_value?: unknown }[];
     jobParts: { id: string; created_at: string; quantity: unknown; price_at_time_lkr: unknown;
         cost_at_time_lkr?: unknown; is_custom?: boolean; custom_name?: string | null;
-        partName?: string | null; jobRef?: string }[];
+        partName?: string | null; jobRef?: string;
+        discount_type?: DiscountType | null; discount_value?: unknown }[];
     manual: { id: string; date: string; description?: string | null; category?: string | null;
         amount_lkr: unknown; is_income?: boolean; loggedBy?: string | null }[];
 }
@@ -134,29 +138,61 @@ export function buildLedger(src: LedgerSources): LedgerEntry[] {
     const entries: LedgerEntry[] = [];
 
     for (const l of src.jobLabour) {
+        const gross = round2(n(l.hours) * n(l.hourly_rate_lkr));
+        const lineDisc = calcDiscount(gross, l.discount_type, l.discount_value as number | string | null | undefined);
+        const netAmt = round2(Math.max(0, gross - lineDisc));
         entries.push({
             id: `labour-${l.id}`,
             date: l.created_at,
             description: l.description || 'Labour',
             category: 'Labour',
             kind: 'income',
-            amount: round2(n(l.hours) * n(l.hourly_rate_lkr)),
+            amount: netAmt,
             source: 'labour',
             jobRef: l.jobRef,
             loggedBy: l.mechanic_name || undefined,
             editable: false,
         });
+        if (lineDisc > 0) {
+            entries.push({
+                id: `disc-labour-${l.id}`,
+                date: l.created_at,
+                description: `Discount: ${l.description || 'Labour'}`,
+                category: 'Discounts',
+                kind: 'expense',
+                amount: lineDisc,
+                source: 'discount',
+                jobRef: l.jobRef,
+                editable: false,
+            });
+        }
     }
 
     for (const p of src.jobParts) {
         const qty = n(p.quantity);
         const name = p.partName || p.custom_name || 'Part';
+        const gross = round2(qty * n(p.price_at_time_lkr));
+        const lineDisc = calcDiscount(gross, p.discount_type, p.discount_value as number | string | null | undefined);
+        const netAmt = round2(Math.max(0, gross - lineDisc));
         entries.push({
             id: `partsale-${p.id}`, date: p.created_at,
             description: name, category: 'Parts',
-            kind: 'income', amount: round2(qty * n(p.price_at_time_lkr)),
+            kind: 'income', amount: netAmt,
             source: 'parts_sale', jobRef: p.jobRef, editable: false,
         });
+        if (lineDisc > 0) {
+            entries.push({
+                id: `disc-part-${p.id}`,
+                date: p.created_at,
+                description: `Discount: ${name}`,
+                category: 'Discounts',
+                kind: 'expense',
+                amount: lineDisc,
+                source: 'discount',
+                jobRef: p.jobRef,
+                editable: false,
+            });
+        }
         const cost = qty * n(p.cost_at_time_lkr);
         if (cost > 0) {
             entries.push({
@@ -212,7 +248,11 @@ export function profitAndLoss(
 
     const periodInvoices = invoices.filter(i => i.status !== 'Cancelled' && inRange(i.created_at, start, end));
     const revenueTotal = round2(periodInvoices.reduce((t, i) => t + n(i.total_amount_lkr), 0));
-    const discounts = round2(periodInvoices.reduce((t, i) => t + n(i.discount_lkr), 0));
+
+    // Discounts comprise both invoice-level discounts and line-item discounts
+    const lineDiscounts = sum(e => e.source === 'discount');
+    const invoiceDiscounts = round2(periodInvoices.reduce((t, i) => t + n(i.discount_lkr), 0));
+    const discounts = round2(lineDiscounts + invoiceDiscounts);
 
     const revenueLabour = sum(e => e.source === 'labour');
     const revenueParts = sum(e => e.source === 'parts_sale');
@@ -480,25 +520,43 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
     const entries: JournalEntry[] = [];
 
     for (const l of src.jobLabour) {
-        const amt = round2(n(l.hours) * n(l.hourly_rate_lkr));
-        if (amt === 0) continue;
+        const gross = round2(n(l.hours) * n(l.hourly_rate_lkr));
+        if (gross === 0) continue;
         entries.push({
             id: `j-lab-${l.id}`, date: l.created_at,
             narrative: `Labour — ${l.description || 'service'}`,
-            lines: [dr(ACCOUNTS.RECEIVABLES, amt), cr(ACCOUNTS.REV_LABOUR, amt)],
+            lines: [dr(ACCOUNTS.RECEIVABLES, gross), cr(ACCOUNTS.REV_LABOUR, gross)],
         });
+
+        const lineDisc = calcDiscount(gross, l.discount_type, l.discount_value as number | string | null | undefined);
+        if (lineDisc > 0) {
+            entries.push({
+                id: `j-disc-lab-${l.id}`, date: l.created_at,
+                narrative: `Labour discount — ${l.description || 'service'}`,
+                lines: [dr(ACCOUNTS.DISCOUNTS, lineDisc), cr(ACCOUNTS.RECEIVABLES, lineDisc)],
+            });
+        }
     }
 
     for (const p of src.jobParts) {
         const qty = n(p.quantity);
-        const sale = round2(qty * n(p.price_at_time_lkr));
+        const gross = round2(qty * n(p.price_at_time_lkr));
         const name = p.partName || p.custom_name || 'part';
-        if (sale !== 0) {
+        if (gross !== 0) {
             entries.push({
                 id: `j-psale-${p.id}`, date: p.created_at,
                 narrative: `Parts sold — ${name}`,
-                lines: [dr(ACCOUNTS.RECEIVABLES, sale), cr(ACCOUNTS.REV_PARTS, sale)],
+                lines: [dr(ACCOUNTS.RECEIVABLES, gross), cr(ACCOUNTS.REV_PARTS, gross)],
             });
+
+            const lineDisc = calcDiscount(gross, p.discount_type, p.discount_value as number | string | null | undefined);
+            if (lineDisc > 0) {
+                entries.push({
+                    id: `j-disc-prt-${p.id}`, date: p.created_at,
+                    narrative: `Parts discount — ${name}`,
+                    lines: [dr(ACCOUNTS.DISCOUNTS, lineDisc), cr(ACCOUNTS.RECEIVABLES, lineDisc)],
+                });
+            }
         }
         const cost = round2(qty * n(p.cost_at_time_lkr));
         if (cost !== 0) {
@@ -515,7 +573,7 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
         if (discount > 0) {
             entries.push({
                 id: `j-disc-${inv.id}`, date: inv.created_at,
-                narrative: 'Discount allowed',
+                narrative: 'Invoice discount allowed',
                 lines: [dr(ACCOUNTS.DISCOUNTS, discount), cr(ACCOUNTS.RECEIVABLES, discount)],
             });
         }

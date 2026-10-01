@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, Download, Wrench, Users } from 'lucide-react';
+import { Plus, Search, Phone, Edit2, Trash2, Mail, History, Calendar, RefreshCcw, MessageSquare, Download, Wrench, Users, Building2 } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -451,12 +451,26 @@ export const Customers = () => {
                         <div key={customer.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-6 hover:border-slate-700 transition-colors">
                             <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-6 gap-4">
                                 <div className="flex items-center gap-4 min-w-0 md:flex-1">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl flex-shrink-0">
-                                        {(customer.name?.[0] || '?').toUpperCase()}
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0 ${
+                                        customer.title?.toLowerCase() === 'company'
+                                            ? 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                                            : 'bg-gradient-to-br from-cyan-500 to-blue-600'
+                                    }`}>
+                                        {customer.title?.toLowerCase() === 'company' ? (
+                                            <Building2 size={22} className="text-white" />
+                                        ) : (
+                                            (customer.name?.[0] || '?').toUpperCase()
+                                        )}
                                     </div>
                                     <div className="min-w-0">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <h3 className="text-xl font-bold text-white truncate">{withTitle(customer.title, customer.name)}</h3>
+                                            {customer.title?.toLowerCase() === 'company' && (
+                                                <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                                                    <Building2 size={10} />
+                                                    Company
+                                                </span>
+                                            )}
                                             {/* How much work this person has actually brought in — the
                                                 quickest read on whether they are a regular. */}
                                             {(jobCounts[customer.id]?.total ?? 0) > 0 && (

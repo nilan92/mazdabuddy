@@ -22,11 +22,12 @@ export function smartTitleCase(input: string): string {
     );
 }
 
-export const CUSTOMER_TITLES = ['Mr.', 'Ms.', 'Dr.', 'Prof.'] as const;
+export const CUSTOMER_TITLES = ['Mr.', 'Ms.', 'Dr.', 'Prof.', 'Company'] as const;
 export type CustomerTitle = typeof CUSTOMER_TITLES[number];
 
 /**
  * "Mr." + "Mohan" → "Mr. Mohan".
+ * "Company" + "ABC Corp" → "ABC Corp" (suppresses personal title prefix for corporate clients).
  *
  * Skips the prefix when the name already carries the title, so the legacy
  * "MR. MOHAN" record renders as-is instead of "Mr. MR. MOHAN" — no need to
@@ -39,6 +40,7 @@ export function withTitle(
     const n = (name ?? '').trim();
     const t = (title ?? '').trim();
     if (!t || !n) return n;
+    if (t.toLowerCase() === 'company') return n;
     const alreadyPrefixed = new RegExp(`^${t.replace(/\./g, '\\.')}\\s`, 'i').test(n);
     return alreadyPrefixed ? n : `${t} ${n}`;
 }
