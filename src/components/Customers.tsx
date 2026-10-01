@@ -276,11 +276,17 @@ export const Customers = () => {
 
         if (editingCustomer) {
              const { error } = await supabase.from('customers').update(tidied).eq('id', editingCustomer.id);
-             if (error) toast(error.message, 'error');
+             if (error) {
+                 toast(error.message, 'error');
+                 return;
+             }
         } else {
              const payload = { ...tidied, tenant_id: profile?.tenant_id };
              const { error } = await supabase.from('customers').insert([payload]);
-             if (error) toast(error.message, 'error');
+             if (error) {
+                 toast(error.message, 'error');
+                 return;
+             }
         }
         
         setIsCustomerModalOpen(false);
@@ -308,10 +314,16 @@ export const Customers = () => {
         if (editingVehicle) {
             const { tenant_id, ...updatePayload } = payload; 
             const { error } = await supabase.from('vehicles').update(updatePayload).eq('id', editingVehicle.id);
-            if (error) toast(error.message, 'error');
+            if (error) {
+                toast(error.message, 'error');
+                return;
+            }
         } else {
             const { error } = await supabase.from('vehicles').insert([payload]);
-            if (error) toast(error.message, 'error');
+            if (error) {
+                toast(error.message, 'error');
+                return;
+            }
         }
         
         setIsVehicleModalOpen(false);

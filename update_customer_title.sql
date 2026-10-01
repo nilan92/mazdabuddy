@@ -9,7 +9,7 @@ alter table customers add column if not exists title text;
 
 alter table customers drop constraint if exists customers_title_check;
 alter table customers add constraint customers_title_check
-  check (title is null or title in ('Mr.', 'Ms.', 'Dr.', 'Prof.'));
+  check (title is null or title in ('Mr.', 'Ms.', 'Dr.', 'Prof.', 'Company'));
 
 -- Backfill: every existing customer is Mr. except Nishani.
 update customers set title = 'Mr.' where title is null;
