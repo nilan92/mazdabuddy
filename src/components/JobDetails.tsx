@@ -432,14 +432,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             }
 
             // Terms
-            if (tenantDetails.terms_and_conditions) {
+            const rawTerms = tenantDetails.terms_and_conditions?.trim()
+                || "1. All repairs carry a 3-month warranty on labor. 2. Parts warranty as per manufacturer. 3. Vehicle is left at owner's risk.";
+
+            if (rawTerms) {
                 ensureSpace(20);
 
                 doc.setFontSize(8);
                 doc.setTextColor(150);
                 doc.text("Terms & Conditions:", 15, yPos);
                 yPos += 5;
-                const terms = doc.splitTextToSize(tenantDetails.terms_and_conditions, pageWidth - 30);
+                const terms = doc.splitTextToSize(rawTerms, pageWidth - 30);
                 doc.text(terms, 15, yPos);
                 yPos += (terms.length * 3) + 15;
             } else {

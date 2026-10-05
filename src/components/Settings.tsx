@@ -813,9 +813,20 @@ export const Settings = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-                      Terms & Conditions (Shown on Invoice)
-                    </label>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-xs font-bold text-slate-500 uppercase">
+                        Terms & Conditions (Shown on Invoice)
+                      </label>
+                      {!terms.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setTerms("1. All repairs carry a 3-month warranty on labor.\n2. Parts warranty as per manufacturer.\n3. Vehicle is left at owner's risk.")}
+                          className="text-[11px] text-cyan-400 hover:text-cyan-300 font-medium"
+                        >
+                          + Insert Default Terms
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       rows={4}
                       className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 focus:outline-none text-xs leading-relaxed"

@@ -590,8 +590,11 @@ export const Invoices = () => {
         }
 
         // Terms & Conditions
-        if (tenant?.terms_and_conditions) {
-            const splitTerms = doc.splitTextToSize(tenant.terms_and_conditions, pageWidth - marginLeft - marginRight);
+        const rawTerms = tenant?.terms_and_conditions?.trim()
+            || "1. All repairs carry a 3-month warranty on labor. 2. Parts warranty as per manufacturer. 3. Vehicle is left at owner's risk.";
+
+        if (rawTerms) {
+            const splitTerms = doc.splitTextToSize(rawTerms, pageWidth - marginLeft - marginRight);
             const termsHeight = 5 + (splitTerms.length * 3.5);
             ensureSpace(termsHeight + 5);
 
@@ -981,6 +984,32 @@ export const Invoices = () => {
                                     </tfoot>
                                 </table>
                             </div>
+ 
+                            {/* Bank Details & Terms & Conditions Preview */}
+                            {(tenant?.bank_details?.trim() || tenant?.terms_and_conditions?.trim()) && (
+                                <div className="shrink-0 space-y-3 mb-4">
+                                    {tenant?.bank_details?.trim() && (
+                                        <div className="bg-cyan-950/20 border border-cyan-500/30 rounded-xl p-4">
+                                            <div className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                                                Bank Transfer Details
+                                            </div>
+                                            <div className="text-xs text-slate-300 font-mono whitespace-pre-line leading-relaxed">
+                                                {tenant.bank_details.trim()}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
+                                            Terms & Conditions
+                                        </div>
+                                        <div className="text-xs text-slate-400 whitespace-pre-line leading-relaxed">
+                                            {tenant?.terms_and_conditions?.trim() || "1. All repairs carry a 3-month warranty on labor. 2. Parts warranty as per manufacturer. 3. Vehicle is left at owner's risk."}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Actions - Pinned Bottom */}
                             <div className="flex gap-3 p-4 mt-auto border-t border-slate-800 bg-slate-900 sticky bottom-0 z-20">
