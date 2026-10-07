@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { 
     Calendar as CalendarIcon, 
     Clock, 
-    Plus, 
     Search, 
     Share2, 
     Copy, 
@@ -386,19 +385,12 @@ export const Bookings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsShareModalOpen(true)}
-                        className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-bold transition-colors"
+                        className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group"
                     >
-                        <Share2 size={15} className="text-cyan-400" />
-                        <span>Share Booking Link</span>
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
-                    >
-                        <Plus size={16} />
-                        <span>+ New Booking</span>
+                        {/* Classy Shimmer Light Beam */}
+                        <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />
+                        <Share2 size={15} className="text-slate-950 shrink-0 stroke-[2.5]" />
+                        <span className="tracking-wide">Share Customer Booking Portal</span>
                     </button>
                 </div>
             </div>

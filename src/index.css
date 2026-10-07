@@ -25,6 +25,12 @@
   input, select, textarea {
     font-size: 16px !important;
   }
+
+  /* Prevent mobile date picker overflow */
+  input[type="date"] {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
 }
 
 
@@ -116,6 +122,15 @@
 }
 .animate-ambient-glow {
   animation: ambient-glow 7s ease-in-out infinite;
+}
+
+/* Button Shimmer highlight */
+@keyframes shimmer-sweep {
+  0% { transform: translateX(-150%) skewX(-20deg); }
+  35%, 100% { transform: translateX(250%) skewX(-20deg); }
+}
+.animate-shimmer-sweep {
+  animation: shimmer-sweep 3s ease-in-out infinite;
 }
 
 

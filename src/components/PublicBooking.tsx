@@ -341,7 +341,7 @@ export const PublicBooking: React.FC = () => {
             </header>
 
             {/* Main Content */}
-            <main className="max-w-4xl mx-auto px-4 py-8 pb-28 sm:pb-8 w-full flex-grow relative">
+            <main className="max-w-4xl mx-auto px-4 py-8 pb-36 sm:pb-12 w-full flex-grow relative">
                 {/* Ambient Loop Animation (Classy subtle automotive pulse) */}
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-96 overflow-hidden pointer-events-none -z-10">
                     <div className="w-[550px] h-[550px] mx-auto rounded-full bg-gradient-to-br from-cyan-500/15 via-blue-600/10 to-transparent blur-3xl animate-ambient-glow" />
@@ -404,10 +404,10 @@ export const PublicBooking: React.FC = () => {
                                         type="button"
                                         key={svc.id}
                                         onClick={() => setSelectedService(svc.id)}
-                                        className={`group rounded-2xl border text-left transition-all overflow-hidden flex flex-col relative focus:outline-none focus:ring-2 focus:ring-cyan-500/50 ${
+                                        className={`group rounded-2xl text-left transition-all overflow-hidden flex flex-col relative focus:outline-none ${
                                             isSelected
-                                                ? 'bg-slate-900 border-cyan-500 ring-2 ring-cyan-500/50 shadow-xl shadow-cyan-950/40'
-                                                : 'bg-slate-900/70 border-slate-800 hover:bg-slate-900 hover:border-slate-700'
+                                                ? 'bg-gradient-to-b from-cyan-950/80 via-slate-900 to-slate-950 border-2 border-cyan-400 ring-4 ring-cyan-500/25 shadow-2xl shadow-cyan-500/25 scale-[1.01]'
+                                                : 'bg-slate-900/60 border border-slate-800/80 hover:bg-slate-900 hover:border-slate-700'
                                         }`}
                                     >
                                         {/* Image Banner with Gradient Overlay */}
@@ -419,53 +419,64 @@ export const PublicBooking: React.FC = () => {
                                                     (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&w=600&q=80';
                                                 }}
                                                 className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${
-                                                    isSelected ? 'brightness-105 scale-105' : 'brightness-90 opacity-90'
+                                                    isSelected ? 'brightness-110 scale-105' : 'brightness-85 opacity-85'
                                                 }`}
                                                 loading="lazy"
                                             />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
 
                                             {/* Top Badges */}
                                             <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
                                                 {svc.tag ? (
-                                                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-950/80 backdrop-blur-md text-cyan-300 border border-cyan-500/30 shadow-sm">
+                                                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-950/85 backdrop-blur-md text-cyan-300 border border-cyan-500/30 shadow-sm">
                                                         {svc.tag}
                                                     </span>
                                                 ) : <span />}
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md border ${svc.badgeColor} bg-slate-950/70`}>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md border ${svc.badgeColor} bg-slate-950/75`}>
                                                     ~{svc.estimatedMinutes} mins
                                                 </span>
                                             </div>
 
-                                            {/* Selected Checkmark Indicator */}
+                                            {/* Obvious Selected Pill Banner */}
                                             {isSelected && (
-                                                <div className="absolute bottom-2.5 right-2.5 bg-cyan-500 text-white rounded-full p-1 shadow-lg shadow-cyan-500/50">
-                                                    <CheckCircle2 size={16} />
+                                                <div className="absolute bottom-2.5 right-2.5 bg-cyan-400 text-slate-950 rounded-full px-2.5 py-1 text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-lg shadow-cyan-400/50">
+                                                    <CheckCircle2 size={13} className="stroke-[3] text-slate-950" />
+                                                    <span>Selected</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Package Content */}
-                                        <div className="p-3.5 flex flex-col flex-grow justify-between">
+                                        <div className="p-4 flex flex-col flex-grow justify-between">
                                             <div>
-                                                <h3 className="text-sm font-bold text-white mb-1 leading-snug group-hover:text-cyan-200 transition-colors">
+                                                <h3 className={`text-sm font-bold mb-1.5 leading-snug transition-colors ${
+                                                    isSelected ? 'text-cyan-300 font-black' : 'text-white group-hover:text-cyan-200'
+                                                }`}>
                                                     {svc.title}
                                                 </h3>
                                                 <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
                                                     {svc.description}
                                                 </p>
                                             </div>
+
+                                            {/* Bottom indicator bar if selected */}
+                                            {isSelected && (
+                                                <div className="mt-3 pt-2 border-t border-cyan-500/30 flex items-center justify-between text-[11px] font-bold text-cyan-400">
+                                                    <span className="uppercase tracking-wider">Active Choice</span>
+                                                    <span className="flex items-center gap-1 font-mono text-[10px] text-cyan-300">Ready for scheduling &rarr;</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </button>
                                 );
                             })}
                         </div>
 
-                        <div className="flex justify-end pt-4">
+                        <div className="flex justify-end pt-6 border-t border-slate-800/60">
                             <button
                                 type="button"
                                 onClick={() => setStep(2)}
-                                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
+                                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
                             >
                                 <span>Continue to Date &amp; Time</span>
                                 <ChevronRight size={16} />
@@ -494,7 +505,7 @@ export const PublicBooking: React.FC = () => {
                         </div>
 
                         {/* Date Picker Input */}
-                        <div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl space-y-2">
+                        <div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl space-y-2 overflow-hidden w-full max-w-full box-border">
                             <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
                                 Appointment Date
                             </label>
@@ -506,7 +517,7 @@ export const PublicBooking: React.FC = () => {
                                     setBookingDate(e.target.value);
                                     setBookingTime(''); // reset slot selection
                                 }}
-                                className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 text-sm focus:border-cyan-500 outline-none"
+                                className="w-full max-w-full min-w-0 box-border bg-slate-950 border border-slate-800 text-white rounded-xl px-3.5 py-3 text-sm focus:border-cyan-500 outline-none block [color-scheme:dark]"
                             />
                         </div>
 
@@ -555,20 +566,22 @@ export const PublicBooking: React.FC = () => {
                                                         : isFull
                                                         ? 'bg-slate-900/30 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-60'
                                                         : isSelected
-                                                        ? 'bg-cyan-500 text-white border-cyan-400 font-bold shadow-md shadow-cyan-500/20'
+                                                        ? 'bg-cyan-400 text-slate-950 border-2 border-white ring-4 ring-cyan-400/40 shadow-xl shadow-cyan-400/50 scale-[1.04] z-10 font-black'
                                                         : 'bg-slate-900/70 border-slate-800 text-slate-200 hover:border-slate-700 hover:bg-slate-850'
                                                 }`}
                                             >
-                                                <div className="text-sm font-mono font-bold">{slot}</div>
+                                                <div className={`text-sm font-mono ${isSelected ? 'font-black text-slate-950 text-base' : 'font-bold'}`}>{slot}</div>
                                                 <div className="text-[10px] mt-1 font-sans">
                                                     {isPast ? (
                                                         <span className="text-slate-500 font-medium">Passed</span>
                                                     ) : isFull ? (
                                                         <span className="text-rose-400 font-semibold">Fully Booked</span>
                                                     ) : isSelected ? (
-                                                        <span className="text-cyan-100 font-semibold">Selected</span>
+                                                        <span className="bg-slate-950 text-cyan-300 px-2 py-0.5 rounded-full font-black text-[9px] uppercase tracking-wider inline-flex items-center gap-1 shadow-sm">
+                                                            <CheckCircle2 size={10} className="stroke-[3]" /> Selected
+                                                        </span>
                                                     ) : remaining === 1 ? (
-                                                        <span className="text-amber-400">1 Spot Left</span>
+                                                        <span className="text-amber-400 font-semibold">1 Spot Left</span>
                                                     ) : (
                                                         <span className="text-emerald-400 font-medium">Available</span>
                                                     )}
@@ -580,19 +593,20 @@ export const PublicBooking: React.FC = () => {
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between pt-4 border-t border-slate-800/60">
+                        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-6 border-t border-slate-800/60">
                             <button
                                 type="button"
                                 onClick={() => setStep(1)}
-                                className="px-4 py-2.5 rounded-xl border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-white text-xs font-bold transition-colors"
+                                className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-800 hover:bg-slate-900 text-slate-300 hover:text-white text-xs font-bold transition-colors flex items-center justify-center gap-2"
                             >
-                                Back to Services
+                                <ChevronLeft size={15} />
+                                <span>Back to Services</span>
                             </button>
                             <button
                                 type="button"
                                 disabled={!bookingTime || isClosedDay}
                                 onClick={() => setStep(3)}
-                                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
+                                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
                             >
                                 <span>Continue to Vehicle &amp; Contact</span>
                                 <ChevronRight size={16} />
@@ -785,22 +799,22 @@ export const PublicBooking: React.FC = () => {
                         </div>
 
                         {/* Booking Summary Box */}
-                        <div className="p-4 bg-cyan-950/20 border border-cyan-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                            <div>
-                                <span className="text-[10px] uppercase font-bold text-cyan-400 block">Selected Slot Summary</span>
-                                <div className="font-bold text-white mt-0.5">
+                        <div className="p-4 sm:p-5 bg-cyan-950/25 border border-cyan-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                            <div className="space-y-1">
+                                <span className="text-[10px] uppercase font-bold text-cyan-400 block tracking-wider">Selected Slot Summary</span>
+                                <div className="font-bold text-white text-sm">
                                     {new Date(bookingDate).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })} at {bookingTime}
                                 </div>
-                                <div className="text-slate-400 mt-0.5">
+                                <div className="text-slate-400">
                                     {SERVICE_TYPES.find(s => s.id === selectedService)?.title}
                                 </div>
                             </div>
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className="px-8 py-3.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm shadow-xl shadow-cyan-600/30 transition-all active:scale-95 disabled:opacity-50"
+                                className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-sm shadow-xl shadow-cyan-600/30 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
                             >
-                                {submitting ? 'Confirming Appointment…' : 'Schedule My Booking'}
+                                <span>{submitting ? 'Confirming Appointment…' : 'Schedule My Booking'}</span>
                             </button>
                         </div>
                     </form>
