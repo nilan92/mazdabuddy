@@ -415,6 +415,9 @@ export const PublicBooking: React.FC = () => {
                                             <img
                                                 src={svc.imageUrl}
                                                 alt={svc.title}
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&w=600&q=80';
+                                                }}
                                                 className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${
                                                     isSelected ? 'brightness-105 scale-105' : 'brightness-90 opacity-90'
                                                 }`}

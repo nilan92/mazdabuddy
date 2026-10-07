@@ -188,6 +188,9 @@ export const PublicBookingStatus: React.FC = () => {
                                 <img
                                     src={serviceDef.imageUrl}
                                     alt={serviceDef.title}
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&w=600&q=80';
+                                    }}
                                     className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-800"
                                 />
                             )}

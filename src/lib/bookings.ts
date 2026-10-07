@@ -19,7 +19,7 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Complete multi-point vehicle service, engine oil & filter change, fluid top-ups, and safety check.',
         estimatedMinutes: 60,
         badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
-        imageUrl: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=600&q=80',
+        imageUrl: 'https://images.unsplash.com/photo-1625047509168-a7026f36de04?auto=format&fit=crop&w=600&q=80',
         tag: 'Most Popular',
     },
     {
