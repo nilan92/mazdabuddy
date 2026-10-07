@@ -183,16 +183,25 @@ export const PublicBookingStatus: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-800/80">
-                            <span className="text-[10px] uppercase text-slate-500 block mb-0.5">Service Requested</span>
-                            <span className="text-xs font-bold text-cyan-300">
-                                {serviceDef?.title || booking.service_type}
-                            </span>
-                            {serviceDef?.description && (
-                                <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                                    {serviceDef.description}
-                                </p>
+                        <div className="pt-3 border-t border-slate-800/80 flex items-start gap-3">
+                            {serviceDef?.imageUrl && (
+                                <img
+                                    src={serviceDef.imageUrl}
+                                    alt={serviceDef.title}
+                                    className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-800"
+                                />
                             )}
+                            <div className="flex-1 min-w-0">
+                                <span className="text-[10px] uppercase text-slate-500 block mb-0.5">Service Requested</span>
+                                <span className="text-xs font-bold text-cyan-300 block">
+                                    {serviceDef?.title || booking.service_type}
+                                </span>
+                                {serviceDef?.description && (
+                                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                        {serviceDef.description}
+                                    </p>
+                                )}
+                            </div>
                         </div>
 
                         {booking.notes && (

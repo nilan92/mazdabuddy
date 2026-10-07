@@ -7,6 +7,8 @@ export interface ServiceTypeDefinition {
     description: string;
     estimatedMinutes: number;
     badgeColor: string;
+    imageUrl: string;
+    tag?: string;
 }
 
 export const SERVICE_TYPES: ServiceTypeDefinition[] = [
@@ -17,6 +19,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Complete multi-point vehicle service, engine oil & filter change, fluid top-ups, and safety check.',
         estimatedMinutes: 60,
         badgeColor: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&w=600&q=80',
+        tag: 'Most Popular',
     },
     {
         id: 'oil_filter',
@@ -25,6 +29,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Engine oil drain & fresh refill with brand new oil filter and washer replacement.',
         estimatedMinutes: 45,
         badgeColor: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1619642751034-765dfdf7c58e?auto=format&fit=crop&w=600&q=80',
+        tag: 'Quick Lube',
     },
     {
         id: 'brakes',
@@ -33,6 +39,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Brake pad thickness, disc rotor inspection, brake fluid moisture test, and caliper cleaning.',
         estimatedMinutes: 60,
         badgeColor: 'text-rose-400 bg-rose-500/10 border-rose-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1600793575654-910699b5e4d4?auto=format&fit=crop&w=600&q=80',
+        tag: 'Safety Critical',
     },
     {
         id: 'inspection',
@@ -41,6 +49,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Comprehensive 40+ point bumper-to-bumper vehicle inspection with full digital health report.',
         estimatedMinutes: 45,
         badgeColor: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1617814076367-b759c7d7e738?auto=format&fit=crop&w=600&q=80',
+        tag: 'Digital Report',
     },
     {
         id: 'diagnostic',
@@ -49,6 +59,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'OBD-II computer scan, live sensor telemetry readout, and fault code troubleshooting.',
         estimatedMinutes: 60,
         badgeColor: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1563720223185-11003d516935?auto=format&fit=crop&w=600&q=80',
+        tag: 'OBD-II Scan',
     },
     {
         id: 'ac_service',
@@ -57,6 +69,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Refrigerant pressure test, cabin blower/filter check, and cabin cooling performance test.',
         estimatedMinutes: 60,
         badgeColor: 'text-teal-400 bg-teal-500/10 border-teal-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=600&q=80',
+        tag: 'Climate Care',
     },
     {
         id: 'wheel_alignment',
@@ -65,6 +79,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Suspension bushings inspection, steering tie-rods, and computer wheel alignment.',
         estimatedMinutes: 45,
         badgeColor: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1578844251758-2f71da64c96f?auto=format&fit=crop&w=600&q=80',
+        tag: 'Handling & Tires',
     },
     {
         id: 'general_repair',
@@ -73,6 +89,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Engine, transmission, cooling system, belts, or running gear repair diagnosis.',
         estimatedMinutes: 90,
         badgeColor: 'text-purple-400 bg-purple-500/10 border-purple-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1530046339160-ce3e530c7d2f?auto=format&fit=crop&w=600&q=80',
+        tag: 'Mechanical',
     },
     {
         id: 'other',
@@ -81,6 +99,8 @@ export const SERVICE_TYPES: ServiceTypeDefinition[] = [
         description: 'Specific noise, fluid leak, or custom mechanical inquiry. Describe your issue in the notes.',
         estimatedMinutes: 60,
         badgeColor: 'text-slate-300 bg-slate-500/10 border-slate-500/30',
+        imageUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=600&q=80',
+        tag: 'Custom',
     },
 ];
 
@@ -150,6 +170,33 @@ export function generateTimeSlots(
     }
 
     return slots;
+}
+
+/**
+ * Checks if a slot on a given date is in the past relative to now (+ 30 min buffer)
+ */
+export function isSlotPast(timeStr: string, dateStr: string): boolean {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (dateStr < todayStr) return true;
+    if (dateStr > todayStr) return false;
+
+    // For today: parse slot time
+    const timeMatch = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!timeMatch) return false;
+
+    let hours = parseInt(timeMatch[1], 10);
+    const mins = parseInt(timeMatch[2], 10);
+    const period = (timeMatch[3] || '').toUpperCase();
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+
+    const slotMinutes = hours * 60 + mins;
+    
+    const now = new Date();
+    // Allow booking at least 30 minutes in advance
+    const currentMinutes = now.getHours() * 60 + now.getMinutes() + 30;
+
+    return slotMinutes <= currentMinutes;
 }
 
 /**

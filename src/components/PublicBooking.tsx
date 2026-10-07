@@ -21,6 +21,7 @@ import {
     generateTimeSlots, 
     buildBookingWhatsAppUrl, 
     downloadCalendarEvent,
+    isSlotPast,
 } from '../lib/bookings';
 
 interface PublicTenant {
@@ -188,9 +189,19 @@ export const PublicBooking: React.FC = () => {
     // Minimum date: today
     const todayStr = new Date().toISOString().split('T')[0];
 
+    // Day of week check for workshop working days
+    const DAY_CODES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const selectedDateObj = new Date(bookingDate ? `${bookingDate}T00:00:00` : Date.now());
+    const dayIndex = selectedDateObj.getDay();
+    const dayCode = DAY_CODES[dayIndex];
+    const dayName = DAY_NAMES[dayIndex];
+    const workingDays = tenantInfo?.booking_working_days || ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const isClosedDay = !workingDays.includes(dayCode);
+
     // Handle Submission
-    const handleSubmitBooking = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmitBooking = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         setSubmitError(null);
 
         if (!selectedTenantId) {
@@ -276,7 +287,7 @@ export const PublicBooking: React.FC = () => {
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-cyan-500/30">
             {/* Header */}
-            <header className="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur sticky top-0 z-40">
+            <header className="border-b border-slate-800/80 bg-slate-900/70 backdrop-blur-md sticky top-0 z-40">
                 <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         {tenantInfo?.logo_url ? (
@@ -301,20 +312,40 @@ export const PublicBooking: React.FC = () => {
                         </div>
                     </div>
 
-                    {tenantInfo?.phone && (
-                        <a
-                            href={`tel:${tenantInfo.phone}`}
-                            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
-                        >
-                            <Phone size={13} className="text-cyan-400" />
-                            <span>{tenantInfo.phone}</span>
-                        </a>
-                    )}
+                    <div className="flex items-center gap-2.5">
+                        {/* Classy Live Pulse Radar Indicator */}
+                        <div className="hidden sm:inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-[10px] font-bold text-cyan-300">
+                            <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                            </span>
+                            <span>Live Schedule</span>
+                        </div>
+
+                        {tenantInfo?.phone && (
+                            <a
+                                href={`tel:${tenantInfo.phone}`}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+                            >
+                                <Phone size={13} className="text-cyan-400" />
+                                <span className="hidden sm:inline">{tenantInfo.phone}</span>
+                                <span className="sm:hidden">Call</span>
+                            </a>
+                        )}
+                    </div>
+                </div>
+                {/* Subtle glowing telemetry scan line */}
+                <div className="relative h-[2px] w-full overflow-hidden bg-slate-800/80">
+                    <div className="absolute inset-y-0 w-48 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-laser-sweep opacity-75" />
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-4xl mx-auto px-4 py-8 w-full flex-grow">
+            <main className="max-w-4xl mx-auto px-4 py-8 pb-28 sm:pb-8 w-full flex-grow relative">
+                {/* Ambient Loop Animation (Classy subtle automotive pulse) */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-96 overflow-hidden pointer-events-none -z-10">
+                    <div className="w-[550px] h-[550px] mx-auto rounded-full bg-gradient-to-br from-cyan-500/15 via-blue-600/10 to-transparent blur-3xl animate-ambient-glow" />
+                </div>
                 {/* Workshop selector if not selected */}
                 {!routeTenantId && availableTenants.length > 1 && !tenantInfo && (
                     <div className="mb-8 p-6 bg-slate-900/80 border border-slate-800 rounded-3xl text-center space-y-4">
@@ -365,7 +396,7 @@ export const PublicBooking: React.FC = () => {
                             </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                             {SERVICE_TYPES.map(svc => {
                                 const isSelected = selectedService === svc.id;
                                 return (
@@ -373,27 +404,54 @@ export const PublicBooking: React.FC = () => {
                                         type="button"
                                         key={svc.id}
                                         onClick={() => setSelectedService(svc.id)}
-                                        className={`p-4 rounded-2xl border text-left transition-all relative flex flex-col justify-between ${
+                                        className={`group rounded-2xl border text-left transition-all overflow-hidden flex flex-col relative focus:outline-none focus:ring-2 focus:ring-cyan-500/50 ${
                                             isSelected
-                                                ? 'bg-cyan-950/30 border-cyan-500/80 ring-1 ring-cyan-500/50 shadow-lg shadow-cyan-900/20'
-                                                : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900 hover:border-slate-700'
+                                                ? 'bg-slate-900 border-cyan-500 ring-2 ring-cyan-500/50 shadow-xl shadow-cyan-950/40'
+                                                : 'bg-slate-900/70 border-slate-800 hover:bg-slate-900 hover:border-slate-700'
                                         }`}
                                     >
-                                        <div>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${svc.badgeColor}`}>
+                                        {/* Image Banner with Gradient Overlay */}
+                                        <div className="relative w-full h-32 overflow-hidden bg-slate-950">
+                                            <img
+                                                src={svc.imageUrl}
+                                                alt={svc.title}
+                                                className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${
+                                                    isSelected ? 'brightness-105 scale-105' : 'brightness-90 opacity-90'
+                                                }`}
+                                                loading="lazy"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
+
+                                            {/* Top Badges */}
+                                            <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between pointer-events-none">
+                                                {svc.tag ? (
+                                                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-950/80 backdrop-blur-md text-cyan-300 border border-cyan-500/30 shadow-sm">
+                                                        {svc.tag}
+                                                    </span>
+                                                ) : <span />}
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md backdrop-blur-md border ${svc.badgeColor} bg-slate-950/70`}>
                                                     ~{svc.estimatedMinutes} mins
                                                 </span>
-                                                {isSelected && (
-                                                    <CheckCircle2 size={16} className="text-cyan-400 shrink-0" />
-                                                )}
                                             </div>
-                                            <h3 className="text-sm font-bold text-white mb-1.5">
-                                                {svc.title}
-                                            </h3>
-                                            <p className="text-xs text-slate-400 leading-relaxed">
-                                                {svc.description}
-                                            </p>
+
+                                            {/* Selected Checkmark Indicator */}
+                                            {isSelected && (
+                                                <div className="absolute bottom-2.5 right-2.5 bg-cyan-500 text-white rounded-full p-1 shadow-lg shadow-cyan-500/50">
+                                                    <CheckCircle2 size={16} />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Package Content */}
+                                        <div className="p-3.5 flex flex-col flex-grow justify-between">
+                                            <div>
+                                                <h3 className="text-sm font-bold text-white mb-1 leading-snug group-hover:text-cyan-200 transition-colors">
+                                                    {svc.title}
+                                                </h3>
+                                                <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
+                                                    {svc.description}
+                                                </p>
+                                            </div>
                                         </div>
                                     </button>
                                 );
@@ -449,57 +507,75 @@ export const PublicBooking: React.FC = () => {
                             />
                         </div>
 
-                        {/* Slots Grid */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                                    Available Arrival Slots ({slots.length})
-                                </label>
-                                {loadingSlots && (
-                                    <span className="text-[11px] text-cyan-400 font-medium animate-pulse">
-                                        Checking live slot capacity…
-                                    </span>
-                                )}
+                        {/* Closed Day Banner OR Slots Grid */}
+                        {isClosedDay ? (
+                            <div className="p-5 bg-amber-950/30 border border-amber-500/30 rounded-2xl flex items-start gap-3 text-amber-200">
+                                <AlertCircle size={20} className="text-amber-400 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-amber-300">Workshop Closed on {dayName}s</h4>
+                                    <p className="text-xs text-amber-200/80 mt-1 leading-relaxed">
+                                        {tenantInfo?.name || 'This workshop'} does not operate on {dayName}s. Please pick an alternative open day to view available arrival slots.
+                                    </p>
+                                </div>
                             </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                                        Available Arrival Slots ({slots.length})
+                                    </label>
+                                    {loadingSlots && (
+                                        <span className="text-[11px] text-cyan-400 font-medium animate-pulse">
+                                            Checking live slot capacity…
+                                        </span>
+                                    )}
+                                </div>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                                {slots.map(slot => {
-                                    const booked = slotCounts[slot] || 0;
-                                    const isFull = booked >= maxConcurrent;
-                                    const isSelected = bookingTime === slot;
-                                    const remaining = maxConcurrent - booked;
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                    {slots.map(slot => {
+                                        const isPast = isSlotPast(slot, bookingDate);
+                                        const booked = slotCounts[slot] || 0;
+                                        const isFull = booked >= maxConcurrent;
+                                        const isSelected = bookingTime === slot;
+                                        const remaining = maxConcurrent - booked;
+                                        const isDisabled = isFull || isPast;
 
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={slot}
-                                            disabled={isFull}
-                                            onClick={() => setBookingTime(slot)}
-                                            className={`p-3 rounded-xl border text-center transition-all ${
-                                                isFull
-                                                    ? 'bg-slate-900/30 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-60'
-                                                    : isSelected
-                                                    ? 'bg-cyan-500 text-white border-cyan-400 font-bold shadow-md shadow-cyan-500/20'
-                                                    : 'bg-slate-900/70 border-slate-800 text-slate-200 hover:border-slate-700 hover:bg-slate-850'
-                                            }`}
-                                        >
-                                            <div className="text-sm font-mono font-bold">{slot}</div>
-                                            <div className="text-[10px] mt-1 font-sans">
-                                                {isFull ? (
-                                                    <span className="text-rose-400 font-semibold">Fully Booked</span>
-                                                ) : isSelected ? (
-                                                    <span className="text-cyan-100 font-semibold">Selected</span>
-                                                ) : remaining === 1 ? (
-                                                    <span className="text-amber-400">1 Spot Left</span>
-                                                ) : (
-                                                    <span className="text-emerald-400 font-medium">Available</span>
-                                                )}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={slot}
+                                                disabled={isDisabled}
+                                                onClick={() => setBookingTime(slot)}
+                                                className={`p-3 rounded-xl border text-center transition-all ${
+                                                    isPast
+                                                        ? 'bg-slate-900/30 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-50'
+                                                        : isFull
+                                                        ? 'bg-slate-900/30 border-slate-800/40 text-slate-600 cursor-not-allowed opacity-60'
+                                                        : isSelected
+                                                        ? 'bg-cyan-500 text-white border-cyan-400 font-bold shadow-md shadow-cyan-500/20'
+                                                        : 'bg-slate-900/70 border-slate-800 text-slate-200 hover:border-slate-700 hover:bg-slate-850'
+                                                }`}
+                                            >
+                                                <div className="text-sm font-mono font-bold">{slot}</div>
+                                                <div className="text-[10px] mt-1 font-sans">
+                                                    {isPast ? (
+                                                        <span className="text-slate-500 font-medium">Passed</span>
+                                                    ) : isFull ? (
+                                                        <span className="text-rose-400 font-semibold">Fully Booked</span>
+                                                    ) : isSelected ? (
+                                                        <span className="text-cyan-100 font-semibold">Selected</span>
+                                                    ) : remaining === 1 ? (
+                                                        <span className="text-amber-400">1 Spot Left</span>
+                                                    ) : (
+                                                        <span className="text-emerald-400 font-medium">Available</span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="flex items-center justify-between pt-4 border-t border-slate-800/60">
                             <button
@@ -511,7 +587,7 @@ export const PublicBooking: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                disabled={!bookingTime}
+                                disabled={!bookingTime || isClosedDay}
                                 onClick={() => setStep(3)}
                                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
                             >
@@ -656,7 +732,7 @@ export const PublicBooking: React.FC = () => {
                                     <input
                                         type="text"
                                         required
-                                        placeholder="e.g. Nilan Perera"
+                                        placeholder="e.g. Kasun Silva"
                                         value={customerName}
                                         onChange={e => setCustomerName(e.target.value)}
                                         className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 text-sm focus:border-cyan-500 outline-none"
@@ -683,7 +759,7 @@ export const PublicBooking: React.FC = () => {
                                     </label>
                                     <input
                                         type="email"
-                                        placeholder="e.g. nilan@example.com"
+                                        placeholder="e.g. customer@example.com"
                                         value={customerEmail}
                                         onChange={e => setCustomerEmail(e.target.value)}
                                         className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 text-sm focus:border-cyan-500 outline-none"
@@ -821,6 +897,59 @@ export const PublicBooking: React.FC = () => {
                                     <span>{confirmedBooking.workshop_address}</span>
                                 </div>
                             </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Mobile Floating Bottom Bar */}
+                {step < 4 && (
+                    <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/90 z-50 flex items-center justify-between gap-3 shadow-2xl safe-area-pb">
+                        <div className="min-w-0 flex-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block truncate">
+                                {step === 1 && 'Step 1 of 3: Package'}
+                                {step === 2 && 'Step 2 of 3: Time Slot'}
+                                {step === 3 && 'Step 3 of 3: Details'}
+                            </span>
+                            <div className="text-xs font-bold text-white truncate">
+                                {step === 1 && (SERVICE_TYPES.find(s => s.id === selectedService)?.shortTitle || 'Select Package')}
+                                {step === 2 && (bookingTime ? `${bookingTime} (${new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })})` : (isClosedDay ? 'Workshop Closed' : 'Pick a Slot'))}
+                                {step === 3 && (vehiclePlate ? `${vehiclePlate} · ${customerName || 'Pending Info'}` : 'Enter Vehicle Plate')}
+                            </div>
+                        </div>
+
+                        {step === 1 && (
+                            <button
+                                type="button"
+                                onClick={() => setStep(2)}
+                                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-md shadow-cyan-600/30 active:scale-95 transition-all"
+                            >
+                                <span>Continue</span>
+                                <ChevronRight size={14} />
+                            </button>
+                        )}
+
+                        {step === 2 && (
+                            <button
+                                type="button"
+                                disabled={!bookingTime || isClosedDay}
+                                onClick={() => setStep(3)}
+                                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-cyan-600/30 active:scale-95 transition-all"
+                            >
+                                <span>Continue</span>
+                                <ChevronRight size={14} />
+                            </button>
+                        )}
+
+                        {step === 3 && (
+                            <button
+                                type="button"
+                                disabled={submitting}
+                                onClick={() => handleSubmitBooking()}
+                                className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs shadow-md shadow-cyan-600/30 active:scale-95 transition-all"
+                            >
+                                <span>{submitting ? 'Confirming…' : 'Schedule'}</span>
+                                <ChevronRight size={14} />
+                            </button>
                         )}
                     </div>
                 )}

@@ -767,7 +767,7 @@ export const Bookings: React.FC = () => {
                                     <input
                                         type="text"
                                         required
-                                        placeholder="Nilan Perera"
+                                        placeholder="e.g. Kasun Silva"
                                         value={manualCustomerName}
                                         onChange={e => setManualCustomerName(e.target.value)}
                                         className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 focus:border-cyan-500 outline-none"

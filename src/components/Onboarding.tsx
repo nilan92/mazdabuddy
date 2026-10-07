@@ -89,7 +89,7 @@ export const Onboarding = () => {
                                 value={shopName}
                                 onChange={(e) => setShopName(e.target.value)}
                                 className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-4 focus:border-cyan-500 focus:outline-none text-lg placeholder-slate-600 transition-colors"
-                                placeholder="e.g. Nilan's Auto"
+                                placeholder="e.g. Apex Auto Care"
                             />
                         </div>
 

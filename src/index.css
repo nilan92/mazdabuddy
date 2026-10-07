@@ -99,6 +99,26 @@
   100% { transform: translateY(100%); opacity: 0.6; }
 }
 
+/* Telemetry Laser Scan for customer booking portal */
+@keyframes laser-sweep {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+.animate-laser-sweep {
+  animation: laser-sweep 4s ease-in-out infinite;
+}
+
+/* Ambient glow breathing animation */
+@keyframes ambient-glow {
+  0%, 100% { opacity: 0.35; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.08); }
+}
+.animate-ambient-glow {
+  animation: ambient-glow 7s ease-in-out infinite;
+}
+
+
 /* Job card slide-in/out from right */
 @keyframes slide-in-right {
   from { transform: translateX(100%); }
