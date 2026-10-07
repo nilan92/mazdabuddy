@@ -505,20 +505,28 @@ export const PublicBooking: React.FC = () => {
                         </div>
 
                         {/* Date Picker Input */}
-                        <div className="p-4 bg-slate-900/70 border border-slate-800 rounded-2xl space-y-2 overflow-hidden w-full max-w-full box-border">
-                            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                                Appointment Date
-                            </label>
-                            <input
-                                type="date"
-                                min={todayStr}
-                                value={bookingDate}
-                                onChange={e => {
-                                    setBookingDate(e.target.value);
-                                    setBookingTime(''); // reset slot selection
-                                }}
-                                className="w-full max-w-full min-w-0 box-border bg-slate-950 border border-slate-800 text-white rounded-xl px-3.5 py-3 text-sm focus:border-cyan-500 outline-none block [color-scheme:dark]"
-                            />
+                        <div className="p-4 sm:p-5 bg-slate-900/80 border border-slate-800 rounded-2xl space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                    <CalendarIcon size={14} className="text-cyan-400" />
+                                    <span>Appointment Date</span>
+                                </label>
+                                <span className="text-[11px] text-cyan-400 font-mono font-bold">
+                                    {bookingDate ? new Date(bookingDate + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) : 'Select Date'}
+                                </span>
+                            </div>
+                            <div className="relative w-full">
+                                <input
+                                    type="date"
+                                    min={todayStr}
+                                    value={bookingDate}
+                                    onChange={e => {
+                                        setBookingDate(e.target.value);
+                                        setBookingTime(''); // reset slot selection
+                                    }}
+                                    className="w-full min-w-0 box-border bg-slate-950 border border-slate-800 focus:border-cyan-500 text-white rounded-xl px-4 py-3 text-sm outline-none block [color-scheme:dark] transition-colors"
+                                />
+                            </div>
                         </div>
 
                         {/* Closed Day Banner OR Slots Grid */}

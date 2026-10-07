@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Trophy, Target, TrendingUp, Clock, Flame, Calendar, ChevronRight } from 'lucide-react';
+import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Trophy, Target, TrendingUp, Clock, Flame, Calendar, ChevronRight, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -206,8 +206,11 @@ export const Dashboard = () => {
           </button>
           <button 
                 onClick={() => navigate('/jobs?action=new')}
-                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all active:scale-95">
-            + New Job
+                className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group">
+            {/* Classy Shimmer Light Beam */}
+            <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />
+            <Plus size={18} className="text-slate-950 shrink-0 stroke-[2.5]" />
+            <span>+ New Job</span>
           </button>
         </div>
       </div>

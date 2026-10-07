@@ -403,8 +403,14 @@ export const Jobs = () => {
                     <button onClick={() => fetchJobs()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
-                    <button onClick={() => setIsNewJobModalOpen(true)} className="flex items-center gap-2 btn-brand px-4 py-2 rounded-lg font-bold shadow-lg">
-                        <Plus size={20} /> New Job
+                    <button 
+                        onClick={() => setIsNewJobModalOpen(true)} 
+                        className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group"
+                    >
+                        {/* Classy Shimmer Light Beam */}
+                        <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />
+                        <Plus size={18} className="text-slate-950 shrink-0 stroke-[2.5]" />
+                        <span>New Job</span>
                     </button>
                 </div>
             </div>
