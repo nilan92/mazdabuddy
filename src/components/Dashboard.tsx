@@ -201,7 +201,7 @@ export const Dashboard = () => {
             </button>
              <button 
                 onClick={() => navigate('/scan')}
-                className="px-4 py-2.5 btn-brand rounded-xl font-bold shadow-lg active:scale-95">
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all active:scale-95">
             Scanning Tool
           </button>
           <button 
