@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { CheckCircle, Clock, Package, Wrench, Phone, AlertCircle, Download, Camera } from 'lucide-react';
+import { CheckCircle, Clock, Package, Wrench, Phone, AlertCircle, Download, Camera, ShieldCheck, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { withTitle } from '../lib/textCase';
 
@@ -24,6 +24,24 @@ interface StatusRow {
     shop_name: string | null;
     shop_phone: string | null;
     shop_logo_url: string | null;
+}
+
+interface InspectionItem {
+    id?: string;
+    category: string;
+    item_name: string;
+    status: 'good' | 'advisory' | 'urgent';
+    notes?: string;
+    estimated_cost_lkr?: number;
+}
+
+interface InspectionPayload {
+    has_inspection: boolean;
+    next_service_mileage: number | null;
+    next_service_date: string | null;
+    inspection_notes: string | null;
+    mileage: number | null;
+    inspections: InspectionItem[];
 }
 
 interface StatusPhoto {
@@ -73,22 +91,27 @@ export const JobStatus = () => {
     const { token } = useParams<{ token: string }>();
     const [row, setRow] = useState<StatusRow | null>(null);
     const [photos, setPhotos] = useState<StatusPhoto[]>([]);
+    const [inspectionData, setInspectionData] = useState<InspectionPayload | null>(null);
+    const [showAllInspections, setShowAllInspections] = useState(false);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
         (async () => {
             if (!token) { setLoading(false); return; }
-            const [status, pics] = await Promise.all([
+            const [status, pics, insp] = await Promise.all([
                 supabase.rpc('get_job_status', { p_token: token }),
                 supabase.rpc('get_job_photos', { p_token: token }),
+                supabase.rpc('get_job_inspection', { p_token: token }),
             ]);
             if (cancelled) return;
             if (status.error) console.warn('status lookup failed', status.error.message);
-            // Photos are optional — a failure here must not blank the status page.
+            // Photos and inspections are optional — a failure here must not blank the status page.
             if (pics.error) console.warn('photo lookup failed', pics.error.message);
+            if (insp.error) console.warn('inspection lookup failed', insp.error.message);
             setRow((status.data as StatusRow[] | null)?.[0] ?? null);
             setPhotos((pics.data as StatusPhoto[] | null) ?? []);
+            setInspectionData((insp.data as InspectionPayload[] | null)?.[0] ?? null);
             setLoading(false);
         })();
         return () => { cancelled = true; };
@@ -169,6 +192,132 @@ export const JobStatus = () => {
                         );
                     })}
                 </ol>
+
+                {/* ── VEHICLE HEALTH & FUTURE CARE REPORT ── */}
+                {inspectionData?.has_inspection && (inspectionData.inspections?.length ?? 0) > 0 && (() => {
+                    const insps = inspectionData.inspections || [];
+                    const goodCount = insps.filter(i => i.status === 'good').length;
+                    const advisoryItems = insps.filter(i => i.status === 'advisory');
+                    const urgentItems = insps.filter(i => i.status === 'urgent');
+
+                    return (
+                        <section className="mb-10 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <ShieldCheck className="text-cyan-400 shrink-0" size={18} />
+                                    <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                                        Vehicle Health &amp; Care Report
+                                    </h2>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                        {goodCount} Passed
+                                    </span>
+                                    {advisoryItems.length > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                            {advisoryItems.length} Future
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Next Routine Service Target */}
+                            {(inspectionData.next_service_mileage || inspectionData.next_service_date) && (
+                                <div className="p-3.5 bg-gradient-to-br from-amber-500/10 via-slate-950 to-slate-950 border border-amber-500/30 rounded-xl space-y-1">
+                                    <div className="text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <Calendar size={12} /> Next Routine Service Due
+                                    </div>
+                                    <div className="text-sm font-bold text-white flex flex-wrap items-baseline gap-x-2">
+                                        {inspectionData.next_service_mileage && (
+                                            <span>Target: {Number(inspectionData.next_service_mileage).toLocaleString()} km</span>
+                                        )}
+                                        {inspectionData.next_service_date && (
+                                            <span className="text-xs text-amber-300/80 font-normal">
+                                                (Est. {new Date(inspectionData.next_service_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Advisories / Future Work Attention Items */}
+                            {(advisoryItems.length > 0 || urgentItems.length > 0) && (
+                                <div className="space-y-2">
+                                    <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Items to Watch for Next Visit
+                                    </h3>
+                                    <div className="space-y-2">
+                                        {urgentItems.map((item, idx) => (
+                                            <div key={`u-${idx}`} className="p-3 bg-red-950/20 border border-red-500/30 rounded-xl space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-red-200">{item.item_name}</span>
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 uppercase">
+                                                        Urgent
+                                                    </span>
+                                                </div>
+                                                {item.notes && (
+                                                    <p className="text-xs text-slate-300 italic">"{item.notes}"</p>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {advisoryItems.map((item, idx) => (
+                                            <div key={`a-${idx}`} className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-amber-200">{item.item_name}</span>
+                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase">
+                                                        Advisory
+                                                    </span>
+                                                </div>
+                                                {item.notes && (
+                                                    <p className="text-xs text-slate-300 italic">"{item.notes}"</p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Service Advisor General Notes */}
+                            {inspectionData.inspection_notes && (
+                                <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-xs text-slate-300 space-y-1">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Advisor Notes</span>
+                                    <p className="italic leading-relaxed">"{inspectionData.inspection_notes}"</p>
+                                </div>
+                            )}
+
+                            {/* Expandable full multi-point list */}
+                            <div className="pt-2 border-t border-slate-800/80">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAllInspections(!showAllInspections)}
+                                    className="w-full py-2 text-xs font-bold text-cyan-400 hover:text-cyan-300 flex items-center justify-center gap-1.5 transition-colors"
+                                >
+                                    {showAllInspections ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    {showAllInspections ? 'Hide Full Multi-Point Checklist' : `View All Checked Systems (${insps.length})`}
+                                </button>
+
+                                {showAllInspections && (
+                                    <div className="mt-3 pt-3 border-t border-slate-800/60 divide-y divide-slate-800/40 text-xs">
+                                        {insps.map((item, idx) => (
+                                            <div key={idx} className="py-2 flex items-center justify-between gap-2">
+                                                <span className="text-slate-300 font-medium truncate">{item.item_name}</span>
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                                    item.status === 'good'
+                                                        ? 'bg-emerald-500/10 text-emerald-400'
+                                                        : item.status === 'urgent'
+                                                        ? 'bg-red-500/10 text-red-400'
+                                                        : 'bg-amber-500/10 text-amber-400'
+                                                }`}>
+                                                    {item.status.toUpperCase()}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </section>
+                    );
+                })()}
 
                 {photos.length > 0 && (
                     <section className="mb-10">

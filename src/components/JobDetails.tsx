@@ -18,6 +18,7 @@ import { waMeUrl } from '../lib/whatsapp';
 import { useQueryClient } from '@tanstack/react-query';
 import jsPDF from 'jspdf';
 import { urlToBase64, fitLogoBox } from '../utils/pdfHelpers';
+import { VehicleInspectionSection } from './VehicleInspectionSection';
 
 interface JobPhoto {
     id: string;
@@ -515,18 +516,22 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     const handleWhatsApp = () => {
-         const phone = getCustomerPhone();
-         if (!phone) { toast("No customer phone number on file.", 'warning'); return; }
-         const vehicle = `${job?.vehicles?.make} ${job?.vehicles?.model}`;
-         const link = statusUrl();
-         const message = [
-             `Hello! Regarding your ${vehicle} at ${tenantDetails?.name || 'our workshop'}.`,
-             `Status: ${status?.replace('_', ' ')}.`,
-             techNotes ? `Note: ${techNotes}` : '',
-             link ? `\nTrack it here: ${link}` : '',
-         ].filter(Boolean).join(' ');
-         // waMeUrl normalises to 94XXXXXXXXX — a bare 0771234567 does not resolve.
-         window.open(waMeUrl(phone, message), '_blank', 'noopener');
+        const phone = getCustomerPhone();
+        if (!phone) { toast("No customer phone number on file.", 'warning'); return; }
+        const vehicle = `${job?.vehicles?.make} ${job?.vehicles?.model}`;
+        const link = statusUrl();
+        const nextInfo = job?.next_service_mileage
+            ? `Next service recommendation: ${Number(job.next_service_mileage).toLocaleString()} km.`
+            : '';
+        const message = [
+            `Hello! Regarding your ${vehicle} at ${tenantDetails?.name || 'our workshop'}.`,
+            `Status: ${status?.replace('_', ' ')}.`,
+            techNotes ? `Note: ${techNotes}` : '',
+            nextInfo,
+            link ? `\nTrack your vehicle & health report here: ${link}` : '',
+        ].filter(Boolean).join(' ');
+        // waMeUrl normalises to 94XXXXXXXXX — a bare 0771234567 does not resolve.
+        window.open(waMeUrl(phone, message), '_blank', 'noopener');
     };
 
     const handleCopyStatusLink = async () => {
@@ -1750,6 +1755,19 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                         {jobLabor.length === 0 && <p className="text-center text-slate-600 py-2 text-sm italic">No labor entries yet.</p>}
                                     </div>
                                 </div>
+
+                                {/* ── VEHICLE HEALTH & FUTURE CARE CHECKLIST ── */}
+                                <VehicleInspectionSection
+                                    jobId={jobId}
+                                    tenantId={job.tenant_id}
+                                    job={job}
+                                    currentMileage={mileage || job.mileage}
+                                    tenantDetails={tenantDetails}
+                                    readOnly={readOnly}
+                                    isTechnician={isTechnician}
+                                    isLocked={isLocked}
+                                    onUpdate={fetchJobDetails}
+                                />
 
                                 {/* ── PHOTOS ────────────────────────────── */}
                                 <div className="border-t border-slate-800">

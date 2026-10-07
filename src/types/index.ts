@@ -90,6 +90,12 @@ export interface JobCard {
   last_start_time?: string;
   total_labor_time?: number; // In minutes
 
+  // Vehicle Health Inspection & Future Maintenance
+  has_inspection?: boolean;
+  next_service_mileage?: number;
+  next_service_date?: string;
+  inspection_notes?: string;
+
   // Joins
   vehicles?: Vehicle;
   parts?: JobPart[];
@@ -114,4 +120,17 @@ export interface JobLabor {
     hours: number;
     description: string;
     hourly_rate_lkr: number;
+}
+
+export type InspectionStatus = 'good' | 'advisory' | 'urgent';
+
+export interface JobInspectionRecord {
+    id?: string;
+    job_id?: string;
+    tenant_id?: string;
+    category: string;
+    item_name: string;
+    status: InspectionStatus;
+    notes?: string;
+    estimated_cost_lkr?: number;
 }
