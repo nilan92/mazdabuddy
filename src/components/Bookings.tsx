@@ -23,6 +23,8 @@ import {
     BOOKING_STATUS_CONFIG, 
     generateTimeSlots, 
     buildBookingWhatsAppUrl,
+    getPublicBookingUrl,
+    getPublicBookingTrackingUrl,
 } from '../lib/bookings';
 import { type Booking, type BookingStatus } from '../types';
 
@@ -354,7 +356,7 @@ export const Bookings: React.FC = () => {
     };
 
     // Workshop Public Booking URL
-    const publicBookingUrl = `${window.location.origin}/#/book/${tenantId || ''}`;
+    const publicBookingUrl = getPublicBookingUrl(tenantId);
 
     const handleCopyBookingLink = () => {
         navigator.clipboard.writeText(publicBookingUrl);
@@ -619,7 +621,7 @@ export const Bookings: React.FC = () => {
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const url = `${window.location.origin}/#/booking/${b.public_token}`;
+                                                const url = getPublicBookingTrackingUrl(b.public_token);
                                                 window.open(url, '_blank');
                                             }}
                                             className="hover:text-cyan-400 flex items-center gap-1 transition-colors"

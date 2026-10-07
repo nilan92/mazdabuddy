@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>AutoPulse - Redirecting...</title>
+    <script>
+      // Single Page App redirect for GitHub Pages with HashRouter
+      var path = window.location.pathname;
+      var repo = '/mazdabuddy';
+      
+      if (path.startsWith(repo)) {
+        var sub = path.slice(repo.length);
+        if (sub.startsWith('/')) sub = sub.slice(1);
+        var target = repo + '/#/' + sub + window.location.search;
+        window.location.replace(target);
+      } else {
+        window.location.replace(repo + '/#/');
+      }
+    </script>
+  </head>
+  <body style="background: #020617; color: #94a3b8; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+    <p>Loading application...</p>
+  </body>
+</html>

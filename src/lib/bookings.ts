@@ -153,6 +153,28 @@ export function generateTimeSlots(
 }
 
 /**
+ * Helper to build accurate public booking URL incorporating Vite BASE_URL (e.g. /mazdabuddy/)
+ */
+export function getPublicBookingUrl(tenantId?: string): string {
+    const origin = window.location.origin;
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.endsWith('/') ? base : `${base}/`;
+    return tenantId 
+        ? `${origin}${cleanBase}#/book/${tenantId}`
+        : `${origin}${cleanBase}#/book`;
+}
+
+/**
+ * Helper to build accurate public booking tracking URL incorporating Vite BASE_URL
+ */
+export function getPublicBookingTrackingUrl(token: string): string {
+    const origin = window.location.origin;
+    const base = import.meta.env.BASE_URL || '/';
+    const cleanBase = base.endsWith('/') ? base : `${base}/`;
+    return `${origin}${cleanBase}#/booking/${token}`;
+}
+
+/**
  * Build WhatsApp confirmation URL / text for a customer booking
  */
 export function buildBookingWhatsAppUrl(booking: {
@@ -175,8 +197,7 @@ export function buildBookingWhatsAppUrl(booking: {
         year: 'numeric'
     });
 
-    const origin = window.location.origin;
-    const trackingUrl = `${origin}/#/booking/${booking.public_token}`;
+    const trackingUrl = getPublicBookingTrackingUrl(booking.public_token);
 
     const text = `🚗 *SERVICE BOOKING CONFIRMATION* 🚗\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +

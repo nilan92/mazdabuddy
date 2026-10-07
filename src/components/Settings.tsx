@@ -33,6 +33,7 @@ import { tidyName } from "../lib/textCase";
 import { CreateStaffModal } from "./CreateStaffModal";
 import { AddFloorTechModal } from "./AddFloorTechModal";
 import { AdminResetPasswordModal } from "./AdminResetPasswordModal";
+import { getPublicBookingUrl } from "../lib/bookings";
 
 export const Settings = () => {
   const { profile, refreshProfile } = useAuth();
@@ -947,7 +948,7 @@ export const Settings = () => {
                     Your Workshop Booking URL
                   </span>
                   <a
-                    href={`${window.location.origin}/#/book/${profile?.tenant_id || ""}`}
+                    href={getPublicBookingUrl(profile?.tenant_id)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold"
@@ -959,13 +960,13 @@ export const Settings = () => {
                   <input
                     type="text"
                     readOnly
-                    value={`${window.location.origin}/#/book/${profile?.tenant_id || ""}`}
-                    className="w-full bg-slate-900 border border-slate-800 text-cyan-400 text-xs font-mono p-2.5 rounded-lg select-all"
+                    value={getPublicBookingUrl(profile?.tenant_id)}
+                    className="w-full bg-slate-900 border border-slate-850 text-cyan-400 text-xs font-mono p-2.5 rounded-lg select-all"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(`${window.location.origin}/#/book/${profile?.tenant_id || ""}`);
+                      navigator.clipboard.writeText(getPublicBookingUrl(profile?.tenant_id));
                       toast("Booking link copied to clipboard!", "success");
                     }}
                     className="px-3.5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5"
