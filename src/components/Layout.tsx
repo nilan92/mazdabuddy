@@ -13,7 +13,8 @@ import {
     Users,
     Truck,
     KeyRound,
-    Award
+    Award,
+    Calendar
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
@@ -48,6 +49,7 @@ export const Layout = ({ children }: LayoutProps) => {
   const allLinks = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'technician', 'accountant'] },
     { to: '/jobs', icon: Tool, label: 'Jobs Board', roles: ['admin', 'manager', 'technician'] },
+    { to: '/bookings', icon: Calendar, label: 'Bookings', roles: ['admin', 'manager', 'technician', 'accountant'] },
     { to: '/performance', icon: Award, label: 'Performance', roles: ['admin', 'manager'] },
     { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },

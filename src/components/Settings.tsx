@@ -22,6 +22,7 @@ import {
   FileSpreadsheet,
   Power,
   Info,
+  Calendar,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -71,6 +72,13 @@ export const Settings = () => {
   const [uploadingQr, setUploadingQr] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Booking Settings State
+  const [bookingEnabled, setBookingEnabled] = useState(true);
+  const [bookingSlotDuration, setBookingSlotDuration] = useState(60);
+  const [bookingStartTime, setBookingStartTime] = useState("08:30");
+  const [bookingEndTime, setBookingEndTime] = useState("17:30");
+  const [bookingMaxConcurrent, setBookingMaxConcurrent] = useState(2);
+
   // Users Settings State
   const [users, setUsers] = useState<any[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -113,6 +121,11 @@ export const Settings = () => {
         setSmsApiKey(data.sms_api_key || "");
         setSmsSenderId(data.sms_sender_id || "");
         setSmsAutoEnabled(data.sms_auto_enabled !== false); // default true
+        setBookingEnabled(data.booking_enabled !== false);
+        setBookingSlotDuration(data.booking_slot_duration || 60);
+        setBookingStartTime(data.booking_start_time || "08:30");
+        setBookingEndTime(data.booking_end_time || "17:30");
+        setBookingMaxConcurrent(data.booking_max_concurrent || 2);
       }
     } catch (error) {
       console.error("Error fetching tenant:", error);
@@ -279,7 +292,12 @@ export const Settings = () => {
                     brand_color: brandColor,
                     default_labor_rate: parseFloat(defaultLaborRate),
                     payment_link: paymentLink || null,
-                    bank_details: bankDetails || null
+                    bank_details: bankDetails || null,
+                    booking_enabled: bookingEnabled,
+                    booking_slot_duration: bookingSlotDuration,
+                    booking_start_time: bookingStartTime,
+                    booking_end_time: bookingEndTime,
+                    booking_max_concurrent: bookingMaxConcurrent,
                 })
                 .eq('id', profile.tenant_id)
                 .select();
@@ -880,6 +898,156 @@ export const Settings = () => {
                   </div>
                   <div className="text-white font-mono">0.00 % (Flat Rate)</div>
                 </div>
+              </div>
+            </div>
+
+            {/* Customer Booking & Appointment Schedule */}
+            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+                    <Calendar size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-tight">
+                      Customer Online Bookings &amp; Schedule
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Configure your public booking portal, slot intervals, and arrival capacity
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-300">
+                    {bookingEnabled ? "Online Booking Active" : "Online Booking Disabled"}
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={bookingEnabled}
+                    onClick={() => setBookingEnabled(!bookingEnabled)}
+                    className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors duration-300 ease-in-out cursor-pointer ${
+                      bookingEnabled ? "bg-cyan-500" : "bg-slate-800"
+                    }`}
+                  >
+                    <div
+                      className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-300 ease-in-out ${
+                        bookingEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* Public Booking Link Card */}
+              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
+                    Your Workshop Booking URL
+                  </span>
+                  <a
+                    href={`${window.location.origin}/#/book/${profile?.tenant_id || ""}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-bold"
+                  >
+                    Test Booking Page
+                  </a>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/#/book/${profile?.tenant_id || ""}`}
+                    className="w-full bg-slate-900 border border-slate-800 text-cyan-400 text-xs font-mono p-2.5 rounded-lg select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/#/book/${profile?.tenant_id || ""}`);
+                      toast("Booking link copied to clipboard!", "success");
+                    }}
+                    className="px-3.5 py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5"
+                  >
+                    <Copy size={13} /> Copy
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Share this link with your customers via WhatsApp, Instagram, Google Maps, or print it as a QR code on service stickers.
+                </p>
+              </div>
+
+              {/* Schedule Parameters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase font-bold mb-1.5 block">
+                    Operating Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={bookingStartTime}
+                    onChange={(e) => setBookingStartTime(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 text-xs font-mono focus:border-cyan-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase font-bold mb-1.5 block">
+                    Operating End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={bookingEndTime}
+                    onChange={(e) => setBookingEndTime(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 text-xs font-mono focus:border-cyan-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase font-bold mb-1.5 block">
+                    Slot Interval
+                  </label>
+                  <select
+                    value={bookingSlotDuration}
+                    onChange={(e) => setBookingSlotDuration(parseInt(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 text-xs focus:border-cyan-500 outline-none"
+                  >
+                    <option value={30}>30 Minutes</option>
+                    <option value={45}>45 Minutes</option>
+                    <option value={60}>60 Minutes (1 Hour)</option>
+                    <option value={90}>90 Minutes (1.5 Hours)</option>
+                    <option value={120}>120 Minutes (2 Hours)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 uppercase font-bold mb-1.5 block">
+                    Max Cars per Slot
+                  </label>
+                  <select
+                    value={bookingMaxConcurrent}
+                    onChange={(e) => setBookingMaxConcurrent(parseInt(e.target.value))}
+                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 text-xs focus:border-cyan-500 outline-none"
+                  >
+                    <option value={1}>1 Car / Slot</option>
+                    <option value={2}>2 Cars / Slot</option>
+                    <option value={3}>3 Cars / Slot</option>
+                    <option value={4}>4 Cars / Slot</option>
+                    <option value={5}>5 Cars / Slot</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveTenant}
+                  className="px-6 py-2.5 rounded-xl text-white font-bold text-xs shadow-lg transition-all flex items-center gap-2 active:scale-95"
+                  style={{ backgroundColor: brandColor }}
+                >
+                  <Save size={15} /> Save Booking Settings
+                </button>
               </div>
             </div>
           </div>

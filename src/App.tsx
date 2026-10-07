@@ -23,6 +23,9 @@ const ResetPassword = lazy(() => import('./components/ResetPassword').then(modul
 const JobStatus = lazy(() => import('./components/JobStatus').then(module => ({ default: module.JobStatus })));
 const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
 const Performance = lazy(() => import('./components/Performance').then(module => ({ default: module.Performance })));
+const Bookings = lazy(() => import('./components/Bookings').then(module => ({ default: module.Bookings })));
+const PublicBooking = lazy(() => import('./components/PublicBooking').then(module => ({ default: module.PublicBooking })));
+const PublicBookingStatus = lazy(() => import('./components/PublicBookingStatus').then(module => ({ default: module.PublicBookingStatus })));
 
 // Reusable Loading Screen
 const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) => (
@@ -204,6 +207,9 @@ const App = () => {
                 {/* Public: customers open this with no account, so it must sit
                     outside AuthGuard. Authorised solely by the unguessable token. */}
                 <Route path="/status/:token" element={<JobStatus />} />
+                <Route path="/book/:tenantId" element={<PublicBooking />} />
+                <Route path="/book" element={<PublicBooking />} />
+                <Route path="/booking/:token" element={<PublicBookingStatus />} />
                 
                 <Route path="/*" element={
                     <AuthGuard>
@@ -211,6 +217,7 @@ const App = () => {
                             <Routes>
                                 <Route path="/" element={<Dashboard />} />
                                 <Route path="/jobs" element={<Jobs />} />
+                                <Route path="/bookings" element={<Bookings />} />
                                 <Route path="/performance" element={
                                     <RoleRoute allowedRoles={['admin', 'manager']}>
                                         <Performance />

@@ -8,6 +8,12 @@ export interface Tenant {
     currency?: string;
     brand_color?: string;
     created_at: string;
+    booking_enabled?: boolean;
+    booking_slot_duration?: number;
+    booking_start_time?: string;
+    booking_end_time?: string;
+    booking_max_concurrent?: number;
+    booking_working_days?: string[];
 }
 
 export interface UserProfile {
@@ -133,4 +139,33 @@ export interface JobInspectionRecord {
     status: InspectionStatus;
     notes?: string;
     estimated_cost_lkr?: number;
+}
+
+export type BookingStatus = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+
+export interface Booking {
+    id: string;
+    tenant_id: string;
+    customer_name: string;
+    customer_phone: string;
+    customer_email?: string;
+    customer_title?: string;
+    vehicle_plate: string;
+    vehicle_make?: string;
+    vehicle_model?: string;
+    vehicle_year?: number;
+    mileage?: number;
+    service_type: string;
+    booking_date: string;
+    booking_time: string;
+    estimated_duration_minutes?: number;
+    status: BookingStatus;
+    notes?: string;
+    internal_notes?: string;
+    job_card_id?: string;
+    public_token: string;
+    created_at: string;
+    updated_at: string;
+    tenants?: Tenant;
+    job_cards?: JobCard;
 }
