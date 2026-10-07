@@ -1,6 +1,20 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil, Lock } from 'lucide-react';
+import { AutoSuggestInput, type SuggestionItem } from './AutoSuggestInput';
+import { 
+    loadPartsMemory, 
+    loadLaborMemory, 
+    savePartToMemory, 
+    saveLaborToMemory, 
+    removePartFromMemory, 
+    removeLaborFromMemory, 
+    syncItemMemoryFromDb, 
+    getPartSuggestions, 
+    getLaborSuggestions, 
+    type PartMemoryItem, 
+    type LaborMemoryItem 
+} from '../lib/itemMemory';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -98,6 +112,116 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         hourly_rate_lkr: string;
         fixedAmount: string;
     }>({ description: '', is_fixed: false, hours: '', hourly_rate_lkr: '', fixedAmount: '' });
+
+    // Memory state for auto-suggestions
+    const [partsMemory, setPartsMemory] = useState<PartMemoryItem[]>(() => loadPartsMemory(profile?.tenant_id));
+    const [laborMemory, setLaborMemory] = useState<LaborMemoryItem[]>(() => loadLaborMemory(profile?.tenant_id));
+
+    // Auto-sync item memory with past database records and current inventory
+    useEffect(() => {
+        let isMounted = true;
+        syncItemMemoryFromDb(profile?.tenant_id, allParts).then(({ parts, labor }) => {
+            if (isMounted) {
+                setPartsMemory(parts);
+                setLaborMemory(labor);
+            }
+        });
+        return () => {
+            isMounted = false;
+        };
+    }, [profile?.tenant_id, allParts]);
+
+    // Computed suggestions for custom parts
+    const partSuggestions: SuggestionItem[] = useMemo(() => {
+        const suggestions = getPartSuggestions(partForm.custom_name, partsMemory, 7);
+        return suggestions.map(item => ({
+            title: item.name,
+            subtitle: item.cost > 0 ? `Cost: LKR ${item.cost.toLocaleString()}` : undefined,
+            badge: item.price > 0 ? `LKR ${item.price.toLocaleString()}` : undefined,
+            badgeColor: 'bg-emerald-950/70 text-emerald-300 border border-emerald-800/50',
+            count: item.count,
+            raw: item
+        }));
+    }, [partForm.custom_name, partsMemory]);
+
+    const editingPartSuggestions: SuggestionItem[] = useMemo(() => {
+        const suggestions = getPartSuggestions(editingPartForm.custom_name, partsMemory, 7);
+        return suggestions.map(item => ({
+            title: item.name,
+            subtitle: item.cost > 0 ? `Cost: LKR ${item.cost.toLocaleString()}` : undefined,
+            badge: item.price > 0 ? `LKR ${item.price.toLocaleString()}` : undefined,
+            badgeColor: 'bg-emerald-950/70 text-emerald-300 border border-emerald-800/50',
+            count: item.count,
+            raw: item
+        }));
+    }, [editingPartForm.custom_name, partsMemory]);
+
+    // Computed suggestions for labor
+    const laborSuggestions: SuggestionItem[] = useMemo(() => {
+        const suggestions = getLaborSuggestions(laborForm.description, laborMemory, 7);
+        return suggestions.map(item => ({
+            title: item.description,
+            subtitle: item.isFixed ? 'Fixed price service' : `${item.hours}h @ LKR ${item.hourlyRate.toLocaleString()}/hr`,
+            badge: item.isFixed 
+                ? `Fixed LKR ${(item.fixedAmount || item.hourlyRate).toLocaleString()}` 
+                : `${item.hours}h @ LKR ${(item.hourlyRate).toLocaleString()}`,
+            badgeColor: item.isFixed 
+                ? 'bg-amber-950/70 text-amber-300 border border-amber-800/50' 
+                : 'bg-cyan-950/70 text-cyan-300 border border-cyan-800/50',
+            count: item.count,
+            raw: item
+        }));
+    }, [laborForm.description, laborMemory]);
+
+    const editingLaborSuggestions: SuggestionItem[] = useMemo(() => {
+        const suggestions = getLaborSuggestions(editingLaborForm.description, laborMemory, 7);
+        return suggestions.map(item => ({
+            title: item.description,
+            subtitle: item.isFixed ? 'Fixed price service' : `${item.hours}h @ LKR ${item.hourlyRate.toLocaleString()}/hr`,
+            badge: item.isFixed 
+                ? `Fixed LKR ${(item.fixedAmount || item.hourlyRate).toLocaleString()}` 
+                : `${item.hours}h @ LKR ${(item.hourlyRate).toLocaleString()}`,
+            badgeColor: item.isFixed 
+                ? 'bg-amber-950/70 text-amber-300 border border-amber-800/50' 
+                : 'bg-cyan-950/70 text-cyan-300 border border-cyan-800/50',
+            count: item.count,
+            raw: item
+        }));
+    }, [editingLaborForm.description, laborMemory]);
+
+    const handleSelectPartSuggestion = (item: PartMemoryItem) => {
+        setPartForm(prev => ({
+            ...prev,
+            custom_name: item.name,
+            custom_price_lkr: item.price > 0 ? String(item.price) : prev.custom_price_lkr,
+            custom_cost_lkr: item.cost > 0 ? String(item.cost) : prev.custom_cost_lkr,
+        }));
+        toast(`Auto-filled: ${item.name}`, 'info');
+    };
+
+    const handleDeletePartFromMemory = (item: PartMemoryItem) => {
+        const updated = removePartFromMemory(item.name, profile?.tenant_id);
+        setPartsMemory(updated);
+        toast(`Removed "${item.name}" from suggestions`, 'info');
+    };
+
+    const handleSelectLaborSuggestion = (item: LaborMemoryItem) => {
+        setLaborForm(prev => ({
+            ...prev,
+            description: item.description,
+            hours: item.isFixed ? '1' : String(item.hours),
+            hourly_rate_lkr: item.hourlyRate > 0 ? String(item.hourlyRate) : prev.hourly_rate_lkr,
+            fixedAmount: item.isFixed ? String(item.fixedAmount || item.hourlyRate) : prev.fixedAmount
+        }));
+        setLaborMode(item.isFixed ? 'fixed' : 'hourly');
+        toast(`Auto-filled: ${item.description}`, 'info');
+    };
+
+    const handleDeleteLaborFromMemory = (item: LaborMemoryItem) => {
+        const updated = removeLaborFromMemory(item.description, profile?.tenant_id);
+        setLaborMemory(updated);
+        toast(`Removed "${item.description}" from suggestions`, 'info');
+    };
 
     // Dirty state tracking
     const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
@@ -755,6 +879,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             if (error) {
                 toast(error.message, 'error');
             } else {
+                savePartToMemory({
+                    name: partForm.custom_name,
+                    price,
+                    cost
+                }, profile?.tenant_id);
+                setPartsMemory(loadPartsMemory(profile?.tenant_id));
+
                 fetchJobDetails();
                 setPartForm({ part_id: '', quantity: 1, is_custom: false, custom_name: '', custom_price_lkr: '', custom_cost_lkr: '' });
                 toast("Custom part added.", 'success');
@@ -790,17 +921,29 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             const amount = parseFloat(laborForm.fixedAmount);
             if (isFixed && !(amount > 0)) { toast("Enter a fixed amount.", 'warning'); return; }
 
+            const laborHours = isFixed ? 1 : parseFloat(laborForm.hours);
+            const laborRate = isFixed ? amount : parseFloat(laborForm.hourly_rate_lkr);
+
             // A fixed charge is stored as 1 x amount, so every total that already
             // multiplies hours by rate keeps working untouched.
             const { error } = await supabase.from('job_labor').insert({
                 job_id: jobId,
                 description: laborForm.description,
-                hours: isFixed ? 1 : parseFloat(laborForm.hours),
-                hourly_rate_lkr: isFixed ? amount : parseFloat(laborForm.hourly_rate_lkr),
+                hours: laborHours,
+                hourly_rate_lkr: laborRate,
                 is_fixed: isFixed,
             });
             
             if(!error) {
+                saveLaborToMemory({
+                    description: laborForm.description,
+                    isFixed,
+                    hours: laborHours,
+                    hourlyRate: laborRate,
+                    fixedAmount: isFixed ? amount : 0
+                }, profile?.tenant_id);
+                setLaborMemory(loadLaborMemory(profile?.tenant_id));
+
                 fetchJobDetails();
                 setLaborForm(prev => ({...prev, description: '', hours: '', fixedAmount: ''}));
                 toast("Labor entry added.", 'success');
@@ -933,6 +1076,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             if (error) {
                 toast(error.message, 'error');
             } else {
+                savePartToMemory({
+                    name,
+                    price,
+                    cost
+                }, profile?.tenant_id);
+                setPartsMemory(loadPartsMemory(profile?.tenant_id));
+
                 setEditingPartId(null);
                 fetchJobDetails();
                 queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -1007,6 +1157,15 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         if (error) {
             toast(error.message, 'error');
         } else {
+            saveLaborToMemory({
+                description: desc,
+                isFixed,
+                hours,
+                hourlyRate: rate,
+                fixedAmount: isFixed ? rate : 0
+            }, profile?.tenant_id);
+            setLaborMemory(loadLaborMemory(profile?.tenant_id));
+
             setEditingLaborId(null);
             fetchJobDetails();
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -1382,7 +1541,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2">
-                                                    <input required placeholder="Part name (e.g. Engine Oil 4L)" value={partForm.custom_name} onChange={e => setPartForm({...partForm, custom_name: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
+                                                    <AutoSuggestInput
+                                                        required
+                                                        placeholder="Part name (e.g. Engine Oil 4L)"
+                                                        value={partForm.custom_name}
+                                                        onChange={val => setPartForm(prev => ({ ...prev, custom_name: val }))}
+                                                        onSelect={handleSelectPartSuggestion}
+                                                        suggestions={partSuggestions}
+                                                        onDelete={handleDeletePartFromMemory}
+                                                        headerLabel="Saved Parts Memory"
+                                                    />
                                                     <div className="flex gap-2">
                                                         {!isTechnician && (
                                                             <>
@@ -1424,12 +1592,23 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             {part.is_custom && <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded uppercase font-bold">Custom</span>}
                                                         </div>
                                                         {part.is_custom ? (
-                                                            <input
+                                                            <AutoSuggestInput
                                                                 required
                                                                 placeholder="Part name"
                                                                 value={editingPartForm.custom_name}
-                                                                onChange={e => setEditingPartForm({ ...editingPartForm, custom_name: e.target.value })}
-                                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm focus:border-brand focus:outline-none"
+                                                                onChange={val => setEditingPartForm(prev => ({ ...prev, custom_name: val }))}
+                                                                onSelect={(item: PartMemoryItem) => {
+                                                                    setEditingPartForm(prev => ({
+                                                                        ...prev,
+                                                                        custom_name: item.name,
+                                                                        price_at_time_lkr: item.price > 0 ? String(item.price) : prev.price_at_time_lkr,
+                                                                        cost_at_time_lkr: item.cost > 0 ? String(item.cost) : prev.cost_at_time_lkr,
+                                                                    }));
+                                                                }}
+                                                                suggestions={editingPartSuggestions}
+                                                                onDelete={handleDeletePartFromMemory}
+                                                                headerLabel="Saved Parts Memory"
+                                                                inputClassName="bg-slate-900 border-slate-700 focus:border-brand"
                                                             />
                                                         ) : (
                                                             <div className="text-sm font-semibold text-white truncate px-1">
@@ -1574,7 +1753,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                 </div>
                                             )}
 
-                                            <input required placeholder="Description" value={laborForm.description} onChange={e => setLaborForm({...laborForm, description: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm" />
+                                            <AutoSuggestInput
+                                                required
+                                                placeholder="Description (e.g. Periodic Service, Brake Pad Replacement)"
+                                                value={laborForm.description}
+                                                onChange={val => setLaborForm(prev => ({ ...prev, description: val }))}
+                                                onSelect={handleSelectLaborSuggestion}
+                                                suggestions={laborSuggestions}
+                                                onDelete={handleDeleteLaborFromMemory}
+                                                headerLabel="Saved Labor Memory"
+                                            />
 
                                             {isTechnician ? (
                                                 <div className="flex gap-2 items-center">
@@ -1637,12 +1825,25 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <input
+                                                        <AutoSuggestInput
                                                             required
                                                             placeholder="Labor description"
                                                             value={editingLaborForm.description}
-                                                            onChange={e => setEditingLaborForm({ ...editingLaborForm, description: e.target.value })}
-                                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm focus:border-brand focus:outline-none"
+                                                            onChange={val => setEditingLaborForm(prev => ({ ...prev, description: val }))}
+                                                            onSelect={(item: LaborMemoryItem) => {
+                                                                setEditingLaborForm(prev => ({
+                                                                    ...prev,
+                                                                    description: item.description,
+                                                                    is_fixed: item.isFixed,
+                                                                    hours: item.isFixed ? '1' : String(item.hours),
+                                                                    hourly_rate_lkr: item.hourlyRate > 0 ? String(item.hourlyRate) : prev.hourly_rate_lkr,
+                                                                    fixedAmount: item.isFixed ? String(item.fixedAmount || item.hourlyRate) : prev.fixedAmount
+                                                                }));
+                                                            }}
+                                                            suggestions={editingLaborSuggestions}
+                                                            onDelete={handleDeleteLaborFromMemory}
+                                                            headerLabel="Saved Labor Memory"
+                                                            inputClassName="bg-slate-900 border-slate-700 focus:border-brand"
                                                         />
                                                         {isTechnician ? (
                                                             <div className="relative">
