@@ -210,7 +210,7 @@ export const Dashboard = () => {
             {/* Classy Shimmer Light Beam */}
             <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />
             <Plus size={18} className="text-slate-950 shrink-0 stroke-[2.5]" />
-            <span>+ New Job</span>
+            <span>New Job</span>
           </button>
         </div>
       </div>
