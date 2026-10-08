@@ -1,28 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { 
     ShieldCheck, 
-    CheckCircle2, 
-    AlertTriangle, 
-    AlertCircle, 
     Download, 
     Plus, 
     Calendar, 
-    Gauge, 
     ChevronDown, 
-    ChevronUp,
-    FileText,
-    Wrench,
-    Sparkles,
-    Clock
+    ChevronUp, 
+    FileText, 
+    Wrench, 
+    Sparkles, 
+    Clock, 
+    RotateCcw 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import { 
     INSPECTION_CATEGORIES, 
-    getInspectionCounts,
-    buildVehicleHealthPdf,
+    getInspectionCounts, 
+    buildVehicleHealthPdf, 
     type InspectionStatus, 
-    type JobInspectionRecord
+    type JobInspectionRecord 
 } from '../lib/inspections';
 
 interface VehicleInspectionSectionProps {
@@ -37,6 +35,15 @@ interface VehicleInspectionSectionProps {
     onUpdate?: () => void;
 }
 
+const STATUS_BUTTONS: { status: InspectionStatus; code: string; label: string; activeClass: string; title: string }[] = [
+    { status: 'checked', code: '✓', label: 'Checked', activeClass: 'bg-emerald-500 text-slate-950 font-black shadow-sm ring-1 ring-emerald-300', title: 'Checked / OK (✓)' },
+    { status: 'adjusted', code: 'A', label: 'Adjusted', activeClass: 'bg-blue-500 text-slate-950 font-black shadow-sm ring-1 ring-blue-300', title: 'Adjusted (A)' },
+    { status: 'clean', code: 'C', label: 'Clean', activeClass: 'bg-teal-500 text-slate-950 font-black shadow-sm ring-1 ring-teal-300', title: 'Clean / Cleaned (C)' },
+    { status: 'replace', code: 'R', label: 'Replace', activeClass: 'bg-amber-500 text-slate-950 font-black shadow-sm ring-1 ring-amber-300', title: 'Replace Recommended (R)' },
+    { status: 'problem', code: 'X', label: 'Problem', activeClass: 'bg-red-500 text-white font-black shadow-sm ring-1 ring-red-300', title: 'Problem / Fault (X)' },
+    { status: 'na', code: 'NA', label: 'N/A', activeClass: 'bg-slate-700 text-white font-bold shadow-sm', title: 'Not Applicable (NA)' },
+];
+
 export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> = ({
     jobId,
     tenantId,
@@ -47,6 +54,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
     isLocked = false,
 }) => {
     const { toast } = useToast();
+    const confirm = useConfirm();
 
     // Toggle switch: is this inspection module active for this job?
     const [hasInspection, setHasInspection] = useState<boolean>(Boolean(job?.has_inspection));
@@ -69,19 +77,40 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         job?.inspection_notes || ''
     );
 
-    // Accordion state for categories
+    // Accordion state for categories (7 official sections)
     const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
-        'Fluids & Filters': true,
-        'Brakes & Tires': true,
-        'Suspension & Steering': false,
-        'Underhood & Electrical': false,
-        'Safety & Exterior': false,
+        '1. [Engine On]': true,
+        '2. [Engine Off]': true,
+        '3. Wheel / Suspension': false,
+        '4. Underbody / Chassis': false,
+        '5. Final Checks (Engine On)': false,
+        '6. Fluid Leakage': false,
+        '7. Final Operations': false,
     });
 
     // Custom item input
-    const [customItemCategory, setCustomItemCategory] = useState<string>('Fluids & Filters');
+    const [customItemCategory, setCustomItemCategory] = useState<string>('1. [Engine On]');
     const [customItemName, setCustomItemName] = useState<string>('');
     const [showAddCustom, setShowAddCustom] = useState<boolean>(false);
+
+    // Build the default 47-item standard check sheet list
+    const createStandardItemsList = (): JobInspectionRecord[] => {
+        const defaultList: JobInspectionRecord[] = [];
+        INSPECTION_CATEGORIES.forEach(cat => {
+            cat.items.forEach(name => {
+                defaultList.push({
+                    job_id: jobId,
+                    tenant_id: tenantId,
+                    category: cat.name,
+                    item_name: name,
+                    status: 'checked',
+                    notes: '',
+                    estimated_cost_lkr: 0,
+                });
+            });
+        });
+        return defaultList;
+    };
 
     // Fetch existing inspection items
     useEffect(() => {
@@ -101,22 +130,8 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                     if (data && data.length > 0) {
                         setItems(data);
                     } else {
-                        // Prepare default template items (in memory until user activates/saves)
-                        const defaultList: JobInspectionRecord[] = [];
-                        INSPECTION_CATEGORIES.forEach(cat => {
-                            cat.items.forEach(name => {
-                                defaultList.push({
-                                    job_id: jobId,
-                                    tenant_id: tenantId,
-                                    category: cat.name,
-                                    item_name: name,
-                                    status: 'good',
-                                    notes: '',
-                                    estimated_cost_lkr: 0,
-                                });
-                            });
-                        });
-                        setItems(defaultList);
+                        // Prepare official 47-item template
+                        setItems(createStandardItemsList());
                     }
                 }
             } catch (err: any) {
@@ -200,12 +215,44 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         setItems(updated);
     };
 
-    // Mark all items as Good (Fast-fill helper)
-    const handleMarkAllGood = () => {
+    // Mark all items as Checked (✓) (Fast-fill helper)
+    const handleMarkAllChecked = () => {
         if (readOnly || isLocked) return;
-        const updated = items.map(item => ({ ...item, status: 'good' as InspectionStatus }));
+        const updated = items.map(item => ({ ...item, status: 'checked' as InspectionStatus }));
         setItems(updated);
-        toast('All checklist items marked as Good / Satisfactory.', 'info');
+        toast('All items marked as Checked (✓).', 'info');
+    };
+
+    // Reload the official 47-item check sheet template
+    const handleResetToStandardSheet = async () => {
+        if (readOnly || isLocked) return;
+        const ok = await confirm({
+            message: "Load the official Periodic Maintenance Check Sheet (47 items)? This will replace existing checklist items for this job card with the standard check sheet.",
+            confirmLabel: "Load Standard Sheet",
+            confirmStyle: "default"
+        });
+        if (!ok) return;
+
+        try {
+            // Delete old records for this job in Supabase
+            await supabase.from('job_inspections').delete().eq('job_id', jobId);
+            const standardList = createStandardItemsList();
+            setItems(standardList);
+            await handleSaveAllItems(standardList, false);
+            toast("Loaded official Periodic Maintenance Check Sheet (47 items).", "success");
+        } catch (err: any) {
+            toast("Error loading template: " + err.message, "error");
+        }
+    };
+
+    // Toggle expand/collapse all categories
+    const handleToggleAllCategories = () => {
+        const allOpen = Object.values(openCategories).every(Boolean);
+        const newState: Record<string, boolean> = {};
+        INSPECTION_CATEGORIES.forEach(c => {
+            newState[c.name] = !allOpen;
+        });
+        setOpenCategories(newState);
     };
 
     // Add a custom inspection item
@@ -216,7 +263,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
             tenant_id: tenantId,
             category: customItemCategory,
             item_name: customItemName.trim(),
-            status: 'good',
+            status: 'checked',
             notes: '',
             estimated_cost_lkr: 0,
         };
@@ -291,7 +338,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                 }
             }
 
-            if (showToast) toast('Inspection checklist saved successfully.', 'success');
+            if (showToast) toast('Periodic Maintenance Check Sheet saved successfully.', 'success');
         } catch (err: any) {
             console.error('Error saving inspections:', err);
             if (showToast) toast('Failed to save inspection: ' + err.message, 'error');
@@ -313,7 +360,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                 generalNotes: inspectionNotes,
             });
             doc.save(filename);
-            toast('Vehicle Health Report downloaded.', 'success');
+            toast('Periodic Maintenance Check Sheet PDF downloaded.', 'success');
         } catch (err: any) {
             console.error('Error generating inspection PDF:', err);
             toast('Failed to generate PDF: ' + err.message, 'error');
@@ -339,21 +386,31 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                     <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-xs font-black text-white uppercase tracking-wider">
-                                Vehicle Health &amp; Future Care
+                                Periodic Maintenance Check Sheet
                             </h3>
                             {hasInspection && (
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold flex-wrap">
                                     <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                                        {counts.good} Good
+                                        {counts.checked} ✓ Checked
                                     </span>
-                                    {counts.advisory > 0 && (
-                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                            {counts.advisory} Advisory
+                                    {counts.adjusted > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                                            {counts.adjusted} A Adjusted
                                         </span>
                                     )}
-                                    {counts.urgent > 0 && (
+                                    {counts.clean > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30">
+                                            {counts.clean} C Clean
+                                        </span>
+                                    )}
+                                    {counts.replace > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                            {counts.replace} R Replace
+                                        </span>
+                                    )}
+                                    {counts.problem > 0 && (
                                         <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                                            {counts.urgent} Urgent
+                                            {counts.problem} X Problem
                                         </span>
                                     )}
                                 </div>
@@ -361,24 +418,24 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                         </div>
                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
                             {hasInspection
-                                ? 'Multi-point inspection & routine maintenance recommendations'
-                                : 'Disabled — turn on switch to log inspection & future service advisories'}
+                                ? 'CODES: A: Adjusted | ✓: Checked | X: Problem | NA: Not Applicable | C: Clean | R: Replace'
+                                : 'Disabled — turn on switch to log periodic maintenance check sheet'}
                         </p>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     {hasInspection && (
                         <>
                             <button
                                 type="button"
                                 onClick={handleDownloadReport}
                                 disabled={generatingPdf}
-                                title="Download PDF Health Report"
+                                title="Download Check Sheet PDF"
                                 className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all active:scale-95"
                             >
                                 <Download size={13} />
-                                {generatingPdf ? 'Generating…' : 'Health PDF'}
+                                {generatingPdf ? 'Generating…' : 'Check Sheet PDF'}
                             </button>
 
                             <button
@@ -402,7 +459,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 ${
                             hasInspection ? 'bg-cyan-500' : 'bg-slate-700'
                         }`}
-                        title={hasInspection ? 'Turn inspection view OFF' : 'Turn inspection view ON'}
+                        title={hasInspection ? 'Turn check sheet view OFF' : 'Turn check sheet view ON'}
                     >
                         <span
                             className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
@@ -417,17 +474,33 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
             {hasInspection && isExpanded && (
                 <div className="px-4 pb-6 space-y-5 animate-fade-in">
                     
-                    {/* 1. Quick Toolbar: Fast-fill & Export */}
+                    {/* 1. Quick Toolbar: Fast-fill, Reset, Expand, & Export */}
                     <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
                             <button
                                 type="button"
-                                onClick={handleMarkAllGood}
+                                onClick={handleMarkAllChecked}
                                 disabled={readOnly || isLocked}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all active:scale-95"
-                                title="Quickly set all items to Good so you only edit advisories"
+                                title="Quickly set all items to Checked (✓) so you only edit exceptions"
                             >
-                                <Sparkles size={13} /> Mark All Good
+                                <Sparkles size={13} /> Mark All Checked (✓)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleResetToStandardSheet}
+                                disabled={readOnly || isLocked}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                                title="Reload official 47-item Periodic Maintenance Check Sheet"
+                            >
+                                <RotateCcw size={12} /> Standard 47 Items
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleToggleAllCategories}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                            >
+                                {Object.values(openCategories).every(Boolean) ? 'Collapse All' : 'Expand All'}
                             </button>
                             <button
                                 type="button"
@@ -454,8 +527,21 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 disabled={saving || readOnly || isLocked}
                                 className="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm transition-all active:scale-95"
                             >
-                                {saving ? 'Saving…' : 'Save Checklist'}
+                                {saving ? 'Saving…' : 'Save Check Sheet'}
                             </button>
+                        </div>
+                    </div>
+
+                    {/* CODES LEGEND STRIP */}
+                    <div className="px-3 py-2 bg-slate-950/60 rounded-xl border border-slate-800/80 text-[11px] flex flex-wrap items-center justify-between gap-2 text-slate-400">
+                        <span className="font-bold text-slate-300 text-[10px] uppercase tracking-wider">Check Codes:</span>
+                        <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
+                            <span><strong className="text-emerald-400">✓</strong> Checked</span>
+                            <span><strong className="text-blue-400">A</strong> Adjusted</span>
+                            <span><strong className="text-teal-400">C</strong> Clean</span>
+                            <span><strong className="text-amber-400">R</strong> Replace</span>
+                            <span><strong className="text-red-400">X</strong> Problem</span>
+                            <span><strong className="text-slate-400">NA</strong> Not Applicable</span>
                         </div>
                     </div>
 
@@ -477,7 +563,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 </select>
                                 <input
                                     type="text"
-                                    placeholder="Item name (e.g. Rear Diff Oil)"
+                                    placeholder="Item name (e.g. Inverter Coolant Hose)"
                                     value={customItemName}
                                     onChange={e => setCustomItemName(e.target.value)}
                                     className="bg-slate-800 border border-slate-700 text-white text-xs rounded-lg p-2 sm:col-span-2"
@@ -537,24 +623,21 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                         </button>
                                     </div>
                                 </div>
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        disabled={readOnly || isLocked}
-                                        value={nextServiceMileage}
-                                        onChange={e => setNextServiceMileage(e.target.value)}
-                                        placeholder={currentMileage ? `${parseInt(String(currentMileage)) + 5000}` : "e.g. 175000"}
-                                        className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 pl-8 text-sm font-mono focus:border-amber-400 outline-none"
-                                    />
-                                    <Gauge size={14} className="absolute left-2.5 top-3 text-slate-500" />
-                                </div>
+                                <input
+                                    type="number"
+                                    disabled={readOnly || isLocked}
+                                    placeholder="e.g. 85000"
+                                    value={nextServiceMileage}
+                                    onChange={e => setNextServiceMileage(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-2.5 text-sm font-mono focus:border-amber-400 outline-none"
+                                />
                             </div>
 
                             {/* Target Date */}
                             <div>
                                 <div className="flex items-center justify-between mb-1">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase">
-                                        Estimated Target Date
+                                        Target Date
                                     </label>
                                     <div className="flex items-center gap-1">
                                         <button
@@ -590,7 +673,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                     {loading ? (
                         <div className="py-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2 bg-slate-950/40 rounded-2xl border border-slate-800/80">
                             <Clock size={15} className="animate-spin text-cyan-400" />
-                            <span>Loading inspection checklist…</span>
+                            <span>Loading check sheet…</span>
                         </div>
                     ) : (
                         <div className="space-y-3">
@@ -619,18 +702,23 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                             </span>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
-                                            {catCounts.advisory > 0 && (
-                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                                    {catCounts.advisory} Advisory
+                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
+                                            {catCounts.replace > 0 && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                                    {catCounts.replace} Replace
                                                 </span>
                                             )}
-                                            {catCounts.urgent > 0 && (
-                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                                                    {catCounts.urgent} Urgent
+                                            {catCounts.problem > 0 && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
+                                                    {catCounts.problem} Problem
                                                 </span>
                                             )}
-                                            {isOpen ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                                            {catCounts.adjusted > 0 && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                                                    {catCounts.adjusted} Adjusted
+                                                </span>
+                                            )}
+                                            {isOpen ? <ChevronUp size={16} className="text-slate-400 shrink-0" /> : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
                                         </div>
                                     </button>
 
@@ -639,70 +727,56 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                         <div className="p-3.5 divide-y divide-slate-800/60 space-y-3">
                                             {catItems.map((item) => {
                                                 const globalIndex = items.findIndex(it => it.item_name === item.item_name && it.category === item.category);
+                                                const hasSpecialStatus = item.status === 'replace' || item.status === 'advisory' || item.status === 'problem' || item.status === 'urgent' || item.status === 'adjusted' || Boolean(item.notes);
 
                                                 return (
                                                     <div key={item.item_name} className="pt-3 first:pt-0 space-y-2">
                                                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                                            <div className="min-w-0">
-                                                                <span className="text-xs font-bold text-slate-200">
+                                                            <div className="min-w-0 flex-1">
+                                                                <span className="text-xs font-semibold text-slate-200">
                                                                     {item.item_name}
                                                                 </span>
                                                             </div>
 
-                                                            {/* 3-State Traffic Light Selector */}
-                                                            <div className="inline-flex rounded-lg p-0.5 bg-slate-900 border border-slate-800 self-start sm:self-auto">
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={readOnly || isLocked}
-                                                                    onClick={() => handleSetStatus(globalIndex, 'good')}
-                                                                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all flex items-center gap-1 ${
-                                                                        item.status === 'good'
-                                                                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
-                                                                            : 'text-slate-400 hover:text-white'
-                                                                    }`}
-                                                                >
-                                                                    <CheckCircle2 size={12} />
-                                                                    Good
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={readOnly || isLocked}
-                                                                    onClick={() => handleSetStatus(globalIndex, 'advisory')}
-                                                                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all flex items-center gap-1 ${
-                                                                        item.status === 'advisory'
-                                                                            ? 'bg-amber-500 text-slate-950 shadow-sm'
-                                                                            : 'text-slate-400 hover:text-white'
-                                                                    }`}
-                                                                >
-                                                                    <AlertTriangle size={12} />
-                                                                    Advisory
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={readOnly || isLocked}
-                                                                    onClick={() => handleSetStatus(globalIndex, 'urgent')}
-                                                                    className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all flex items-center gap-1 ${
-                                                                        item.status === 'urgent'
-                                                                            ? 'bg-red-500 text-white shadow-sm'
-                                                                            : 'text-slate-400 hover:text-white'
-                                                                    }`}
-                                                                >
-                                                                    <AlertCircle size={12} />
-                                                                    Urgent
-                                                                </button>
+                                                            {/* 6-Code Selector matching Check Sheet (A, ✓, X, NA, C, R) */}
+                                                            <div className="inline-flex rounded-lg p-0.5 bg-slate-900 border border-slate-800 self-start sm:self-auto overflow-x-auto max-w-full shrink-0">
+                                                                {STATUS_BUTTONS.map(btn => {
+                                                                    const isSelected = item.status === btn.status ||
+                                                                        (btn.status === 'checked' && item.status === 'good') ||
+                                                                        (btn.status === 'replace' && item.status === 'advisory') ||
+                                                                        (btn.status === 'problem' && item.status === 'urgent');
+
+                                                                    return (
+                                                                        <button
+                                                                            key={btn.status}
+                                                                            type="button"
+                                                                            disabled={readOnly || isLocked}
+                                                                            onClick={() => handleSetStatus(globalIndex, btn.status)}
+                                                                            className={`px-2 py-1 text-xs rounded transition-all flex items-center gap-1 ${
+                                                                                isSelected 
+                                                                                    ? btn.activeClass 
+                                                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                                                            }`}
+                                                                            title={btn.title}
+                                                                        >
+                                                                            <span className="font-mono font-bold text-xs">{btn.code}</span>
+                                                                            <span className="hidden md:inline text-[10px]">{btn.label}</span>
+                                                                        </button>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
 
-                                                        {/* Advisory / Future Work Note input */}
-                                                        {(item.status === 'advisory' || item.status === 'urgent' || item.notes) && (
-                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pl-2 border-l-2 border-amber-500/40">
+                                                        {/* Observation / Notes / Cost input (automatically shown for non-OK or when note exists) */}
+                                                        {hasSpecialStatus && (
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pl-2.5 border-l-2 border-cyan-500/40">
                                                                 <input
                                                                     type="text"
                                                                     disabled={readOnly || isLocked}
-                                                                    placeholder="Advisory note (e.g. Pads at ~30%, replace at next 5,000 km)"
+                                                                    placeholder="Observation note (e.g. Worn down, cleaned filter, adjusted play...)"
                                                                     value={item.notes || ''}
                                                                     onChange={e => handleSetNotes(globalIndex, e.target.value)}
-                                                                    className="sm:col-span-2 bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg p-2 focus:border-amber-400 outline-none"
+                                                                    className="sm:col-span-2 bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg p-2 focus:border-cyan-400 outline-none"
                                                                 />
                                                                 <div className="relative">
                                                                     <span className="absolute left-2 top-2 text-[10px] text-slate-500">LKR</span>
@@ -712,7 +786,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                                                         placeholder="Est. Cost"
                                                                         value={item.estimated_cost_lkr || ''}
                                                                         onChange={e => handleSetCost(globalIndex, e.target.value)}
-                                                                        className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg p-2 pl-9 font-mono focus:border-amber-400 outline-none"
+                                                                        className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg p-2 pl-9 font-mono focus:border-cyan-400 outline-none"
                                                                     />
                                                                 </div>
                                                             </div>
@@ -728,22 +802,22 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                     </div>
                 )}
 
-                    {/* 4. Service Advisor General Summary Notes */}
+                    {/* 4. Special Comments / Notes */}
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Service Advisor Overall Recommendations for Customer
+                            Special Comments / Notes
                         </label>
                         <textarea
                             rows={3}
                             disabled={readOnly || isLocked}
                             value={inspectionNotes}
                             onChange={e => setInspectionNotes(e.target.value)}
-                            placeholder="Overall vehicle condition summary, driving suggestions, or notes for the customer..."
+                            placeholder="Special comments or workshop notes regarding periodic maintenance condition..."
                             className="w-full bg-slate-950 border border-slate-800 text-white rounded-xl p-3 text-xs leading-relaxed focus:border-cyan-500 outline-none"
                         />
                     </div>
 
-                    {/* 5. Sticky/Bottom Save CTA */}
+                    {/* 5. Bottom Save CTA */}
                     <div className="flex items-center justify-between pt-2">
                         <button
                             type="button"
@@ -751,16 +825,16 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             disabled={generatingPdf}
                             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all active:scale-95"
                         >
-                            <FileText size={14} /> Download Health PDF Report
+                            <FileText size={14} /> Download Check Sheet PDF
                         </button>
 
                         <button
                             type="button"
                             onClick={() => handleSaveAllItems(items, true)}
                             disabled={saving || readOnly || isLocked}
-                            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
+                            className="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
                         >
-                            {saving ? 'Saving…' : 'Save Health Checklist'}
+                            {saving ? 'Saving…' : 'Save Check Sheet'}
                         </button>
                     </div>
 

@@ -128,7 +128,16 @@ export interface JobLabor {
     hourly_rate_lkr: number;
 }
 
-export type InspectionStatus = 'good' | 'advisory' | 'urgent';
+export type InspectionStatus = 
+    | 'checked'
+    | 'adjusted'
+    | 'clean'
+    | 'replace'
+    | 'problem'
+    | 'na'
+    | 'good'
+    | 'advisory'
+    | 'urgent';
 
 export interface JobInspectionRecord {
     id?: string;
