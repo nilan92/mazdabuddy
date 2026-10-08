@@ -10,7 +10,10 @@ import {
     Wrench, 
     Sparkles, 
     Clock, 
-    RotateCcw 
+    RotateCcw,
+    Check,
+    MessageSquare,
+    Save
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../context/ToastContext';
@@ -35,13 +38,62 @@ interface VehicleInspectionSectionProps {
     onUpdate?: () => void;
 }
 
-const STATUS_BUTTONS: { status: InspectionStatus; code: string; label: string; activeClass: string; title: string }[] = [
-    { status: 'checked', code: '✓', label: 'Checked', activeClass: 'bg-emerald-500 text-slate-950 font-black shadow-sm ring-1 ring-emerald-300', title: 'Checked / OK (✓)' },
-    { status: 'adjusted', code: 'A', label: 'Adjusted', activeClass: 'bg-blue-500 text-slate-950 font-black shadow-sm ring-1 ring-blue-300', title: 'Adjusted (A)' },
-    { status: 'clean', code: 'C', label: 'Clean', activeClass: 'bg-teal-500 text-slate-950 font-black shadow-sm ring-1 ring-teal-300', title: 'Clean / Cleaned (C)' },
-    { status: 'replace', code: 'R', label: 'Replace', activeClass: 'bg-amber-500 text-slate-950 font-black shadow-sm ring-1 ring-amber-300', title: 'Replace Recommended (R)' },
-    { status: 'problem', code: 'X', label: 'Problem', activeClass: 'bg-red-500 text-white font-black shadow-sm ring-1 ring-red-300', title: 'Problem / Fault (X)' },
-    { status: 'na', code: 'NA', label: 'N/A', activeClass: 'bg-slate-700 text-white font-bold shadow-sm', title: 'Not Applicable (NA)' },
+const STATUS_BUTTONS: { 
+    status: InspectionStatus; 
+    code: string; 
+    shortLabel: string; 
+    label: string; 
+    activeClass: string; 
+    title: string;
+}[] = [
+    { 
+        status: 'checked', 
+        code: '✓', 
+        shortLabel: 'OK', 
+        label: 'Checked', 
+        activeClass: 'bg-emerald-500 text-slate-950 font-black ring-2 ring-emerald-300 shadow-md', 
+        title: 'Checked / OK (✓)' 
+    },
+    { 
+        status: 'adjusted', 
+        code: 'A', 
+        shortLabel: 'Adj', 
+        label: 'Adjusted', 
+        activeClass: 'bg-sky-500 text-slate-950 font-black ring-2 ring-sky-300 shadow-md', 
+        title: 'Adjusted (A)' 
+    },
+    { 
+        status: 'clean', 
+        code: 'C', 
+        shortLabel: 'Cln', 
+        label: 'Clean', 
+        activeClass: 'bg-teal-400 text-slate-950 font-black ring-2 ring-teal-200 shadow-md', 
+        title: 'Clean / Cleaned (C)' 
+    },
+    { 
+        status: 'replace', 
+        code: 'R', 
+        shortLabel: 'Rep', 
+        label: 'Replace', 
+        activeClass: 'bg-amber-400 text-slate-950 font-black ring-2 ring-amber-200 shadow-md', 
+        title: 'Replace Recommended (R)' 
+    },
+    { 
+        status: 'problem', 
+        code: 'X', 
+        shortLabel: 'Bad', 
+        label: 'Problem', 
+        activeClass: 'bg-rose-500 text-white font-black ring-2 ring-rose-300 shadow-md', 
+        title: 'Problem / Fault (X)' 
+    },
+    { 
+        status: 'na', 
+        code: 'NA', 
+        shortLabel: 'N/A', 
+        label: 'N/A', 
+        activeClass: 'bg-slate-700 text-white font-bold ring-1 ring-slate-500 shadow-sm', 
+        title: 'Not Applicable (NA)' 
+    },
 ];
 
 export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> = ({
@@ -65,6 +117,9 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
 
     // Inspection items
     const [items, setItems] = useState<JobInspectionRecord[]>([]);
+
+    // Toggled note drawers per global index
+    const [openNoteIndices, setOpenNoteIndices] = useState<Record<number, boolean>>({});
 
     // Next service recommendation
     const [nextServiceMileage, setNextServiceMileage] = useState<string>(
@@ -213,6 +268,14 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         const costNum = parseFloat(costStr);
         updated[index] = { ...updated[index], estimated_cost_lkr: isNaN(costNum) ? 0 : costNum };
         setItems(updated);
+    };
+
+    // Toggle observation note drawer for an item
+    const toggleItemNote = (index: number) => {
+        setOpenNoteIndices(prev => ({
+            ...prev,
+            [index]: !prev[index]
+        }));
     };
 
     // Mark all items as Checked (✓) (Fast-fill helper)
@@ -372,11 +435,11 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
     const counts = getInspectionCounts(items);
 
     return (
-        <div className="border-t border-slate-800 bg-slate-900/60">
+        <div className="border-t border-slate-800 bg-slate-900/60 relative">
             {/* ── TOGGLE HEADER BAR (Compact when off, never clutters) ── */}
-            <div className="p-4 flex items-center justify-between gap-3">
+            <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
                         hasInspection 
                             ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' 
                             : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -395,22 +458,22 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                     </span>
                                     {counts.adjusted > 0 && (
                                         <span className="px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                                            {counts.adjusted} A Adjusted
+                                            {counts.adjusted} A
                                         </span>
                                     )}
                                     {counts.clean > 0 && (
                                         <span className="px-1.5 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30">
-                                            {counts.clean} C Clean
+                                            {counts.clean} C
                                         </span>
                                     )}
                                     {counts.replace > 0 && (
                                         <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                            {counts.replace} R Replace
+                                            {counts.replace} R
                                         </span>
                                     )}
                                     {counts.problem > 0 && (
                                         <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                                            {counts.problem} X Problem
+                                            {counts.problem} X
                                         </span>
                                     )}
                                 </div>
@@ -418,7 +481,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                         </div>
                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
                             {hasInspection
-                                ? 'CODES: A: Adjusted | ✓: Checked | X: Problem | NA: Not Applicable | C: Clean | R: Replace'
+                                ? 'CODES: ✓ Checked | A Adjusted | C Clean | R Replace | X Problem | NA Not Applicable'
                                 : 'Disabled — turn on switch to log periodic maintenance check sheet'}
                         </p>
                     </div>
@@ -472,25 +535,40 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
 
             {/* ── EXPANDED INSPECTION FORM (Only shown when switch is ON) ── */}
             {hasInspection && isExpanded && (
-                <div className="px-4 pb-6 space-y-5 animate-fade-in">
+                <div className="px-3 sm:px-4 pb-20 sm:pb-6 space-y-4 animate-fade-in">
                     
                     {/* 1. Quick Toolbar: Fast-fill, Reset, Expand, & Export */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800">
-                        <div className="flex flex-wrap items-center gap-2">
+                    <div className="p-3 bg-slate-950/90 rounded-2xl border border-slate-800 space-y-2.5">
+                        {/* Primary Action Buttons */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 onClick={handleMarkAllChecked}
                                 disabled={readOnly || isLocked}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 transition-all active:scale-95"
+                                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 shadow-sm transition-all active:scale-95"
                                 title="Quickly set all items to Checked (✓) so you only edit exceptions"
                             >
-                                <Sparkles size={13} /> Mark All Checked (✓)
+                                <Sparkles size={14} className="text-emerald-400" />
+                                <span>Mark All Checked (✓)</span>
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => handleSaveAllItems(items, true)}
+                                disabled={saving || readOnly || isLocked}
+                                className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/25 transition-all active:scale-95"
+                            >
+                                {saving ? <Clock size={14} className="animate-spin" /> : <Save size={14} />}
+                                <span>{saving ? 'Saving…' : 'Save Check Sheet'}</span>
+                            </button>
+                        </div>
+
+                        {/* Secondary Helper Actions (Scrollable on small mobile screens) */}
+                        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 text-xs no-scrollbar">
                             <button
                                 type="button"
                                 onClick={handleResetToStandardSheet}
                                 disabled={readOnly || isLocked}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 whitespace-nowrap transition-colors shrink-0"
                                 title="Reload official 47-item Periodic Maintenance Check Sheet"
                             >
                                 <RotateCcw size={12} /> Standard 47 Items
@@ -498,7 +576,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             <button
                                 type="button"
                                 onClick={handleToggleAllCategories}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 whitespace-nowrap transition-colors shrink-0"
                             >
                                 {Object.values(openCategories).every(Boolean) ? 'Collapse All' : 'Expand All'}
                             </button>
@@ -506,28 +584,17 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 type="button"
                                 onClick={() => setShowAddCustom(!showAddCustom)}
                                 disabled={readOnly || isLocked}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 whitespace-nowrap transition-colors shrink-0"
                             >
                                 <Plus size={13} /> Custom Item
                             </button>
-                        </div>
-
-                        <div className="flex items-center gap-2">
                             <button
                                 type="button"
                                 onClick={handleDownloadReport}
                                 disabled={generatingPdf}
-                                className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 whitespace-nowrap transition-colors shrink-0"
                             >
-                                <Download size={13} /> PDF
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleSaveAllItems(items, true)}
-                                disabled={saving || readOnly || isLocked}
-                                className="px-4 py-1.5 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm transition-all active:scale-95"
-                            >
-                                {saving ? 'Saving…' : 'Save Check Sheet'}
+                                <Download size={13} /> PDF Report
                             </button>
                         </div>
                     </div>
@@ -535,13 +602,13 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                     {/* CODES LEGEND STRIP */}
                     <div className="px-3 py-2 bg-slate-950/60 rounded-xl border border-slate-800/80 text-[11px] flex flex-wrap items-center justify-between gap-2 text-slate-400">
                         <span className="font-bold text-slate-300 text-[10px] uppercase tracking-wider">Check Codes:</span>
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[11px]">
-                            <span><strong className="text-emerald-400">✓</strong> Checked</span>
-                            <span><strong className="text-blue-400">A</strong> Adjusted</span>
-                            <span><strong className="text-teal-400">C</strong> Clean</span>
-                            <span><strong className="text-amber-400">R</strong> Replace</span>
-                            <span><strong className="text-red-400">X</strong> Problem</span>
-                            <span><strong className="text-slate-400">NA</strong> Not Applicable</span>
+                        <div className="flex flex-wrap items-center gap-2.5 font-mono text-[11px]">
+                            <span><strong className="text-emerald-400">✓</strong> OK</span>
+                            <span><strong className="text-sky-400">A</strong> Adj</span>
+                            <span><strong className="text-teal-400">C</strong> Cln</span>
+                            <span><strong className="text-amber-400">R</strong> Rep</span>
+                            <span><strong className="text-rose-400">X</strong> Bad</span>
+                            <span><strong className="text-slate-400">NA</strong> N/A</span>
                         </div>
                     </div>
 
@@ -589,7 +656,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                     )}
 
                     {/* 2. Next Routine Service Recommendation Box */}
-                    <div className="p-4 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl space-y-3">
+                    <div className="p-3.5 sm:p-4 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-900 border border-amber-500/30 rounded-2xl space-y-3">
                         <div className="flex items-center gap-2">
                             <Calendar size={16} className="text-amber-400" />
                             <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">
@@ -597,7 +664,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             </h4>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                             {/* Target Mileage */}
                             <div>
                                 <div className="flex items-center justify-between mb-1">
@@ -609,7 +676,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                             type="button"
                                             disabled={readOnly || isLocked}
                                             onClick={() => handleMileageShortcut(5000)}
-                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700"
+                                            className="text-[9px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 active:scale-95 transition-all"
                                         >
                                             +5,000 km
                                         </button>
@@ -617,7 +684,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                             type="button"
                                             disabled={readOnly || isLocked}
                                             onClick={() => handleMileageShortcut(10000)}
-                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700"
+                                            className="text-[9px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 active:scale-95 transition-all"
                                         >
                                             +10,000 km
                                         </button>
@@ -625,6 +692,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 </div>
                                 <input
                                     type="number"
+                                    inputMode="numeric"
                                     disabled={readOnly || isLocked}
                                     placeholder="e.g. 85000"
                                     value={nextServiceMileage}
@@ -644,7 +712,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                             type="button"
                                             disabled={readOnly || isLocked}
                                             onClick={() => handleDateShortcut(3)}
-                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700"
+                                            className="text-[9px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 active:scale-95 transition-all"
                                         >
                                             +3 Mo
                                         </button>
@@ -652,7 +720,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                             type="button"
                                             disabled={readOnly || isLocked}
                                             onClick={() => handleDateShortcut(6)}
-                                            className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700"
+                                            className="text-[9px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-amber-400 border border-slate-700 active:scale-95 transition-all"
                                         >
                                             +6 Mo
                                         </button>
@@ -677,69 +745,92 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {INSPECTION_CATEGORIES.map(category => {
-                            const catItems = items.filter(i => i.category === category.name);
-                            if (catItems.length === 0) return null;
+                            {INSPECTION_CATEGORIES.map((category, catIndex) => {
+                                const catItems = items.filter(i => i.category === category.name);
+                                if (catItems.length === 0) return null;
 
-                            const catCounts = getInspectionCounts(catItems);
-                            const isOpen = openCategories[category.name] ?? false;
+                                const catCounts = getInspectionCounts(catItems);
+                                const isOpen = openCategories[category.name] ?? false;
 
-                            return (
-                                <div key={category.name} className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
-                                    {/* Category Accordion Header */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setOpenCategories({ ...openCategories, [category.name]: !isOpen })}
-                                        className="w-full p-3.5 flex items-center justify-between bg-slate-900/60 hover:bg-slate-800/50 transition-colors text-left"
-                                    >
-                                        <div className="flex items-center gap-2.5">
-                                            <Wrench size={14} className="text-cyan-400" />
-                                            <span className="text-xs font-bold text-white uppercase tracking-wider">
-                                                {category.name}
-                                            </span>
-                                            <span className="text-[10px] text-slate-500 font-mono">
-                                                ({catItems.length})
-                                            </span>
-                                        </div>
-
-                                        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
-                                            {catCounts.replace > 0 && (
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                                                    {catCounts.replace} Replace
+                                return (
+                                    <div key={category.name} className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
+                                        {/* Category Accordion Header */}
+                                        <button
+                                            type="button"
+                                            onClick={() => setOpenCategories({ ...openCategories, [category.name]: !isOpen })}
+                                            className="w-full p-3 sm:p-3.5 flex items-center justify-between bg-slate-900/60 hover:bg-slate-800/50 transition-colors text-left"
+                                        >
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <Wrench size={14} className="text-cyan-400 shrink-0" />
+                                                <span className="text-xs font-bold text-white uppercase tracking-wider truncate">
+                                                    {category.name}
                                                 </span>
-                                            )}
-                                            {catCounts.problem > 0 && (
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
-                                                    {catCounts.problem} Problem
+                                                <span className="text-[10px] text-slate-500 font-mono shrink-0">
+                                                    ({catItems.length})
                                                 </span>
-                                            )}
-                                            {catCounts.adjusted > 0 && (
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                                                    {catCounts.adjusted} Adjusted
-                                                </span>
-                                            )}
-                                            {isOpen ? <ChevronUp size={16} className="text-slate-400 shrink-0" /> : <ChevronDown size={16} className="text-slate-400 shrink-0" />}
-                                        </div>
-                                    </button>
+                                            </div>
 
-                                    {/* Items List */}
-                                    {isOpen && (
-                                        <div className="p-3.5 divide-y divide-slate-800/60 space-y-3">
-                                            {catItems.map((item) => {
-                                                const globalIndex = items.findIndex(it => it.item_name === item.item_name && it.category === item.category);
-                                                const hasSpecialStatus = item.status === 'replace' || item.status === 'advisory' || item.status === 'problem' || item.status === 'urgent' || item.status === 'adjusted' || Boolean(item.notes);
+                                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                                {catCounts.replace > 0 && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                                                        {catCounts.replace} Rep
+                                                    </span>
+                                                )}
+                                                {catCounts.problem > 0 && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
+                                                        {catCounts.problem} Bad
+                                                    </span>
+                                                )}
+                                                {catCounts.adjusted > 0 && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                                                        {catCounts.adjusted} Adj
+                                                    </span>
+                                                )}
+                                                {isOpen ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+                                            </div>
+                                        </button>
 
-                                                return (
-                                                    <div key={item.item_name} className="pt-3 first:pt-0 space-y-2">
-                                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                                            <div className="min-w-0 flex-1">
-                                                                <span className="text-xs font-semibold text-slate-200">
-                                                                    {item.item_name}
-                                                                </span>
+                                        {/* Items List */}
+                                        {isOpen && (
+                                            <div className="p-3 divide-y divide-slate-800/60 space-y-3">
+                                                {catItems.map((item, itemIdx) => {
+                                                    const globalIndex = items.findIndex(it => it.item_name === item.item_name && it.category === item.category);
+                                                    const hasSpecialStatus = item.status === 'replace' || item.status === 'advisory' || item.status === 'problem' || item.status === 'urgent' || item.status === 'adjusted' || Boolean(item.notes);
+                                                    const isNoteOpen = Boolean(openNoteIndices[globalIndex]) || hasSpecialStatus;
+
+                                                    return (
+                                                        <div key={item.item_name} className="pt-3 first:pt-0 space-y-2">
+                                                            {/* Item Header & Note Trigger */}
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="flex items-baseline gap-1.5 min-w-0">
+                                                                    <span className="text-[10px] font-mono font-bold text-slate-500 shrink-0">
+                                                                        {catIndex + 1}.{itemIdx + 1}
+                                                                    </span>
+                                                                    <span className="text-xs sm:text-sm font-semibold text-slate-100 leading-snug">
+                                                                        {item.item_name}
+                                                                    </span>
+                                                                </div>
+
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={readOnly || isLocked}
+                                                                    onClick={() => toggleItemNote(globalIndex)}
+                                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors shrink-0 ${
+                                                                        item.notes?.trim()
+                                                                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                                                            : isNoteOpen
+                                                                                ? 'bg-slate-800 text-cyan-300 border border-cyan-500/30'
+                                                                                : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                                                                    }`}
+                                                                    title="Add or edit observation note"
+                                                                >
+                                                                    <MessageSquare size={10} />
+                                                                    <span>{item.notes?.trim() ? 'Note' : '+ Note'}</span>
+                                                                </button>
                                                             </div>
 
-                                                            {/* 6-Code Selector matching Check Sheet (A, ✓, X, NA, C, R) */}
-                                                            <div className="inline-flex rounded-lg p-0.5 bg-slate-900 border border-slate-800 self-start sm:self-auto overflow-x-auto max-w-full shrink-0">
+                                                            {/* 6-Code Selector (A, ✓, X, NA, C, R) - Mobile Grid & Desktop Flex */}
+                                                            <div className="grid grid-cols-6 gap-1 w-full sm:inline-flex sm:w-auto p-1 bg-slate-900/90 rounded-xl border border-slate-800/80">
                                                                 {STATUS_BUTTONS.map(btn => {
                                                                     const isSelected = item.status === btn.status ||
                                                                         (btn.status === 'checked' && item.status === 'good') ||
@@ -752,60 +843,60 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                                                             type="button"
                                                                             disabled={readOnly || isLocked}
                                                                             onClick={() => handleSetStatus(globalIndex, btn.status)}
-                                                                            className={`px-2 py-1 text-xs rounded transition-all flex items-center gap-1 ${
+                                                                            className={`flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 py-1.5 sm:py-1 px-1 sm:px-2.5 rounded-lg transition-all active:scale-90 select-none ${
                                                                                 isSelected 
                                                                                     ? btn.activeClass 
-                                                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                                                                    : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
                                                                             }`}
                                                                             title={btn.title}
                                                                         >
-                                                                            <span className="font-mono font-bold text-xs">{btn.code}</span>
-                                                                            <span className="hidden md:inline text-[10px]">{btn.label}</span>
+                                                                            <span className="font-mono font-black text-xs sm:text-xs">{btn.code}</span>
+                                                                            <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-tight leading-none opacity-90">{btn.shortLabel}</span>
                                                                         </button>
                                                                     );
                                                                 })}
                                                             </div>
-                                                        </div>
 
-                                                        {/* Observation / Notes / Cost input (automatically shown for non-OK or when note exists) */}
-                                                        {hasSpecialStatus && (
-                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pl-2.5 border-l-2 border-cyan-500/40">
-                                                                <input
-                                                                    type="text"
-                                                                    disabled={readOnly || isLocked}
-                                                                    placeholder="Observation note (e.g. Worn down, cleaned filter, adjusted play...)"
-                                                                    value={item.notes || ''}
-                                                                    onChange={e => handleSetNotes(globalIndex, e.target.value)}
-                                                                    className="sm:col-span-2 bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg p-2 focus:border-cyan-400 outline-none"
-                                                                />
-                                                                <div className="relative">
-                                                                    <span className="absolute left-2 top-2 text-[10px] text-slate-500">LKR</span>
+                                                            {/* Observation / Notes / Cost input drawer */}
+                                                            {isNoteOpen && (
+                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2 rounded-xl bg-slate-900/50 border border-slate-800/90 pl-3 border-l-2 border-l-cyan-400">
                                                                     <input
-                                                                        type="number"
+                                                                        type="text"
                                                                         disabled={readOnly || isLocked}
-                                                                        placeholder="Est. Cost"
-                                                                        value={item.estimated_cost_lkr || ''}
-                                                                        onChange={e => handleSetCost(globalIndex, e.target.value)}
-                                                                        className="w-full bg-slate-900 border border-slate-800 text-slate-200 text-xs rounded-lg p-2 pl-9 font-mono focus:border-cyan-400 outline-none"
+                                                                        placeholder="Observation note (e.g. Worn down, cleaned filter, adjusted play...)"
+                                                                        value={item.notes || ''}
+                                                                        onChange={e => handleSetNotes(globalIndex, e.target.value)}
+                                                                        className="sm:col-span-2 bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-lg p-2 focus:border-cyan-400 outline-none placeholder:text-slate-500"
                                                                     />
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2.5 top-2 text-[10px] font-bold text-slate-500">LKR</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            inputMode="numeric"
+                                                                            disabled={readOnly || isLocked}
+                                                                            placeholder="Est. Cost"
+                                                                            value={item.estimated_cost_lkr || ''}
+                                                                            onChange={e => handleSetCost(globalIndex, e.target.value)}
+                                                                            className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-lg p-2 pl-10 font-mono focus:border-cyan-400 outline-none placeholder:text-slate-500"
+                                                                        />
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
                     {/* 4. Special Comments / Notes */}
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                            Special Comments / Notes
+                            Special Comments / Workshop Notes
                         </label>
                         <textarea
                             rows={3}
@@ -823,7 +914,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             type="button"
                             onClick={handleDownloadReport}
                             disabled={generatingPdf}
-                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all active:scale-95"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-all active:scale-95"
                         >
                             <FileText size={14} /> Download Check Sheet PDF
                         </button>
@@ -832,12 +923,50 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             type="button"
                             onClick={() => handleSaveAllItems(items, true)}
                             disabled={saving || readOnly || isLocked}
-                            className="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/20 transition-all active:scale-95"
+                            className="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/20 transition-all active:scale-95 flex items-center gap-1.5"
                         >
-                            {saving ? 'Saving…' : 'Save Check Sheet'}
+                            {saving ? <Clock size={13} className="animate-spin" /> : <Save size={13} />}
+                            <span>{saving ? 'Saving…' : 'Save Check Sheet'}</span>
                         </button>
                     </div>
 
+                </div>
+            )}
+
+            {/* ── STICKY FLOATING BOTTOM BAR ON MOBILE (Thumb-friendly fast actions) ── */}
+            {hasInspection && isExpanded && (
+                <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 p-2.5 px-4 flex items-center justify-between sm:hidden shadow-2xl">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-xs font-black text-emerald-400 flex items-center gap-1">
+                            <Check size={14} className="stroke-[3]" />
+                            {counts.checked}/{items.length} Checked
+                        </span>
+                        {(counts.problem > 0 || counts.replace > 0) && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                {counts.problem + counts.replace} Issue{counts.problem + counts.replace > 1 ? 's' : ''}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={handleDownloadReport}
+                            disabled={generatingPdf}
+                            className="p-2 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 active:scale-95 transition-all"
+                            title="Download Check Sheet PDF"
+                        >
+                            <Download size={14} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleSaveAllItems(items, true)}
+                            disabled={saving || readOnly || isLocked}
+                            className="px-3.5 py-2 rounded-lg text-xs font-black bg-cyan-600 hover:bg-cyan-500 text-white shadow-md active:scale-95 transition-all flex items-center gap-1.5"
+                        >
+                            {saving ? <Clock size={13} className="animate-spin" /> : <Save size={13} />}
+                            <span>{saving ? 'Saving…' : 'Save'}</span>
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
