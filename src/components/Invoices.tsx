@@ -8,7 +8,8 @@ import {
     CheckCircle, 
     Clock, 
     AlertCircle,
-    MessageCircle
+    MessageCircle,
+    Coins
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { supabase } from '../lib/supabase';
@@ -28,6 +29,9 @@ type ShareableInvoice = {
     total: number;
     subtotal?: number;
     discount?: number;
+    paidAmount?: number;
+    balanceDue?: number;
+    status?: string;
     customerDetails?: { phone?: string | null } | null;
 };
 
@@ -40,6 +44,8 @@ export const Invoices = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [updatingStatus, setUpdatingStatus] = useState(false);
     const [sharing, setSharing] = useState(false);
+    const [isEditingPayment, setIsEditingPayment] = useState(false);
+    const [paymentInput, setPaymentInput] = useState('');
 
     // 1. Fetch Invoices
     const { data: invoices = [], isLoading: loading } = useQuery({
@@ -78,6 +84,11 @@ export const Invoices = () => {
                     ? (inv.job_cards?.discount_type === 'percent' ? `Discount (${Number(inv.job_cards?.discount_value) || 0}%)` : 'Discount')
                     : 'Discount';
 
+                const total = Number(inv.total_amount_lkr) || summary.totalAmount;
+                const rawPaid = Number(inv.paid_amount_lkr);
+                const paidAmount = !isNaN(rawPaid) && rawPaid > 0 ? rawPaid : (inv.status === 'Paid' ? total : 0);
+                const balanceDue = Math.max(0, total - paidAmount);
+
                 return {
                     id: inv.id,
                     invoiceNumber: `INV-${inv.id.slice(0, 8).toUpperCase()}`,
@@ -86,7 +97,7 @@ export const Invoices = () => {
                     vehicle: `${inv.job_cards?.vehicles?.make} ${inv.job_cards?.vehicles?.model} (${inv.job_cards?.vehicles?.license_plate})`,
                     vehicleDetails: inv.job_cards?.vehicles,
                     mileage: inv.job_cards?.mileage,
-                    total: Number(inv.total_amount_lkr) || summary.totalAmount,
+                    total,
                     subtotal: summary.grossSubtotal || Number(inv.subtotal_lkr) || 0,
                     discount: summary.totalDiscount || Number(inv.discount_lkr) || 0,
                     linesDiscount: summary.linesDiscount,
@@ -95,6 +106,9 @@ export const Invoices = () => {
                     jobDiscountValue: inv.job_cards?.discount_value,
                     discountLabel,
                     status: inv.status || 'Unpaid',
+                    paidAmount,
+                    balanceDue,
+                    paid_amount_lkr: inv.paid_amount_lkr,
                     date: new Date(inv.created_at).toLocaleDateString('en-GB', { 
                         day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
                     }),
@@ -147,31 +161,88 @@ export const Invoices = () => {
     // 4. Status Update Logic
     const handleStatusUpdate = async (newStatus: string) => {
         if (!selectedInvoice) return;
+
+        if (newStatus === 'Partially Paid') {
+            setPaymentInput(String(selectedInvoice.paidAmount || ''));
+            setIsEditingPayment(true);
+            return;
+        }
         
         // Confirmation for payment status change
         if (!await confirm({ message: `Mark this invoice as ${newStatus}?`, confirmLabel: 'Update', confirmStyle: 'default' })) return;
 
         setUpdatingStatus(true);
+        const updates: any = { status: newStatus };
+        if (newStatus === 'Paid') {
+            updates.paid_amount_lkr = selectedInvoice.total;
+            updates.paid_on = new Date().toISOString();
+        } else if (newStatus === 'Unpaid') {
+            updates.paid_amount_lkr = 0;
+            updates.paid_on = null;
+        }
+
         const { error } = await supabase
             .from('invoices')
-            .update({ status: newStatus })
+            .update(updates)
             .eq('id', selectedInvoice.id);
         
         if (error) {
             console.error("Error updating invoice:", error);
-            console.error("Failed to update invoice status:", error.message);
+            toast("Failed to update invoice status: " + error.message, 'error');
         } else {
-            const updatedInv = { ...selectedInvoice, status: newStatus };
+            const nextPaid = updates.paid_amount_lkr !== undefined ? updates.paid_amount_lkr : selectedInvoice.paidAmount;
+            const updatedInv = { 
+                ...selectedInvoice, 
+                status: newStatus,
+                paidAmount: nextPaid,
+                balanceDue: Math.max(0, selectedInvoice.total - nextPaid),
+            };
             setSelectedInvoice(updatedInv);
             refreshInvoices();
+            toast(`Invoice marked as ${newStatus}`, 'success');
+        }
+        setUpdatingStatus(false);
+    };
+
+    const handleRecordPayment = async (amount: number) => {
+        if (!selectedInvoice) return;
+        const total = selectedInvoice.total;
+        const cleanAmount = Math.max(0, Math.min(total, amount));
+        const newStatus = cleanAmount >= total ? 'Paid' : (cleanAmount > 0 ? 'Partially Paid' : 'Unpaid');
+
+        setUpdatingStatus(true);
+        const { error } = await supabase
+            .from('invoices')
+            .update({
+                paid_amount_lkr: cleanAmount,
+                status: newStatus,
+                paid_on: cleanAmount > 0 ? new Date().toISOString() : null,
+            })
+            .eq('id', selectedInvoice.id);
+
+        if (error) {
+            console.error('Error recording payment:', error);
+            toast('Failed to record payment: ' + error.message, 'error');
+        } else {
+            toast(`Payment recorded: LKR ${cleanAmount.toLocaleString()} (${newStatus})`, 'success');
+            const updatedInv = {
+                ...selectedInvoice,
+                status: newStatus,
+                paidAmount: cleanAmount,
+                balanceDue: Math.max(0, total - cleanAmount),
+            };
+            setSelectedInvoice(updatedInv);
+            refreshInvoices();
+            setIsEditingPayment(false);
         }
         setUpdatingStatus(false);
     };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'Paid': return <CheckCircle size={14} />;
-            case 'Unpaid': return <Clock size={14} />;
+            case 'Paid': return <CheckCircle size={14} className="text-emerald-400" />;
+            case 'Partially Paid': return <Clock size={14} className="text-amber-400" />;
+            case 'Unpaid': return <AlertCircle size={14} className="text-red-400" />;
             default: return <AlertCircle size={14} />;
         }
     };
@@ -220,9 +291,16 @@ export const Invoices = () => {
         // Status is stored capitalised ('Paid'), so a lowercase comparison never
         // matched and every paid invoice printed in the unpaid red.
         doc.setFont('helvetica', 'bold');
-        if (inv.status?.toLowerCase() === 'paid') doc.setTextColor(34, 197, 94);
-        else doc.setTextColor(239, 68, 68);
-        doc.text(`STATUS: ${inv.status.toUpperCase()}`, pageWidth - marginRight, 42, { align: 'right' });
+        if (inv.status?.toLowerCase() === 'paid') {
+            doc.setTextColor(34, 197, 94);
+            doc.text('STATUS: PAID', pageWidth - marginRight, 42, { align: 'right' });
+        } else if (inv.status?.toLowerCase() === 'partially paid' || (Number(inv.paidAmount) > 0 && Number(inv.balanceDue) > 0)) {
+            doc.setTextColor(217, 119, 6);
+            doc.text('STATUS: PARTIALLY PAID', pageWidth - marginRight, 42, { align: 'right' });
+        } else {
+            doc.setTextColor(239, 68, 68);
+            doc.text(`STATUS: ${inv.status.toUpperCase()}`, pageWidth - marginRight, 42, { align: 'right' });
+        }
         
         doc.setTextColor(0); // Reset
 
@@ -466,8 +544,10 @@ export const Invoices = () => {
         const linesDiscount = Number(inv.linesDiscount) || 0;
         const jobDiscountAmount = Number(inv.jobDiscount) || 0;
         const hasBothDiscounts = linesDiscount > 0 && jobDiscountAmount > 0;
+        const isPartialOrPaid = Number(inv.paidAmount) > 0 || inv.status === 'Partially Paid';
+        const spaceNeeded = (totalDiscount > 0 ? (hasBothDiscounts ? 36 : 28) : 16) + (isPartialOrPaid ? 18 : 0);
 
-        ensureSpace(totalDiscount > 0 ? (hasBothDiscounts ? 36 : 28) : 16);
+        ensureSpace(spaceNeeded);
 
         // Draw Line
         doc.setDrawColor(220);
@@ -520,6 +600,32 @@ export const Invoices = () => {
             doc.setFont('helvetica', 'italic');
             doc.setTextColor(16, 149, 105);
             doc.text(`Total savings on this bill: LKR ${totalDiscount.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+        }
+
+        // Partial payment / balance breakdown in PDF
+        if (isPartialOrPaid) {
+            yPos += 6;
+            doc.setFontSize(9.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(80);
+            doc.text('Amount Received', pageWidth - marginRight - 65, yPos);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(16, 149, 105);
+            doc.text(`LKR ${(Number(inv.paidAmount) || 0).toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+
+            yPos += 6;
+            doc.setFontSize(10.5);
+            doc.setFont('helvetica', 'bold');
+            const balDue = inv.balanceDue !== undefined ? Number(inv.balanceDue) : Math.max(0, inv.total - (Number(inv.paidAmount) || 0));
+            if (balDue > 0) {
+                doc.setTextColor(217, 119, 6);
+                doc.text('BALANCE DUE', pageWidth - marginRight - 65, yPos);
+                doc.text(`LKR ${balDue.toLocaleString()}`, pageWidth - marginRight, yPos, { align: 'right' });
+            } else {
+                doc.setTextColor(16, 149, 105);
+                doc.text('BALANCE DUE', pageWidth - marginRight - 65, yPos);
+                doc.text('LKR 0 (PAID IN FULL)', pageWidth - marginRight, yPos, { align: 'right' });
+            }
         }
         
         // Payment QR / link — above Terms, since it's what the customer acts on
@@ -691,6 +797,9 @@ export const Invoices = () => {
                 total: inv.total,
                 subtotal: inv.subtotal,
                 discount: inv.discount,
+                paidAmount: inv.paidAmount,
+                balanceDue: inv.balanceDue,
+                status: inv.status,
                 shopName: tenant?.name,
                 paymentLink: tenant?.payment_link,
             });
@@ -773,12 +882,23 @@ export const Invoices = () => {
                                 <div className="text-sm text-slate-400 mb-2">{inv.vehicle}</div>
                                 <div className="flex justify-between items-center">
                                     <span className={`text-xs px-2 py-1 rounded font-bold uppercase flex items-center gap-1 ${
-                                        inv.status === 'Paid' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                                        inv.status === 'Paid' 
+                                            ? 'bg-emerald-500/10 text-emerald-400' 
+                                            : inv.status === 'Partially Paid'
+                                            ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                                            : 'bg-red-500/10 text-red-400'
                                     }`}>
                                         {getStatusIcon(inv.status)}
                                         {inv.status}
                                     </span>
-                                    <span className="font-mono text-white font-bold">LKR {inv.total.toLocaleString()}</span>
+                                    <div className="text-right">
+                                        <span className="font-mono text-white font-bold block">LKR {inv.total.toLocaleString()}</span>
+                                        {inv.status === 'Partially Paid' && (
+                                            <span className="text-[10px] text-amber-400 font-mono font-medium block">
+                                                Due: LKR {inv.balanceDue.toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -814,26 +934,147 @@ export const Invoices = () => {
                                     </div>
                                 </div>
                                     
-                                    <div className="flex flex-col items-end gap-1 w-full md:w-auto">
-                                        <label className="text-[10px] text-slate-400 font-bold uppercase">Payment Status</label>
-                                        <div className="flex items-center gap-2 w-full md:w-auto">
-                                            <div className="text-slate-400 hidden md:block">
-                                                {getStatusIcon(selectedInvoice.status)}
+                                <div className="flex flex-col items-end gap-1 w-full md:w-auto">
+                                    <label className="text-[10px] text-slate-400 font-bold uppercase">Payment Status</label>
+                                    <div className="flex items-center gap-2 w-full md:w-auto">
+                                        <div className="text-slate-400 hidden md:block">
+                                            {getStatusIcon(selectedInvoice.status)}
+                                        </div>
+                                        <select 
+                                            value={selectedInvoice.status}
+                                            onChange={(e) => handleStatusUpdate(e.target.value)}
+                                            disabled={updatingStatus}
+                                            className="w-full md:w-auto bg-slate-950 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-cyan-500 font-medium"
+                                        >
+                                            <option value="Unpaid">Pending Payment (Unpaid)</option>
+                                            <option value="Partially Paid">Partially Paid</option>
+                                            <option value="Paid">Paid Fully</option>
+                                            <option value="Refunded">Refunded</option>
+                                            <option value="Cancelled">Cancelled</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Payment Summary & Partial Payment Editor Card */}
+                            <div className="shrink-0 bg-slate-950 rounded-xl border border-slate-800 p-4 mb-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div className="space-y-1">
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Coins size={13} className="text-cyan-400" />
+                                            Payment Summary &amp; Balance
+                                        </div>
+                                        <div className="flex items-center gap-5 flex-wrap pt-1">
+                                            <div>
+                                                <span className="text-[10px] text-slate-400 uppercase font-bold block">Invoice Total</span>
+                                                <span className="font-mono text-white font-black text-sm">LKR {selectedInvoice.total.toLocaleString()}</span>
                                             </div>
-                                            <select 
-                                                value={selectedInvoice.status}
-                                                onChange={(e) => handleStatusUpdate(e.target.value)}
-                                                disabled={updatingStatus}
-                                                className="w-full md:w-auto bg-slate-950 border border-slate-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:border-cyan-500"
-                                            >
-                                                <option value="Unpaid">Pending Payment</option>
-                                                <option value="Paid">Paid Fully</option>
-                                                <option value="Refunded">Refunded</option>
-                                                <option value="Cancelled">Cancelled</option>
-                                            </select>
+                                            <div>
+                                                <span className="text-[10px] text-emerald-400 uppercase font-bold block">Amount Received</span>
+                                                <span className="font-mono text-emerald-400 font-black text-sm">
+                                                    LKR {(Number(selectedInvoice.paidAmount) || 0).toLocaleString()}
+                                                </span>
+                                            </div>
+                                            <div>
+                                                <span className={`text-[10px] uppercase font-bold block ${selectedInvoice.balanceDue > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                                                    {selectedInvoice.balanceDue > 0 ? 'Balance Due' : 'Balance'}
+                                                </span>
+                                                <span className={`font-mono font-black text-sm ${selectedInvoice.balanceDue > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+                                                    LKR {(Number(selectedInvoice.balanceDue) || 0).toLocaleString()}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
 
+                                    <div>
+                                        {!isEditingPayment ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setPaymentInput(String(selectedInvoice.paidAmount > 0 ? selectedInvoice.paidAmount : ''));
+                                                    setIsEditingPayment(true);
+                                                }}
+                                                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-cyan-300 border border-slate-700 transition-colors shadow-sm"
+                                            >
+                                                {selectedInvoice.paidAmount > 0 ? 'Update Payment' : '+ Record Partial / Full'}
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                </div>
+
+                                {/* Inline Payment Amount Input */}
+                                {isEditingPayment && (
+                                    <div className="mt-3 pt-3 border-t border-slate-800/80 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-bold text-white">Enter Amount Received (LKR):</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPaymentInput(String(selectedInvoice.total))}
+                                                    className="px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-emerald-400 border border-slate-700"
+                                                >
+                                                    Full (100%)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPaymentInput(String(Math.round(selectedInvoice.total / 2)))}
+                                                    className="px-2.5 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-amber-400 border border-slate-700"
+                                                >
+                                                    50%
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <div className="relative flex-1">
+                                                <span className="absolute left-3 top-2.5 text-xs text-slate-500 font-bold">LKR</span>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max={selectedInvoice.total}
+                                                    value={paymentInput}
+                                                    onChange={(e) => setPaymentInput(e.target.value)}
+                                                    placeholder="e.g. 15000"
+                                                    className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-12 pr-3 py-2 text-white font-mono text-sm outline-none focus:border-cyan-500"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRecordPayment(Number(paymentInput) || 0)}
+                                                disabled={updatingStatus}
+                                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-emerald-600/20"
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsEditingPayment(false)}
+                                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs rounded-xl"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                        {paymentInput !== '' && !isNaN(Number(paymentInput)) && (
+                                            <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                                                <span>
+                                                    Balance Due: <strong className="font-mono text-amber-400">
+                                                        LKR {Math.max(0, selectedInvoice.total - (Number(paymentInput) || 0)).toLocaleString()}
+                                                    </strong>
+                                                </span>
+                                                <span>
+                                                    {Number(paymentInput) >= selectedInvoice.total ? (
+                                                        <span className="text-emerald-400 font-bold">Status: Paid in Full</span>
+                                                    ) : Number(paymentInput) > 0 ? (
+                                                        <span className="text-amber-400 font-bold">Status: Partially Paid</span>
+                                                    ) : (
+                                                        <span className="text-red-400 font-bold">Status: Unpaid</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Vehicle */}
@@ -969,11 +1210,39 @@ export const Invoices = () => {
                                             </>
                                         )}
                                         <tr>
-                                            <td className="px-3 py-3 md:px-6 md:py-4 text-right uppercase text-[10px] md:text-xs tracking-wider text-slate-400">Total Due</td>
-                                            <td className="px-3 py-3 md:px-6 md:py-4 text-right text-base md:text-lg text-emerald-400 font-mono">
+                                            <td className="px-3 py-3 md:px-6 md:py-4 text-right uppercase text-[10px] md:text-xs tracking-wider text-slate-400">Total Invoiced</td>
+                                            <td className="px-3 py-3 md:px-6 md:py-4 text-right text-base md:text-lg text-white font-mono">
                                                 LKR {selectedInvoice.total.toLocaleString()}
                                             </td>
                                         </tr>
+                                        {Number(selectedInvoice.paidAmount) > 0 && (
+                                            <>
+                                                <tr className="text-emerald-400 font-normal">
+                                                    <td className="px-3 py-2 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">Amount Received</td>
+                                                    <td className="px-3 py-2 md:px-6 text-right font-mono text-sm font-bold">
+                                                        LKR {(Number(selectedInvoice.paidAmount) || 0).toLocaleString()}
+                                                    </td>
+                                                </tr>
+                                                <tr className={selectedInvoice.balanceDue > 0 ? "text-amber-400 font-bold bg-amber-950/20" : "text-emerald-400 font-bold"}>
+                                                    <td className="px-3 py-2.5 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">
+                                                        Balance Due
+                                                    </td>
+                                                    <td className="px-3 py-2.5 md:px-6 text-right font-mono text-sm md:text-base">
+                                                        {selectedInvoice.balanceDue > 0 
+                                                            ? `LKR ${selectedInvoice.balanceDue.toLocaleString()}` 
+                                                            : 'LKR 0 (PAID IN FULL)'}
+                                                    </td>
+                                                </tr>
+                                            </>
+                                        )}
+                                        {Number(selectedInvoice.paidAmount) === 0 && (
+                                            <tr className="text-amber-400 font-bold">
+                                                <td className="px-3 py-2.5 md:px-6 text-right uppercase text-[10px] md:text-xs tracking-wider">Balance Due</td>
+                                                <td className="px-3 py-2.5 md:px-6 text-right text-base md:text-lg text-amber-400 font-mono">
+                                                    LKR {selectedInvoice.total.toLocaleString()}
+                                                </td>
+                                            </tr>
+                                        )}
                                         {selectedInvoice.discount > 0 && (
                                             <tr className="border-t border-slate-800/80 bg-emerald-950/20">
                                                 <td colSpan={2} className="px-3 py-2 md:px-6 text-right text-xs text-emerald-400 font-medium">

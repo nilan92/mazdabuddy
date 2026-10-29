@@ -330,15 +330,20 @@ export async function buildVehicleHealthPdf(opts: {
 
     // 2. Document Title & Header Meta (Right aligned)
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
+    doc.setFontSize(16);
     doc.setTextColor(15, 23, 42);
-    doc.text('PERIODIC MAINTENANCE CHECK SHEET', pageWidth - marginRight, 18, { align: 'right' });
+    doc.text('VEHICLE HEALTH REPORT', pageWidth - marginRight, 17, { align: 'right' });
 
-    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(13, 148, 136);
+    doc.text('Periodic Maintenance Check Sheet', pageWidth - marginRight, 22, { align: 'right' });
+
+    doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`Job Card #: ${(job.id || '').slice(0, 8).toUpperCase()}`, pageWidth - marginRight, 23.5, { align: 'right' });
-    doc.text(`Date: ${new Date(job.created_at || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`, pageWidth - marginRight, 28, { align: 'right' });
+    doc.text(`Job Card #: ${(job.id || '').slice(0, 8).toUpperCase()}`, pageWidth - marginRight, 27, { align: 'right' });
+    doc.text(`Date: ${new Date(job.created_at || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}`, pageWidth - marginRight, 31, { align: 'right' });
 
     // Shop info below logo
     doc.setFont('helvetica', 'bold');
@@ -364,23 +369,7 @@ export async function buildVehicleHealthPdf(opts: {
 
     yPos = Math.max(leftHeaderY + 2, 34);
 
-    // 3. CODES GUIDE BANNER
-    doc.setFillColor(241, 245, 249);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(marginLeft, yPos, printableWidth, 6.5, 1, 1, 'FD');
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.2);
-    doc.setTextColor(51, 65, 85);
-    doc.text(
-        'CODES:    A: Adjusted   |   OK: Checked   |   X: Problem   |   NA: Not Applicable   |   C: Clean   |   R: Replace',
-        pageWidth / 2,
-        yPos + 4.3,
-        { align: 'center' }
-    );
-    yPos += 9.5;
-
-    // 4. Customer & Vehicle Box (with strict padding & no overflow)
+    // 3. Customer & Vehicle Box (with strict padding & no overflow)
     doc.setFillColor(248, 250, 252);
     doc.setDrawColor(226, 232, 240);
     doc.roundedRect(marginLeft, yPos, printableWidth, 19, 1.2, 1.2, 'FD');
@@ -691,13 +680,13 @@ export async function buildVehicleHealthPdf(opts: {
         doc.setFont('helvetica', 'italic');
         doc.setFontSize(6.8);
         doc.setTextColor(148, 163, 184);
-        doc.text(`${shopName} — Periodic Maintenance Check Sheet`, marginLeft, pageHeight - 6.5);
+        doc.text(`${shopName} — Vehicle Health Report`, marginLeft, pageHeight - 6.5);
         doc.text(`Page ${p} of ${pageCount}`, pageWidth - marginRight, pageHeight - 6.5, { align: 'right' });
     }
 
     const cleanPlate = (plate || 'Vehicle').replace(/[^a-z0-9]/gi, '_');
     return {
         doc,
-        filename: `Periodic-Maintenance-Check-Sheet-${cleanPlate}-${(job.id || '').slice(0, 6)}.pdf`,
+        filename: `Vehicle-Health-Report-${cleanPlate}-${(job.id || '').slice(0, 6)}.pdf`,
     };
 }

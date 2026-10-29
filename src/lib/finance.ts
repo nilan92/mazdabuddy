@@ -579,17 +579,17 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
         }
         // Settlement is its own entry on its own date — that separation is what
         // makes the books accrual rather than cash.
-        if (inv.status === 'Paid') {
-            const amt = round2(n(inv.total_amount_lkr));
-            if (amt !== 0) {
-                const isCash = (inv.payment_method || '').toLowerCase() === 'cash';
-                entries.push({
-                    id: `j-rcpt-${inv.id}`,
-                    date: inv.paid_on || inv.created_at,
-                    narrative: 'Invoice settled',
-                    lines: [dr(isCash ? ACCOUNTS.CASH : ACCOUNTS.BANK, amt), cr(ACCOUNTS.RECEIVABLES, amt)],
-                });
-            }
+        const paidAmt = inv.status === 'Paid'
+            ? round2(n(inv.total_amount_lkr))
+            : round2(n((inv as any).paid_amount_lkr));
+        if (paidAmt > 0) {
+            const isCash = (inv.payment_method || '').toLowerCase() === 'cash';
+            entries.push({
+                id: `j-rcpt-${inv.id}`,
+                date: inv.paid_on || inv.created_at,
+                narrative: inv.status === 'Paid' ? 'Invoice settled' : 'Invoice partial payment',
+                lines: [dr(isCash ? ACCOUNTS.CASH : ACCOUNTS.BANK, paidAmt), cr(ACCOUNTS.RECEIVABLES, paidAmt)],
+            });
         }
     }
 

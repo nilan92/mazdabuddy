@@ -69,10 +69,13 @@ export function invoiceMessage(opts: {
     total: number;
     subtotal?: number;
     discount?: number;
+    paidAmount?: number;
+    balanceDue?: number;
+    status?: string;
     shopName?: string | null;
     paymentLink?: string | null;
 }): string {
-    const { invoiceNumber, vehicle, total, subtotal, discount, shopName, paymentLink } = opts;
+    const { invoiceNumber, vehicle, total, subtotal, discount, paidAmount, balanceDue, status, shopName, paymentLink } = opts;
     const lines = [
         `Invoice ${invoiceNumber}`,
         vehicle,
@@ -81,8 +84,18 @@ export function invoiceMessage(opts: {
         lines.push(`Subtotal: LKR ${subtotal.toLocaleString()}`);
         lines.push(`Discount: -LKR ${discount.toLocaleString()} (You save!)`);
     }
-    lines.push(`Total Due: LKR ${total.toLocaleString()}`);
-    if (paymentLink) lines.push('', `Pay here: ${paymentLink}`);
+    lines.push(`Total: LKR ${total.toLocaleString()}`);
+    if (paidAmount && paidAmount > 0) {
+        lines.push(`Amount Received: LKR ${paidAmount.toLocaleString()}`);
+        if (balanceDue !== undefined && balanceDue > 0) {
+            lines.push(`*Balance Due: LKR ${balanceDue.toLocaleString()}*`);
+        } else if (status === 'Paid' || balanceDue === 0) {
+            lines.push(`*Status: Paid in Full (LKR 0 Balance)*`);
+        }
+    } else {
+        lines.push(`*Balance Due: LKR ${total.toLocaleString()}*`);
+    }
+    if (paymentLink && (balanceDue === undefined || balanceDue > 0)) lines.push('', `Pay here: ${paymentLink}`);
     if (shopName) lines.push('', `— ${shopName}`);
     return lines.join('\n');
 }

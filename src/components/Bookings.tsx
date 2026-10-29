@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
     Calendar as CalendarIcon, 
@@ -11,7 +11,10 @@ import {
     Check, 
     ChevronRight,
     MessageSquare,
-    Eye
+    Eye,
+    Plus,
+    Car,
+    UserCheck
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +40,7 @@ export const Bookings: React.FC = () => {
 
     // Bookings Data State
     const [bookings, setBookings] = useState<Booking[]>([]);
+    const [existingCustomers, setExistingCustomers] = useState<any[]>([]);
     const [loading, setLoading] = useState<boolean>(true);
 
     // Filters State
@@ -64,6 +68,37 @@ export const Bookings: React.FC = () => {
     const [manualNotes, setManualNotes] = useState<string>('');
     const [manualSubmitting, setManualSubmitting] = useState<boolean>(false);
 
+    // Reset manual form to fresh state
+    const resetManualForm = () => {
+        setManualPlate('');
+        setManualMake('Mazda');
+        setManualModel('');
+        setManualYear('');
+        setManualMileage('');
+        setManualCustomerTitle('Mr.');
+        setManualCustomerName('');
+        setManualCustomerPhone('');
+        setManualServiceType('routine_service');
+        setManualDate(new Date().toISOString().split('T')[0]);
+        setManualTime('09:00 AM');
+        setManualNotes('');
+    };
+
+    // Quick-select an existing registered customer
+    const handleSelectExistingCustomer = (c: any, v?: any) => {
+        setManualCustomerTitle(c.title || 'Mr.');
+        setManualCustomerName(c.name || '');
+        setManualCustomerPhone(c.phone || '');
+        const veh = v || (c.vehicles && c.vehicles.length > 0 ? c.vehicles[0] : null);
+        if (veh) {
+            setManualPlate(veh.license_plate ? String(veh.license_plate).toUpperCase() : '');
+            setManualMake(veh.make || 'Mazda');
+            setManualModel(veh.model || '');
+            setManualYear(veh.year ? String(veh.year) : '');
+            setManualMileage(veh.mileage ? String(veh.mileage) : '');
+        }
+    };
+
     // Fetch Bookings
     const fetchBookings = async () => {
         if (!tenantId) return;
@@ -86,8 +121,32 @@ export const Bookings: React.FC = () => {
         }
     };
 
+    // Fetch Existing Customers with their vehicles
+    const fetchCustomers = async () => {
+        if (!tenantId) return;
+        try {
+            const { data, error } = await supabase
+                .from('customers')
+                .select(`
+                    id, title, name, phone, email,
+                    vehicles ( id, license_plate, make, model, year, mileage )
+                `)
+                .eq('tenant_id', tenantId)
+                .order('name');
+
+            if (error) {
+                console.warn('Customers fetch error:', error);
+            } else {
+                setExistingCustomers(data || []);
+            }
+        } catch (e) {
+            console.warn('Error fetching customers:', e);
+        }
+    };
+
     useEffect(() => {
         fetchBookings();
+        fetchCustomers();
     }, [tenantId]);
 
     // Filter Logic
@@ -96,26 +155,49 @@ export const Bookings: React.FC = () => {
     tomorrowObj.setDate(tomorrowObj.getDate() + 1);
     const tomorrowStr = tomorrowObj.toISOString().split('T')[0];
 
+    const hasSearch = searchQuery.trim().length > 0;
+    const cleanSearch = searchQuery.toLowerCase().trim();
+
+    // Filtered bookings: when searching, do not filter out past bookings!
     const filteredBookings = bookings.filter(b => {
-        // Date filter
-        if (dateFilter === 'today' && b.booking_date !== todayStr) return false;
-        if (dateFilter === 'tomorrow' && b.booking_date !== tomorrowStr) return false;
-        if (dateFilter === 'upcoming' && b.booking_date < todayStr) return false;
+        // Only apply date filter if NOT searching
+        if (!hasSearch) {
+            if (dateFilter === 'today' && b.booking_date !== todayStr) return false;
+            if (dateFilter === 'tomorrow' && b.booking_date !== tomorrowStr) return false;
+            if (dateFilter === 'upcoming' && b.booking_date < todayStr) return false;
+        }
 
         // Status filter
         if (statusFilter !== 'all' && b.status !== statusFilter) return false;
 
-        // Search Query
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase().trim();
-            const plateMatch = b.vehicle_plate.toLowerCase().includes(q);
-            const nameMatch = b.customer_name.toLowerCase().includes(q);
-            const phoneMatch = b.customer_phone.includes(q);
-            if (!plateMatch && !nameMatch && !phoneMatch) return false;
+        // Search Query across all fields
+        if (hasSearch) {
+            const plateMatch = (b.vehicle_plate || '').toLowerCase().includes(cleanSearch);
+            const nameMatch = (b.customer_name || '').toLowerCase().includes(cleanSearch);
+            const phoneMatch = (b.customer_phone || '').includes(cleanSearch);
+            const modelMatch = (b.vehicle_model || '').toLowerCase().includes(cleanSearch);
+            const makeMatch = (b.vehicle_make || '').toLowerCase().includes(cleanSearch);
+            const notesMatch = (b.notes || '').toLowerCase().includes(cleanSearch);
+            if (!plateMatch && !nameMatch && !phoneMatch && !modelMatch && !makeMatch && !notesMatch) return false;
         }
 
         return true;
     });
+
+    // Find registered workshop customers matching search
+    const matchingCustomers = useMemo(() => {
+        if (!hasSearch) return [];
+        return existingCustomers.filter(c => {
+            const nameMatch = (c.name || '').toLowerCase().includes(cleanSearch);
+            const phoneMatch = (c.phone || '').includes(cleanSearch);
+            const vehMatch = (c.vehicles || []).some((v: any) => 
+                (v.license_plate || '').toLowerCase().includes(cleanSearch) ||
+                (v.model || '').toLowerCase().includes(cleanSearch) ||
+                (v.make || '').toLowerCase().includes(cleanSearch)
+            );
+            return nameMatch || phoneMatch || vehMatch;
+        });
+    }, [existingCustomers, hasSearch, cleanSearch]);
 
     // Counts for stats
     const todayCount = bookings.filter(b => b.booking_date === todayStr && b.status !== 'cancelled').length;
@@ -384,6 +466,18 @@ export const Bookings: React.FC = () => {
                 <div className="flex items-center gap-2.5 flex-wrap">
                     <button
                         type="button"
+                        onClick={() => {
+                            resetManualForm();
+                            setIsCreateModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-lg shadow-cyan-600/25 border border-cyan-400 transition-all active:scale-95"
+                    >
+                        <Plus size={16} />
+                        <span>+ New Booking</span>
+                    </button>
+
+                    <button
+                        type="button"
                         onClick={() => setIsShareModalOpen(true)}
                         className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group"
                     >
@@ -471,6 +565,59 @@ export const Bookings: React.FC = () => {
                 </div>
             </div>
 
+            {/* Registered Workshop Customers Matching Search */}
+            {hasSearch && matchingCustomers.length > 0 && (
+                <div className="p-4 bg-slate-900/70 border border-cyan-500/30 rounded-2xl space-y-3 shadow-lg shadow-cyan-950/20">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <UserCheck size={15} />
+                            Registered Customers Matching "{searchQuery}" ({matchingCustomers.length})
+                        </h3>
+                        <span className="text-[11px] text-slate-400">Click Book to schedule appointment</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                        {matchingCustomers.map((c: any) => {
+                            const primaryVeh = c.vehicles && c.vehicles.length > 0 ? c.vehicles[0] : null;
+                            return (
+                                <div
+                                    key={c.id}
+                                    className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
+                                >
+                                    <div className="min-w-0">
+                                        <div className="text-sm font-bold text-white truncate">
+                                            {c.title ? `${c.title} ` : ''}{c.name}
+                                        </div>
+                                        <div className="text-xs text-cyan-400 font-mono mt-0.5">
+                                            {c.phone || 'No phone'}
+                                        </div>
+                                        {primaryVeh && (
+                                            <div className="text-[11px] text-slate-400 truncate mt-0.5 flex items-center gap-1">
+                                                <Car size={11} className="text-slate-500 shrink-0" />
+                                                <span className="font-mono text-slate-300 font-bold">{primaryVeh.license_plate}</span>
+                                                {primaryVeh.make || primaryVeh.model ? ` · ${primaryVeh.make} ${primaryVeh.model}` : ''}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            handleSelectExistingCustomer(c, primaryVeh);
+                                            setIsCreateModalOpen(true);
+                                        }}
+                                        className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm transition-all active:scale-95 shrink-0 flex items-center gap-1"
+                                    >
+                                        <Plus size={13} />
+                                        <span>Book</span>
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Bookings List */}
             {loading ? (
                 <div className="py-16 text-center text-xs text-slate-500 flex items-center justify-center gap-2">
@@ -480,10 +627,27 @@ export const Bookings: React.FC = () => {
             ) : filteredBookings.length === 0 ? (
                 <div className="p-12 text-center bg-slate-900/30 border border-slate-800 rounded-3xl space-y-3">
                     <CalendarIcon size={36} className="mx-auto text-slate-600" />
-                    <h3 className="text-base font-bold text-white">No Bookings Found</h3>
+                    <h3 className="text-base font-bold text-white">
+                        {hasSearch ? `No Bookings Matched "${searchQuery}"` : 'No Bookings Found'}
+                    </h3>
                     <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                        No appointments match your active filter criteria. Share your booking link or take a manual walk-in booking above.
+                        {hasSearch
+                            ? (matchingCustomers.length > 0 
+                                ? 'We found matching registered customers above. Click "Book" on any customer to schedule their appointment.' 
+                                : 'No bookings or registered customers matched your search query.')
+                            : 'No appointments match your active filter criteria. Share your booking link or record a new appointment above.'}
                     </p>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            resetManualForm();
+                            setIsCreateModalOpen(true);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 mx-auto"
+                    >
+                        <Plus size={14} />
+                        <span>+ New Booking</span>
+                    </button>
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
@@ -668,6 +832,38 @@ export const Bookings: React.FC = () => {
                         </div>
 
                         <form onSubmit={handleCreateManualBooking} className="space-y-4 text-xs">
+                            {/* Existing Customer Quick-Fill */}
+                            {existingCustomers.length > 0 && (
+                                <div className="p-3 bg-slate-950 border border-slate-800 rounded-2xl space-y-1.5">
+                                    <label className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                                        <UserCheck size={13} />
+                                        Existing Customer (Auto-fills vehicle &amp; contact)
+                                    </label>
+                                    <select
+                                        onChange={(e) => {
+                                            const custId = e.target.value;
+                                            if (!custId) return;
+                                            const cust = existingCustomers.find((c: any) => c.id === custId);
+                                            if (cust) handleSelectExistingCustomer(cust);
+                                        }}
+                                        defaultValue=""
+                                        className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl p-2.5 text-xs focus:border-cyan-500 outline-none"
+                                    >
+                                        <option value="">-- Choose registered customer or enter below --</option>
+                                        {existingCustomers.map((c: any) => {
+                                            const veh = c.vehicles?.[0];
+                                            const plateInfo = veh?.license_plate ? ` — ${veh.license_plate}` : '';
+                                            const carInfo = veh?.make || veh?.model ? ` (${[veh.make, veh.model].filter(Boolean).join(' ')})` : '';
+                                            return (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.title ? `${c.title} ` : ''}{c.name} {c.phone ? `· ${c.phone}` : ''}{plateInfo}{carInfo}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+                            )}
+
                             {/* Vehicle fields */}
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                                 <div className="sm:col-span-2">

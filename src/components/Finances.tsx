@@ -246,7 +246,7 @@ export const Finances = () => {
         setLoading(true);
         try {
             const [inv, lab, prt, man, ast, cat, pos, stk, ten, sup] = await Promise.all([
-                supabase.from('invoices').select('id, total_amount_lkr, discount_lkr, created_at, status, paid_on, payment_method, job_id, job_cards(vehicles(license_plate, customers(title, name, phone)))'),
+                supabase.from('invoices').select('id, total_amount_lkr, paid_amount_lkr, discount_lkr, created_at, status, paid_on, payment_method, job_id, job_cards(vehicles(license_plate, customers(title, name, phone)))'),
                 supabase.from('job_labor').select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, mechanic_name, job_id, discount_type, discount_value, job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
                 supabase.from('job_parts').select('id, created_at, quantity, price_at_time_lkr, cost_at_time_lkr, is_custom, custom_name, job_id, discount_type, discount_value, parts(name, cost_lkr), job_cards!inner(id, status)').eq('job_cards.status', 'completed'),
                 supabase.from('user_expenses').select('*, profiles!user_id(full_name)').order('date', { ascending: false }),
@@ -261,7 +261,10 @@ export const Finances = () => {
             const firstError = [inv, lab, prt, man, ast, cat, pos, stk].find(r => r.error)?.error;
             if (firstError) throw firstError;
 
-            const unpaid = (inv.data || []).filter((i: any) => i.status === 'Unpaid');
+            const unpaid = (inv.data || []).filter((i: any) => 
+                (i.status === 'Unpaid' || i.status === 'Partially Paid') &&
+                ((Number(i.total_amount_lkr) || 0) - (Number(i.paid_amount_lkr) || 0)) > 0
+            );
             const cancelledJobIds = new Set(
                 (inv.data || []).filter((i: any) => i.status === 'Cancelled').map((i: any) => i.job_id).filter(Boolean)
             );
@@ -322,21 +325,22 @@ export const Finances = () => {
         () => profitAndLoss(ledger, raw.invoices, period.start, period.end, depreciationForPeriod),
         [ledger, raw.invoices, period, depreciationForPeriod]);
 
-    /* Trade receivables come straight off the invoices — unpaid means owed.
+    /* Trade receivables come straight off the invoices — unpaid/partial means owed.
        Nothing to key in, and it cannot drift from what the Invoices tab shows. */
     const receivables = useMemo(() => ageItems(
         raw.debtors
-            // A zero-value unpaid invoice is not money owed; it would only pad
+            // A zero-value unpaid balance is not money owed; it would only pad
             // the chase list and the balance sheet with nothing.
-            .filter((d: any) => (Number(d.total_amount_lkr) || 0) > 0)
+            .filter((d: any) => ((Number(d.total_amount_lkr) || 0) - (Number(d.paid_amount_lkr) || 0)) > 0)
             .map((d: any) => {
             const c = d.job_cards?.vehicles?.customers;
+            const balanceOwed = Math.max(0, (Number(d.total_amount_lkr) || 0) - (Number(d.paid_amount_lkr) || 0));
             return {
                 id: d.id,
                 reference: `INV-${String(d.id).slice(0, 8).toUpperCase()}`,
                 counterparty: withTitle(c?.title, c?.name) || 'Unknown customer',
                 date: d.created_at,
-                amount: Number(d.total_amount_lkr) || 0,
+                amount: balanceOwed,
                 phone: c?.phone ?? null,
             };
         })), [raw.debtors]);
@@ -721,7 +725,7 @@ export const Finances = () => {
                     invoiceNumber: `INV-${String(d.id).slice(0, 8).toUpperCase()}`,
                     customer: '—',
                     date: d.created_at,
-                    amount: Number(d.total_amount_lkr) || 0,
+                    amount: Math.max(0, (Number(d.total_amount_lkr) || 0) - (Number(d.paid_amount_lkr) || 0)),
                     daysOld: Math.max(0, Math.round((Date.now() - new Date(d.created_at).getTime()) / 86400000)),
                 })),
                 ledger: inPeriod,

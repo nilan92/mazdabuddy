@@ -589,7 +589,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                 generalNotes: inspectionNotes,
             });
             doc.save(filename);
-            toast('Periodic Maintenance Check Sheet PDF downloaded.', 'success');
+            toast('Vehicle Health Report PDF downloaded.', 'success');
         } catch (err: any) {
             console.error('Error generating inspection PDF:', err);
             toast('Failed to generate PDF: ' + err.message, 'error');
@@ -686,7 +686,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 type="button"
                                 onClick={handleDownloadReport}
                                 disabled={generatingPdf}
-                                title="Download Check Sheet PDF"
+                                title="Download Vehicle Health Report PDF"
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white shadow-md shadow-rose-950/40 border border-rose-400/40 active:scale-95 transition-all"
                             >
                                 {generatingPdf ? (
@@ -694,7 +694,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 ) : (
                                     <Download size={13} className="text-white stroke-[2.5]" />
                                 )}
-                                <span className="hidden sm:inline">Check Sheet PDF</span>
+                                <span className="hidden sm:inline">Health Report PDF</span>
                                 <span className="sm:hidden">PDF</span>
                             </button>
 
@@ -756,14 +756,14 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                 onClick={handleDownloadReport}
                                 disabled={generatingPdf}
                                 className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-500 hover:to-rose-500 text-white shadow-lg shadow-rose-950/50 border border-rose-400/50 transition-all active:scale-95"
-                                title="Download Periodic Maintenance Check Sheet PDF"
+                                title="Download Vehicle Health Report PDF"
                             >
                                 {generatingPdf ? (
                                     <Clock size={14} className="animate-spin text-white shrink-0" />
                                 ) : (
                                     <Download size={14} className="text-white shrink-0 stroke-[2.5]" />
                                 )}
-                                <span>Download Check Sheet PDF</span>
+                                <span>Download Health Report PDF</span>
                             </button>
                         </div>
 
@@ -1141,7 +1141,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             ) : (
                                 <Download size={14} className="text-white stroke-[2.5]" />
                             )}
-                            <span>Download Check Sheet PDF</span>
+                            <span>Download Health Report PDF</span>
                         </button>
                     </div>
 
