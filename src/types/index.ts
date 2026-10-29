@@ -87,6 +87,8 @@ export interface JobCard {
   mileage?: number;
   assigned_technician_id?: string; // legacy, superseded by assigned_staff_id
   assigned_staff_id?: string;
+  is_outsourced?: boolean;
+  outsourced_to?: string;
   archived?: boolean;
   estimated_hours?: number;
   
@@ -126,6 +128,8 @@ export interface JobLabor {
     hours: number;
     description: string;
     hourly_rate_lkr: number;
+    is_outsourced?: boolean;
+    outsourced_to?: string;
 }
 
 export type InspectionStatus = 

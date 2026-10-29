@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil, Lock } from 'lucide-react';
+import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil, Lock, ExternalLink } from 'lucide-react';
 import { AutoSuggestInput, type SuggestionItem } from './AutoSuggestInput';
 import { 
     loadPartsMemory, 
@@ -75,6 +75,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const [techNotes, setTechNotes] = useState('');
     const [status, setStatus] = useState<string>('');
     const [assignedTech, setAssignedTech] = useState<string>('');
+    const [isOutsourced, setIsOutsourced] = useState<boolean>(false);
+    const [outsourcedTo, setOutsourcedTo] = useState<string>('');
     const [estimatedHours, setEstimatedHours] = useState<string>('');
     // Which line is having its discount edited, and the draft being typed.
     const [lineDiscount, setLineDiscount] = useState<
@@ -90,7 +92,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         custom_price_lkr: '',
         custom_cost_lkr: '' 
     });
-    const [laborForm, setLaborForm] = useState({ description: '', hours: '', hourly_rate_lkr: '5000', fixedAmount: '' });
+    const [laborForm, setLaborForm] = useState({ 
+        description: '', 
+        hours: '', 
+        hourly_rate_lkr: '5000', 
+        fixedAmount: '',
+        is_outsourced: false,
+        outsourced_to: ''
+    });
     // Some work is priced flat (a service is 6,500 regardless of the clock).
     const [laborMode, setLaborMode] = useState<'hourly' | 'fixed'>('hourly');
 
@@ -111,7 +120,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         hours: string;
         hourly_rate_lkr: string;
         fixedAmount: string;
-    }>({ description: '', is_fixed: false, hours: '', hourly_rate_lkr: '', fixedAmount: '' });
+        is_outsourced: boolean;
+        outsourced_to: string;
+    }>({ description: '', is_fixed: false, hours: '', hourly_rate_lkr: '', fixedAmount: '', is_outsourced: false, outsourced_to: '' });
 
     // Memory state for auto-suggestions
     const [partsMemory, setPartsMemory] = useState<PartMemoryItem[]>(() => loadPartsMemory(profile?.tenant_id));
@@ -224,12 +235,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     // Dirty state tracking
-    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
+    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', isOutsourced: false, outsourcedTo: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
     const isDirty = (
         mileage !== initialState.current.mileage ||
         techNotes !== initialState.current.techNotes ||
         status !== initialState.current.status ||
         assignedTech !== initialState.current.assignedTech ||
+        isOutsourced !== initialState.current.isOutsourced ||
+        outsourcedTo !== initialState.current.outsourcedTo ||
         estimatedHours !== initialState.current.estimatedHours ||
         discountType !== initialState.current.discountType ||
         discountValue !== initialState.current.discountValue
@@ -263,6 +276,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                     const n = jobData.technician_notes || '';
                     const s = jobData.status;
                     const a = jobData.assigned_staff_id || '';
+                    const iso = !!jobData.is_outsourced;
+                    const ost = jobData.outsourced_to || '';
                     const e = jobData.estimated_hours?.toString() || '';
                     const dt: DiscountType = jobData.discount_type === 'percent' ? 'percent' : 'amount';
                     const dv = Number(jobData.discount_value) ? String(jobData.discount_value) : '';
@@ -270,10 +285,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                     setTechNotes(n);
                     setStatus(s);
                     setAssignedTech(a);
+                    setIsOutsourced(iso);
+                    setOutsourcedTo(ost);
                     setEstimatedHours(e);
                     setDiscountType(dt);
                     setDiscountValue(dv);
-                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e, discountType: dt, discountValue: dv };
+                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, isOutsourced: iso, outsourcedTo: ost, estimatedHours: e, discountType: dt, discountValue: dv };
                     setSavedSuccessfully(false);
                     isInitialLoad.current = false;
                 }
@@ -727,7 +744,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             mileage: mileage ? parseInt(mileage) : null,
             technician_notes: techNotes,
             status,
-            assigned_staff_id: assignedTech || null,
+            assigned_staff_id: isOutsourced ? null : (assignedTech || null),
+            is_outsourced: isOutsourced,
+            outsourced_to: isOutsourced ? (outsourcedTo.trim() || null) : null,
             estimated_hours: finalEstHours,
             discount_type: discountType,
             discount_value: parseFloat(discountValue) || 0
@@ -839,7 +858,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                 toast("Job updated successfully.", 'success');
             }
             // Reset dirty tracking after successful save
-            initialState.current = { mileage, techNotes, status, assignedTech, estimatedHours, discountType, discountValue };
+            initialState.current = { mileage, techNotes, status, assignedTech, isOutsourced, outsourcedTo, estimatedHours, discountType, discountValue };
             setSavedSuccessfully(true);
             // The job_cards discount trigger rewrites the invoice total.
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -932,6 +951,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                 hours: laborHours,
                 hourly_rate_lkr: laborRate,
                 is_fixed: isFixed,
+                is_outsourced: laborForm.is_outsourced,
+                outsourced_to: laborForm.is_outsourced ? (laborForm.outsourced_to?.trim() || null) : null
             });
             
             if(!error) {
@@ -1121,6 +1142,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             hours: isFixed ? '' : String(labor.hours ?? ''),
             hourly_rate_lkr: isFixed ? '' : String(labor.hourly_rate_lkr ?? ''),
             fixedAmount: isFixed ? String(labor.hourly_rate_lkr ?? '') : '',
+            is_outsourced: !!labor.is_outsourced,
+            outsourced_to: labor.outsourced_to || '',
         });
     };
 
@@ -1152,6 +1175,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             is_fixed: isFixed,
             hours,
             hourly_rate_lkr: rate,
+            is_outsourced: editingLaborForm.is_outsourced,
+            outsourced_to: editingLaborForm.is_outsourced ? (editingLaborForm.outsourced_to?.trim() || null) : null,
         }).eq('id', laborId);
 
         if (error) {
@@ -1416,14 +1441,54 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Technician</label>
-                                            <div className="relative">
-                                                <select value={assignedTech} disabled={readOnly} onChange={e => setAssignedTech(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60">
-                                                    <option value="">Unassigned</option>
-                                                    {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                                </select>
-                                                <User size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                                            <div className="flex items-center justify-between mb-1">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Technician</label>
+                                                {/* Outsourced checkbox button */}
+                                                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                                                    <input
+                                                        type="checkbox"
+                                                        disabled={readOnly}
+                                                        checked={isOutsourced}
+                                                        onChange={(e) => {
+                                                            const checked = e.target.checked;
+                                                            setIsOutsourced(checked);
+                                                            if (checked) setAssignedTech('');
+                                                        }}
+                                                        className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                                                    />
+                                                    <span className={`text-[10px] font-bold uppercase transition-colors ${
+                                                        isOutsourced ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-300'
+                                                    }`}>
+                                                        ⚡ Outsourced
+                                                    </span>
+                                                </label>
                                             </div>
+                                            {!isOutsourced ? (
+                                                <div className="relative">
+                                                    <select value={assignedTech} disabled={readOnly} onChange={e => setAssignedTech(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60">
+                                                        <option value="">Unassigned</option>
+                                                        {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                                    </select>
+                                                    <User size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-1">
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            disabled={readOnly}
+                                                            value={outsourcedTo}
+                                                            onChange={e => setOutsourcedTo(e.target.value)}
+                                                            placeholder="Contractor / Freelancer name (optional)"
+                                                            className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 p-2 pl-8 text-sm rounded outline-none focus:border-amber-400 font-medium"
+                                                        />
+                                                        <ExternalLink size={14} className="absolute left-2.5 top-2.5 text-amber-400" />
+                                                    </div>
+                                                    <span className="text-[10px] text-amber-400/80 block italic">
+                                                        Outsourced to contractor · Exempt from staff hours
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1737,19 +1802,48 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     <div className="px-4 pb-3">
                                         <form onSubmit={handleAddLabor} className="space-y-2">
                                             {!isTechnician && (
-                                                <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
-                                                    {(['hourly', 'fixed'] as const).map(mode => (
-                                                        <button
-                                                            key={mode}
-                                                            type="button"
-                                                            onClick={() => setLaborMode(mode)}
-                                                            className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
-                                                                laborMode === mode ? 'bg-brand text-slate-950' : 'text-slate-400 hover:text-white'
-                                                            }`}
-                                                        >
-                                                            {mode === 'hourly' ? 'By hour' : 'Fixed price'}
-                                                        </button>
-                                                    ))}
+                                                <div className="flex items-center justify-between gap-2 flex-wrap">
+                                                    <div className="flex gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 w-fit">
+                                                        {(['hourly', 'fixed'] as const).map(mode => (
+                                                            <button
+                                                                key={mode}
+                                                                type="button"
+                                                                onClick={() => setLaborMode(mode)}
+                                                                className={`px-3 py-1 rounded-md text-[11px] font-bold uppercase tracking-wide transition-colors ${
+                                                                    laborMode === mode ? 'bg-brand text-slate-950' : 'text-slate-400 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                {mode === 'hourly' ? 'By hour' : 'Fixed price'}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={laborForm.is_outsourced}
+                                                            onChange={e => setLaborForm(prev => ({ ...prev, is_outsourced: e.target.checked }))}
+                                                            className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
+                                                        />
+                                                        <span className={`text-[10px] font-bold uppercase transition-colors ${
+                                                            laborForm.is_outsourced ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-300'
+                                                        }`}>
+                                                            ⚡ Outsourced Task
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            )}
+
+                                            {laborForm.is_outsourced && (
+                                                <div className="relative animate-fade-in">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Sublet contractor / Freelancer name (optional, e.g. City Lathe)"
+                                                        value={laborForm.outsourced_to}
+                                                        onChange={e => setLaborForm(prev => ({ ...prev, outsourced_to: e.target.value }))}
+                                                        className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 rounded-lg p-2 pl-8 text-xs font-medium outline-none focus:border-amber-400"
+                                                    />
+                                                    <ExternalLink size={12} className="absolute left-2.5 top-2.5 text-amber-400" />
                                                 </div>
                                             )}
 
@@ -1803,28 +1897,54 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                 <Pencil size={11} /> Editing Labor
                                                             </span>
                                                             {!isTechnician && (
-                                                                <div className="flex gap-1 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: false })}
-                                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                                                                            !editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
-                                                                        }`}
-                                                                    >
-                                                                        Hourly
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: true })}
-                                                                        className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
-                                                                            editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
-                                                                        }`}
-                                                                    >
-                                                                        Fixed
-                                                                    </button>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="flex gap-1 p-0.5 bg-slate-900 rounded-lg border border-slate-800">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: false })}
+                                                                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                                                                !editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
+                                                                            }`}
+                                                                        >
+                                                                            Hourly
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setEditingLaborForm({ ...editingLaborForm, is_fixed: true })}
+                                                                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase transition-colors ${
+                                                                                editingLaborForm.is_fixed ? 'bg-brand text-slate-950' : 'text-slate-400'
+                                                                            }`}
+                                                                        >
+                                                                            Fixed
+                                                                        </button>
+                                                                    </div>
+
+                                                                    <label className="inline-flex items-center gap-1 cursor-pointer select-none">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={editingLaborForm.is_outsourced}
+                                                                            onChange={e => setEditingLaborForm(prev => ({ ...prev, is_outsourced: e.target.checked }))}
+                                                                            className="rounded border-slate-700 bg-slate-800 text-amber-500 w-3 h-3"
+                                                                        />
+                                                                        <span className={`text-[9px] font-bold uppercase ${editingLaborForm.is_outsourced ? 'text-amber-400 font-bold' : 'text-slate-400'}`}>
+                                                                            Outsourced
+                                                                        </span>
+                                                                    </label>
                                                                 </div>
                                                             )}
                                                         </div>
+                                                        {editingLaborForm.is_outsourced && (
+                                                            <div className="relative animate-fade-in">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Sublet contractor / Freelancer name (optional)"
+                                                                    value={editingLaborForm.outsourced_to}
+                                                                    onChange={e => setEditingLaborForm(prev => ({ ...prev, outsourced_to: e.target.value }))}
+                                                                    className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 rounded-lg p-1.5 pl-7 text-xs font-medium outline-none focus:border-amber-400"
+                                                                />
+                                                                <ExternalLink size={12} className="absolute left-2 top-2 text-amber-400" />
+                                                            </div>
+                                                        )}
                                                         <AutoSuggestInput
                                                             required
                                                             placeholder="Labor description"
@@ -1916,7 +2036,15 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                 ) : (
                                                     <div className="flex justify-between items-center gap-2">
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="font-medium text-white text-sm truncate">{labor.description}</div>
+                                                            <div className="font-medium text-white text-sm truncate flex items-center gap-1.5 flex-wrap">
+                                                                <span>{labor.description}</span>
+                                                                {labor.is_outsourced && (
+                                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0 flex items-center gap-1">
+                                                                        <ExternalLink size={10} />
+                                                                        <span>Outsourced{labor.outsourced_to ? `: ${labor.outsourced_to}` : ''}</span>
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="text-xs text-slate-500">
                                                                 {isTechnician
                                                                     ? `${labor.hours} hrs`

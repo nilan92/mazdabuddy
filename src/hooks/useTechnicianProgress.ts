@@ -331,6 +331,8 @@ export const useTechnicianProgress = (overrideMonthDate?: Date) => {
           description,
           assigned_staff_id,
           assigned_technician_id,
+          is_outsourced,
+          outsourced_to,
           vehicles (
             license_plate,
             make,
@@ -450,6 +452,7 @@ export const useTechnicianProgress = (overrideMonthDate?: Date) => {
 
         const techSummaries: AdminTechnicianSummary[] = technicians.map(tech => {
           const techJobsCompleted = (jobs || []).filter(j => {
+            if (j.is_outsourced) return false;
             const isAssigned = j.assigned_staff_id === tech.id || (tech.profile_id && j.assigned_technician_id === tech.profile_id);
             if (!isAssigned || j.status !== 'completed' || !j.completed_at) return false;
             const d = new Date(j.completed_at);
@@ -458,6 +461,7 @@ export const useTechnicianProgress = (overrideMonthDate?: Date) => {
             .sort((a: any, b: any) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime());
 
           const techActiveJobs = (jobs || []).filter(j => {
+            if (j.is_outsourced) return false;
             const isAssigned = j.assigned_staff_id === tech.id || (tech.profile_id && j.assigned_technician_id === tech.profile_id);
             return isAssigned && j.status !== 'completed' && j.status !== 'cancelled';
           }).map(j => ({ ...j, creditedHours: getCreditedHours(j) }));

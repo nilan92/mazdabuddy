@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, RefreshCcw, Archive, UserCheck, Download, Clock, Trophy } from 'lucide-react';
+import { Plus, Search, RefreshCcw, Archive, UserCheck, Download, Clock, Trophy, ExternalLink } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { ensureInvoiceForJob } from '../lib/invoices';
@@ -42,7 +42,9 @@ export const Jobs = () => {
         customerPhone: '',
         vehicleMake: '',
         vehicleModel: '',
-        licensePlate: ''
+        licensePlate: '',
+        is_outsourced: false,
+        outsourced_to: ''
     });
     const [vehicleSearchTerm, setVehicleSearchTerm] = useState('');
     const [showVehicleResults, setShowVehicleResults] = useState(false);
@@ -232,7 +234,9 @@ export const Jobs = () => {
                 vehicle_id: finalVehicleId,
                 description: newJobForm.description,
                 status: 'pending',
-                assigned_staff_id: myStaffId,
+                assigned_staff_id: newJobForm.is_outsourced ? null : myStaffId,
+                is_outsourced: newJobForm.is_outsourced,
+                outsourced_to: newJobForm.is_outsourced ? (newJobForm.outsourced_to?.trim() || null) : null,
                 tenant_id: profile?.tenant_id
             }]);
 
@@ -247,7 +251,9 @@ export const Jobs = () => {
                 customerPhone: '',
                 vehicleMake: '',
                 vehicleModel: '',
-                licensePlate: ''
+                licensePlate: '',
+                is_outsourced: false,
+                outsourced_to: ''
             });
             setVehicleSearchTerm('');
             fetchJobs();
@@ -456,14 +462,21 @@ export const Jobs = () => {
                                             <span className="text-xs font-mono text-brand bg-brand-soft px-1.5 py-0.5 rounded border border-brand/20">
                                                 {job.vehicles?.license_plate}
                                             </span>
-                                            {job.assigned_staff_id && (
+                                            {job.is_outsourced ? (
+                                                <div className="text-[10px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[120px] truncate font-bold">
+                                                    <ExternalLink size={10} className="flex-shrink-0" />
+                                                    <span className="truncate">
+                                                        {job.outsourced_to || 'Outsourced'}
+                                                    </span>
+                                                </div>
+                                            ) : job.assigned_staff_id ? (
                                                 <div className="text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded flex items-center gap-1 max-w-[90px] truncate">
                                                     <UserCheck size={10} className="flex-shrink-0" />
                                                     <span className="truncate">
                                                         {(job as any).staff?.name?.split(' ')[0] || 'Assigned'}
                                                     </span>
                                                 </div>
-                                            )}
+                                            ) : null}
                                         </div>
                                         <h3 className="font-bold text-white mb-1">{job.vehicles?.make} {job.vehicles?.model}</h3>
                                         <p className="text-sm text-slate-400 line-clamp-2">{job.description}</p>
@@ -635,6 +648,32 @@ export const Jobs = () => {
                             value={newJobForm.description}
                             onChange={(e) => setNewJobForm({...newJobForm, description: e.target.value})}
                         />
+                    </div>
+
+                    <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-300 flex items-center gap-1.5 cursor-pointer select-none">
+                                <span>⚡ Outsourced / Freelancer Job</span>
+                            </label>
+                            <input
+                                type="checkbox"
+                                checked={newJobForm.is_outsourced}
+                                onChange={(e) => setNewJobForm({ ...newJobForm, is_outsourced: e.target.checked })}
+                                className="rounded border-slate-700 bg-slate-800 text-amber-500 w-4 h-4 cursor-pointer"
+                            />
+                        </div>
+                        {newJobForm.is_outsourced && (
+                            <div className="relative animate-fade-in pt-1">
+                                <input
+                                    type="text"
+                                    placeholder="Contractor / Freelancer name (optional, e.g. City Lathe)"
+                                    className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 rounded-lg p-2 pl-8 text-xs font-medium outline-none focus:border-amber-400"
+                                    value={newJobForm.outsourced_to}
+                                    onChange={(e) => setNewJobForm({ ...newJobForm, outsourced_to: e.target.value })}
+                                />
+                                <ExternalLink size={13} className="absolute left-2.5 top-3.5 text-amber-400" />
+                            </div>
+                        )}
                     </div>
                     
                     <button type="submit" className="w-full btn-brand py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all">

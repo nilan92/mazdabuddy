@@ -58,11 +58,13 @@ export const Invoices = () => {
                     job_cards!inner (
                         description,
                         mileage,
+                        is_outsourced,
+                        outsourced_to,
                         discount_type,
                         discount_value,
                         vehicles!inner (license_plate, make, model, year, vin, color, customers!inner(title, name, address, phone, email)),
                         job_parts ( quantity, price_at_time_lkr, custom_name, discount_type, discount_value, parts(name) ),
-                        job_labor ( description, hours, hourly_rate_lkr, is_fixed, discount_type, discount_value )
+                        job_labor ( description, hours, hourly_rate_lkr, is_fixed, is_outsourced, outsourced_to, discount_type, discount_value )
                     )
                 `)
                 .order('created_at', { ascending: false })
@@ -501,8 +503,11 @@ export const Invoices = () => {
             inv.labor.forEach((l: any) => {
                 const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
                 const off = calcDiscount(gross, l.discount_type, l.discount_value);
+                const desc = l.is_outsourced && l.outsourced_to 
+                    ? `${l.description || 'Service'} (Outsourced: ${l.outsourced_to})`
+                    : (l.is_outsourced ? `${l.description || 'Service'} (Outsourced)` : (l.description || 'Service'));
                 row(
-                    l.description || 'Service',
+                    desc,
                     Math.max(0, gross - off),
                     anyHourly && !l.is_fixed ? Number(l.hourly_rate_lkr) || 0 : undefined,
                     anyHourly && !l.is_fixed ? l.hours : undefined,
@@ -1110,7 +1115,14 @@ export const Invoices = () => {
                                             return (
                                                 <tr key={`l-${i}`} className="hover:bg-slate-900/50">
                                                     <td className="px-3 py-3 md:px-6 md:py-4">
-                                                        <div className="font-medium text-white text-sm">{l.description}</div>
+                                                        <div className="font-medium text-white text-sm flex items-center gap-1.5 flex-wrap">
+                                                            <span>{l.description}</span>
+                                                            {l.is_outsourced && (
+                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                                                    Outsourced{l.outsourced_to ? `: ${l.outsourced_to}` : ''}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <div className="flex flex-wrap items-center gap-2 text-[10px] md:text-xs text-slate-400 mt-0.5">
                                                             {!l.is_fixed && (
                                                                 <span>{l.hours} hrs &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}</span>
