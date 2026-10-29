@@ -134,16 +134,8 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         job?.inspection_notes || ''
     );
 
-    // Accordion state for categories (7 official sections)
-    const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
-        '1. [Engine On]': true,
-        '2. [Engine Off]': true,
-        '3. Wheel / Suspension': false,
-        '4. Underbody / Chassis': false,
-        '5. Final Checks (Engine On)': false,
-        '6. Fluid Leakage': false,
-        '7. Final Operations': false,
-    });
+    // Accordion state for categories — defaults to all open so technicians see the full list immediately
+    const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({});
 
     // Custom item input
     const [customItemCategory, setCustomItemCategory] = useState<string>('1. [Engine On]');
@@ -169,6 +161,23 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         return defaultList;
     };
 
+    // Active categories list (standard 7 plus any custom categories)
+    const activeCategories = React.useMemo(() => {
+        const list: string[] = [];
+        INSPECTION_CATEGORIES.forEach(c => {
+            if (!list.includes(c.name)) list.push(c.name);
+        });
+        items.forEach(i => {
+            if (i.category && !list.includes(i.category)) {
+                list.push(i.category);
+            }
+        });
+        return list;
+    }, [items]);
+
+    // Check if all active categories are currently open (default is true)
+    const areAllCategoriesOpen = activeCategories.length > 0 && activeCategories.every(cat => openCategories[cat] !== false);
+
     // Cleanup debounced timer on unmount
     useEffect(() => {
         return () => {
@@ -178,7 +187,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         };
     }, []);
 
-    // Fetch existing inspection items
+    // Fetch existing inspection items & auto-upgrade legacy categories if needed
     useEffect(() => {
         let isMounted = true;
         const fetchInspections = async () => {
@@ -193,7 +202,18 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                 if (error) throw error;
 
                 if (isMounted) {
-                    if (data && data.length > 0) {
+                    const standardCatNames = INSPECTION_CATEGORIES.map(c => c.name);
+                    const hasStandardItems = data && data.length > 0 && data.some(i => standardCatNames.includes(i.category));
+                    const isLegacyTemplate = data && data.length > 0 && !hasStandardItems;
+
+                    if (isLegacyTemplate) {
+                        // Job was previously saved with legacy 23-item template (Fluids & Filters, etc.)
+                        // Automatically upgrade to official 47-item Periodic Maintenance Check Sheet
+                        const standardList = createStandardItemsList();
+                        setItems(standardList);
+                        await supabase.from('job_inspections').delete().eq('job_id', jobId);
+                        await handleSaveAllItemsBatch(standardList);
+                    } else if (data && data.length > 0) {
                         setItems(data);
                     } else {
                         // Prepare official 47-item template
@@ -476,14 +496,14 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
         }
     };
 
-    // Toggle expand/collapse all categories
+    // Toggle expand/collapse all categories cleanly
     const handleToggleAllCategories = () => {
-        const allOpen = Object.values(openCategories).every(Boolean);
-        const newState: Record<string, boolean> = {};
-        INSPECTION_CATEGORIES.forEach(c => {
-            newState[c.name] = !allOpen;
+        const nextState = !areAllCategoriesOpen;
+        const nextMap: Record<string, boolean> = {};
+        activeCategories.forEach(cat => {
+            nextMap[cat] = nextState;
         });
-        setOpenCategories(newState);
+        setOpenCategories(nextMap);
     };
 
     // Add a custom inspection item (auto-saves immediately)
@@ -761,9 +781,11 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             <button
                                 type="button"
                                 onClick={handleToggleAllCategories}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700/80 whitespace-nowrap transition-colors shrink-0"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 whitespace-nowrap transition-all active:scale-95 shrink-0"
+                                title={areAllCategoriesOpen ? "Collapse all categories" : "Expand all categories to edit"}
                             >
-                                {Object.values(openCategories).every(Boolean) ? 'Collapse All' : 'Expand All'}
+                                {areAllCategoriesOpen ? <ChevronUp size={12} className="text-cyan-400" /> : <ChevronDown size={12} className="text-cyan-400" />}
+                                <span>{areAllCategoriesOpen ? 'Collapse All' : 'Expand All'}</span>
                             </button>
                             <button
                                 type="button"
@@ -933,25 +955,25 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {INSPECTION_CATEGORIES.map((category, catIndex) => {
-                                const catItems = items.filter(i => i.category === category.name);
+                            {activeCategories.map((catName, catIndex) => {
+                                const catItems = items.filter(i => i.category === catName);
                                 if (catItems.length === 0) return null;
 
                                 const catCounts = getInspectionCounts(catItems);
-                                const isOpen = openCategories[category.name] ?? false;
+                                const isOpen = openCategories[catName] !== false;
 
                                 return (
-                                    <div key={category.name} className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden">
+                                    <div key={catName} className="bg-slate-950/70 border border-slate-800 rounded-2xl overflow-hidden transition-all">
                                         {/* Category Accordion Header */}
                                         <button
                                             type="button"
-                                            onClick={() => setOpenCategories({ ...openCategories, [category.name]: !isOpen })}
+                                            onClick={() => setOpenCategories(prev => ({ ...prev, [catName]: !isOpen }))}
                                             className="w-full p-3 sm:p-3.5 flex items-center justify-between bg-slate-900/60 hover:bg-slate-800/50 transition-colors text-left"
                                         >
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <Wrench size={14} className="text-cyan-400 shrink-0" />
                                                 <span className="text-xs font-bold text-white uppercase tracking-wider truncate">
-                                                    {category.name}
+                                                    {catName}
                                                 </span>
                                                 <span className="text-[10px] text-slate-500 font-mono shrink-0">
                                                     ({catItems.length})
