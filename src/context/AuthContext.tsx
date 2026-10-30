@@ -70,7 +70,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const profileIdRef = useRef<string | null>(null);
 
     const isSuperAdmin = Boolean(profile?.is_super_admin || profile?.role === 'super_admin');
-    const isImpersonating = Boolean(isSuperAdmin && originalTenantId && profile?.tenant_id && originalTenantId !== profile.tenant_id);
+    const isImpersonating = Boolean(
+        isSuperAdmin &&
+        Boolean(originalTenantId || localStorage.getItem(ORIGINAL_TENANT_KEY)) &&
+        profile?.tenant_id &&
+        profile.tenant_id !== originalTenantId
+    );
 
     // ⚡️ SPEED HACK 1 REMOVED: No more relying on localStorage for initial loading state.
     // We trust Supabase's async check completely to avoid "flash of unauthenticated content".
@@ -391,8 +396,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (!user || !isSuperAdmin) return false;
         try {
             setLoading(true);
-            const orig = originalTenantId || profile?.tenant_id || null;
-            if (orig && !localStorage.getItem(ORIGINAL_TENANT_KEY)) {
+            const orig = originalTenantId || profile?.tenant_id || 'super_admin_root';
+            if (!localStorage.getItem(ORIGINAL_TENANT_KEY)) {
                 localStorage.setItem(ORIGINAL_TENANT_KEY, orig);
                 setOriginalTenantId(orig);
             }
@@ -401,7 +406,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             });
             if (rpcErr) {
                 console.error('[Auth] Switch Tenant Error:', rpcErr);
-                setError(rpcErr.message);
                 return false;
             }
             profileIdRef.current = null;
@@ -409,7 +413,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return true;
         } catch (err: any) {
             console.error('[Auth] Switch Tenant Exception:', err);
-            setError(err.message);
             return false;
         } finally {
             setLoading(false);
@@ -422,12 +425,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             const orig = originalTenantId || localStorage.getItem(ORIGINAL_TENANT_KEY);
             if (!orig) return false;
             setLoading(true);
+            const targetTenantId = orig === 'super_admin_root' ? null : orig;
             const { error: rpcErr } = await supabase.rpc('super_admin_switch_tenant', {
-                target_tenant_id: orig,
+                target_tenant_id: targetTenantId,
             });
             if (rpcErr) {
                 console.error('[Auth] Reset Tenant Error:', rpcErr);
-                setError(rpcErr.message);
                 return false;
             }
             localStorage.removeItem(ORIGINAL_TENANT_KEY);
@@ -437,7 +440,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             return true;
         } catch (err: any) {
             console.error('[Auth] Reset Tenant Exception:', err);
-            setError(err.message);
             return false;
         } finally {
             setLoading(false);
