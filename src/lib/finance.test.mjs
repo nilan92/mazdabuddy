@@ -64,6 +64,60 @@ const plDep = profitAndLoss(ledger, sources.invoices, FY_START, FY_END, 45000);
 assert.equal(plDep.grossProfit, pl.grossProfit);
 assert.equal(plDep.netProfit, pl.netProfit - 45000);
 
+// ---- outsourced labour as cost ---------------------------------------------
+const sourcesWithOutsourced = {
+  ...sources,
+  jobLabour: [
+    ...sources.jobLabour,
+    { id: 'l-out', created_at: '2026-08-01T00:00:00Z', description: 'Lathe machining', hours: 1, hourly_rate_lkr: 5000, is_outsourced: true, outsourced_to: 'City Lathe' }
+  ],
+  invoices: [
+    ...sources.invoices,
+    { total_amount_lkr: 5000, discount_lkr: 0, created_at: '2026-08-01T00:00:00Z' }
+  ]
+};
+const ledgerOut = buildLedger(sourcesWithOutsourced);
+const plOut = profitAndLoss(ledgerOut, sourcesWithOutsourced.invoices, FY_START, FY_END);
+assert.equal(plOut.costOfOutsourcedLabor, 5000, 'outsourced labour line counts as cost (fallback when no cost price)');
+assert.equal(plOut.costOfSales, pl.costOfParts + 5000, 'cost of sales includes outsourced labour');
+// Revenue increased by 5000 and cost increased by 5000, so grossProfit should be unchanged:
+assert.equal(plOut.grossProfit, pl.grossProfit, '0 margin on outsourced labour sublet without separate cost');
+
+// ---- outsourced labour with two prices (Cost Price vs Customer Price) & quantity ----
+const sourcesWithOutsourcedMargin = {
+  ...sources,
+  jobLabour: [
+    ...sources.jobLabour,
+    // Customer charged 8,000, workshop pays contractor 5,000 -> 3,000 profit
+    { id: 'l-out-margin', created_at: '2026-08-01T00:00:00Z', description: 'AC Repair sublet', hours: 1, hourly_rate_lkr: 8000, cost_at_time_lkr: 5000, is_outsourced: true, outsourced_to: 'Cool Auto' }
+  ],
+  invoices: [
+    ...sources.invoices,
+    { total_amount_lkr: 8000, discount_lkr: 0, created_at: '2026-08-01T00:00:00Z' }
+  ]
+};
+const ledgerOutMargin = buildLedger(sourcesWithOutsourcedMargin);
+const plOutMargin = profitAndLoss(ledgerOutMargin, sourcesWithOutsourcedMargin.invoices, FY_START, FY_END);
+assert.equal(plOutMargin.costOfOutsourcedLabor, 5000, 'only cost_at_time_lkr counts as cost');
+assert.equal(plOutMargin.grossProfit, pl.grossProfit + 3000, 'workshop margin of 3,000 shows as profit');
+
+// Quantity test: 2 x wheel alignment at 4,000 customer price, 2,500 cost price
+const sourcesWithQty = {
+  ...sources,
+  jobLabour: [
+    ...sources.jobLabour,
+    { id: 'l-out-qty', created_at: '2026-08-01T00:00:00Z', description: 'Wheel alignment', quantity: 2, hours: 1, hourly_rate_lkr: 4000, cost_at_time_lkr: 2500, is_outsourced: true, outsourced_to: 'Tire Hub' }
+  ],
+  invoices: [
+    ...sources.invoices,
+    { total_amount_lkr: 8000, discount_lkr: 0, created_at: '2026-08-01T00:00:00Z' }
+  ]
+};
+const ledgerOutQty = buildLedger(sourcesWithQty);
+const plOutQty = profitAndLoss(ledgerOutQty, sourcesWithQty.invoices, FY_START, FY_END);
+assert.equal(plOutQty.costOfOutsourcedLabor, 5000, 'cost is qty * cost_at_time_lkr (2 * 2500 = 5000)');
+assert.equal(plOutQty.grossProfit, pl.grossProfit + 3000, 'profit is qty * (customer - cost) = 2 * (4000 - 2500) = 3000');
+
 // ---- depreciation ----------------------------------------------------------
 const hoist = { id: 'a1', name: 'Hoist', category: 'equipment',
   purchase_date: '2025-04-01', cost_lkr: 450000, useful_life_years: 10, residual_lkr: 0 };

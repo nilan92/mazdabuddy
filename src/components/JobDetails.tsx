@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil, Lock, ExternalLink } from 'lucide-react';
+import { X, Save, Trash2, Clock, CheckCircle, Package, User, Hash, Archive, AlertCircle, Smartphone, Download, Camera, Link as LinkIcon, Percent, Pencil, Lock, Building2 } from 'lucide-react';
 import { AutoSuggestInput, type SuggestionItem } from './AutoSuggestInput';
 import { 
     loadPartsMemory, 
@@ -25,7 +25,7 @@ import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
 import { ensureInvoiceForJob } from '../lib/invoices';
-import { calcDiscount, calcInvoiceSummary, type DiscountType } from '../lib/totals';
+import { calcDiscount, calcInvoiceSummary, DEFAULT_LABOR_RATE_LKR, type DiscountType } from '../lib/totals';
 import { uploadJobPhoto, deleteJobPhotoObject } from '../lib/photos';
 import { withTitle } from '../lib/textCase';
 import { waMeUrl } from '../lib/whatsapp';
@@ -75,8 +75,6 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const [techNotes, setTechNotes] = useState('');
     const [status, setStatus] = useState<string>('');
     const [assignedTech, setAssignedTech] = useState<string>('');
-    const [isOutsourced, setIsOutsourced] = useState<boolean>(false);
-    const [outsourcedTo, setOutsourcedTo] = useState<string>('');
     const [estimatedHours, setEstimatedHours] = useState<string>('');
     // Which line is having its discount edited, and the draft being typed.
     const [lineDiscount, setLineDiscount] = useState<
@@ -94,9 +92,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     });
     const [laborForm, setLaborForm] = useState({ 
         description: '', 
+        quantity: 1,
         hours: '', 
         hourly_rate_lkr: '5000', 
         fixedAmount: '',
+        cost_at_time_lkr: '',
         is_outsourced: false,
         outsourced_to: ''
     });
@@ -117,12 +117,14 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const [editingLaborForm, setEditingLaborForm] = useState<{
         description: string;
         is_fixed: boolean;
+        quantity: number;
         hours: string;
         hourly_rate_lkr: string;
         fixedAmount: string;
+        cost_at_time_lkr: string;
         is_outsourced: boolean;
         outsourced_to: string;
-    }>({ description: '', is_fixed: false, hours: '', hourly_rate_lkr: '', fixedAmount: '', is_outsourced: false, outsourced_to: '' });
+    }>({ description: '', is_fixed: false, quantity: 1, hours: '', hourly_rate_lkr: '', fixedAmount: '', cost_at_time_lkr: '', is_outsourced: false, outsourced_to: '' });
 
     // Memory state for auto-suggestions
     const [partsMemory, setPartsMemory] = useState<PartMemoryItem[]>(() => loadPartsMemory(profile?.tenant_id));
@@ -235,14 +237,12 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     };
 
     // Dirty state tracking
-    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', isOutsourced: false, outsourcedTo: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
+    const initialState = useRef({ mileage: '', techNotes: '', status: '', assignedTech: '', estimatedHours: '', discountType: 'amount', discountValue: '' });
     const isDirty = (
         mileage !== initialState.current.mileage ||
         techNotes !== initialState.current.techNotes ||
         status !== initialState.current.status ||
         assignedTech !== initialState.current.assignedTech ||
-        isOutsourced !== initialState.current.isOutsourced ||
-        outsourcedTo !== initialState.current.outsourcedTo ||
         estimatedHours !== initialState.current.estimatedHours ||
         discountType !== initialState.current.discountType ||
         discountValue !== initialState.current.discountValue
@@ -276,8 +276,6 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                     const n = jobData.technician_notes || '';
                     const s = jobData.status;
                     const a = jobData.assigned_staff_id || '';
-                    const iso = !!jobData.is_outsourced;
-                    const ost = jobData.outsourced_to || '';
                     const e = jobData.estimated_hours?.toString() || '';
                     const dt: DiscountType = jobData.discount_type === 'percent' ? 'percent' : 'amount';
                     const dv = Number(jobData.discount_value) ? String(jobData.discount_value) : '';
@@ -285,12 +283,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                     setTechNotes(n);
                     setStatus(s);
                     setAssignedTech(a);
-                    setIsOutsourced(iso);
-                    setOutsourcedTo(ost);
                     setEstimatedHours(e);
                     setDiscountType(dt);
                     setDiscountValue(dv);
-                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, isOutsourced: iso, outsourcedTo: ost, estimatedHours: e, discountType: dt, discountValue: dv };
+                    initialState.current = { mileage: m, techNotes: n, status: s, assignedTech: a, estimatedHours: e, discountType: dt, discountValue: dv };
                     setSavedSuccessfully(false);
                     isInitialLoad.current = false;
                 }
@@ -566,8 +562,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                 jobLabor.forEach(l => {
                     ensureSpace(5);
                     doc.setFont('helvetica', 'normal');
+                    const qty = Math.max(1, Number(l.quantity) || 1);
+                    const qtyPrefix = qty > 1 ? `${qty}x ` : '';
                     const basis = (l as unknown as { is_fixed?: boolean }).is_fixed ? 'fixed price' : `${l.hours} hrs`;
-                    doc.text(`- ${l.description} (${basis})`, 20, yPos);
+                    doc.text(`- ${qtyPrefix}${l.description} (${basis})`, 20, yPos);
                     yPos += 5;
                 });
                 yPos += 10;
@@ -744,9 +742,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             mileage: mileage ? parseInt(mileage) : null,
             technician_notes: techNotes,
             status,
-            assigned_staff_id: isOutsourced ? null : (assignedTech || null),
-            is_outsourced: isOutsourced,
-            outsourced_to: isOutsourced ? (outsourcedTo.trim() || null) : null,
+            assigned_staff_id: assignedTech || null,
             estimated_hours: finalEstHours,
             discount_type: discountType,
             discount_value: parseFloat(discountValue) || 0
@@ -858,7 +854,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                 toast("Job updated successfully.", 'success');
             }
             // Reset dirty tracking after successful save
-            initialState.current = { mileage, techNotes, status, assignedTech, isOutsourced, outsourcedTo, estimatedHours, discountType, discountValue };
+            initialState.current = { mileage, techNotes, status, assignedTech, estimatedHours, discountType, discountValue };
             setSavedSuccessfully(true);
             // The job_cards discount trigger rewrites the invoice total.
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -938,22 +934,40 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         try {
             const isFixed = laborMode === 'fixed';
             const amount = parseFloat(laborForm.fixedAmount);
-            if (isFixed && !(amount > 0)) { toast("Enter a fixed amount.", 'warning'); return; }
+            if (isFixed && !(amount > 0)) { toast("Enter a valid fixed amount.", 'warning'); return; }
 
             const laborHours = isFixed ? 1 : parseFloat(laborForm.hours);
             const laborRate = isFixed ? amount : parseFloat(laborForm.hourly_rate_lkr);
+            if (!isFixed && (!(laborHours > 0) || !(laborRate >= 0))) {
+                toast("Enter valid hours and rate.", 'warning');
+                return;
+            }
 
-            // A fixed charge is stored as 1 x amount, so every total that already
-            // multiplies hours by rate keeps working untouched.
-            const { error } = await supabase.from('job_labor').insert({
+            const qty = Math.max(1, parseInt(String(laborForm.quantity), 10) || 1);
+            const costPrice = laborForm.is_outsourced && laborForm.cost_at_time_lkr !== ''
+                ? Math.max(0, parseFloat(laborForm.cost_at_time_lkr) || 0)
+                : null;
+
+            // A fixed charge is stored as 1 x amount, with quantity multiplied
+            const payload: any = {
                 job_id: jobId,
                 description: laborForm.description,
+                quantity: qty,
                 hours: laborHours,
                 hourly_rate_lkr: laborRate,
                 is_fixed: isFixed,
+                cost_at_time_lkr: costPrice,
                 is_outsourced: laborForm.is_outsourced,
                 outsourced_to: laborForm.is_outsourced ? (laborForm.outsourced_to?.trim() || null) : null
-            });
+            };
+
+            let { error } = await supabase.from('job_labor').insert(payload);
+            if (error && (error.code === 'PGRST204' || error.message?.includes('quantity') || error.message?.includes('cost_at_time_lkr'))) {
+                delete payload.quantity;
+                delete payload.cost_at_time_lkr;
+                const retry = await supabase.from('job_labor').insert(payload);
+                error = retry.error;
+            }
             
             if(!error) {
                 saveLaborToMemory({
@@ -966,7 +980,16 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                 setLaborMemory(loadLaborMemory(profile?.tenant_id));
 
                 fetchJobDetails();
-                setLaborForm(prev => ({...prev, description: '', hours: '', fixedAmount: ''}));
+                setLaborForm(prev => ({
+                    ...prev,
+                    description: '',
+                    quantity: 1,
+                    hours: '',
+                    fixedAmount: '',
+                    cost_at_time_lkr: '',
+                    is_outsourced: false,
+                    outsourced_to: ''
+                }));
                 toast("Labor entry added.", 'success');
             } else {
                 toast(error.message, 'error');
@@ -1139,9 +1162,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         setEditingLaborForm({
             description: labor.description || '',
             is_fixed: isFixed,
+            quantity: Math.max(1, Number(labor.quantity) || 1),
             hours: isFixed ? '' : String(labor.hours ?? ''),
             hourly_rate_lkr: isFixed ? '' : String(labor.hourly_rate_lkr ?? ''),
             fixedAmount: isFixed ? String(labor.hourly_rate_lkr ?? '') : '',
+            cost_at_time_lkr: labor.cost_at_time_lkr !== null && labor.cost_at_time_lkr !== undefined ? String(labor.cost_at_time_lkr) : '',
             is_outsourced: !!labor.is_outsourced,
             outsourced_to: labor.outsourced_to || '',
         });
@@ -1170,14 +1195,29 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             rate = r;
         }
 
-        const { error } = await supabase.from('job_labor').update({
+        const qty = Math.max(1, parseInt(String(editingLaborForm.quantity), 10) || 1);
+        const costPrice = editingLaborForm.is_outsourced && editingLaborForm.cost_at_time_lkr !== ''
+            ? Math.max(0, parseFloat(editingLaborForm.cost_at_time_lkr) || 0)
+            : null;
+
+        const updatePayload: any = {
             description: desc,
             is_fixed: isFixed,
+            quantity: qty,
             hours,
             hourly_rate_lkr: rate,
+            cost_at_time_lkr: costPrice,
             is_outsourced: editingLaborForm.is_outsourced,
             outsourced_to: editingLaborForm.is_outsourced ? (editingLaborForm.outsourced_to?.trim() || null) : null,
-        }).eq('id', laborId);
+        };
+
+        let { error } = await supabase.from('job_labor').update(updatePayload).eq('id', laborId);
+        if (error && (error.code === 'PGRST204' || error.message?.includes('quantity') || error.message?.includes('cost_at_time_lkr'))) {
+            delete updatePayload.quantity;
+            delete updatePayload.cost_at_time_lkr;
+            const retry = await supabase.from('job_labor').update(updatePayload).eq('id', laborId);
+            error = retry.error;
+        }
 
         if (error) {
             toast(error.message, 'error');
@@ -1227,11 +1267,26 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     const subtotal = invoiceSummary.grossSubtotal;
     const totalDiscountAmount = invoiceSummary.totalDiscount;
     const jobTotalAmount = invoiceSummary.totalAmount;
-    // const totalHours = jobLabor.reduce((sum, l) => sum + l.hours, 0); // Removed unused
-    // const estHours = parseFloat(estimatedHours) || 0; // Removed unused
-    
-    // Efficiency
-    // Efficiency - Logic moved to inline render
+
+    // Internal direct costs & profitability for workshop management
+    // In-house labor is internal workshop profit.
+    // Outsourced labor:
+    // When cost_at_time_lkr is provided: cost is qty * cost_at_time_lkr,
+    // and workshop margin (customer - cost) contributes to profit.
+    // When cost_at_time_lkr is missing/null (legacy rows): fallback to customer netAmt (0 margin).
+    const partsCost = jobParts.reduce((sum, p) => sum + (Number(p.quantity) || 0) * (Number(p.cost_at_time_lkr) || 0), 0);
+    const outsourcedLaborCost = jobLabor.reduce((sum, l) => {
+        if (!l.is_outsourced) return sum;
+        const qty = Math.max(1, Number(l.quantity) || 1);
+        const gross = qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || DEFAULT_LABOR_RATE_LKR);
+        const off = calcDiscount(gross, l.discount_type, l.discount_value);
+        const netAmt = Math.max(0, gross - off);
+        const hasCost = l.cost_at_time_lkr !== null && l.cost_at_time_lkr !== undefined && (l.cost_at_time_lkr as any) !== '';
+        return sum + (hasCost ? qty * Math.max(0, Number(l.cost_at_time_lkr)) : netAmt);
+    }, 0);
+    const totalDirectCost = partsCost + outsourcedLaborCost;
+    const estimatedGrossProfit = Math.max(0, jobTotalAmount - totalDirectCost);
+    const estimatedGrossMarginPct = jobTotalAmount > 0 ? (estimatedGrossProfit / jobTotalAmount) * 100 : 0;
 
 
 
@@ -1434,10 +1489,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
                                 {/* ── JOB DETAILS ───────────────────────── */}
                                 <div className="p-4 space-y-4">
+                                    {/* Status & Mileage Grid */}
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Status</label>
-                                            <select value={status} disabled={readOnly} onChange={e => setStatus(e.target.value)} className="w-full bg-slate-800 text-white p-2 text-sm rounded border border-slate-700 disabled:opacity-60">
+                                            <select value={status} disabled={readOnly} onChange={e => setStatus(e.target.value)} className="w-full bg-slate-800 text-white p-2 text-sm rounded-lg border border-slate-700 disabled:opacity-60 focus:border-brand focus:outline-none">
                                                 <option value="pending">Pending</option>
                                                 <option value="in_progress">In Progress</option>
                                                 <option value="waiting_parts">Waiting for Parts</option>
@@ -1446,90 +1502,58 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                             </select>
                                         </div>
                                         <div>
-                                            <div className="flex items-center justify-between mb-1">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Technician</label>
-                                                {/* Outsourced checkbox button */}
-                                                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                                                    <input
-                                                        type="checkbox"
-                                                        disabled={readOnly}
-                                                        checked={isOutsourced}
-                                                        onChange={(e) => {
-                                                            const checked = e.target.checked;
-                                                            setIsOutsourced(checked);
-                                                            if (checked) setAssignedTech('');
-                                                        }}
-                                                        className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
-                                                    />
-                                                    <span className={`text-[10px] font-bold uppercase transition-colors ${
-                                                        isOutsourced ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-300'
-                                                    }`}>
-                                                        ⚡ Outsourced
-                                                    </span>
-                                                </label>
-                                            </div>
-                                            {!isOutsourced ? (
-                                                <div className="relative">
-                                                    <select value={assignedTech} disabled={readOnly} onChange={e => setAssignedTech(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60">
-                                                        <option value="">Unassigned</option>
-                                                        {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                                                    </select>
-                                                    <User size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-1">
-                                                    <div className="relative">
-                                                        <input
-                                                            type="text"
-                                                            disabled={readOnly}
-                                                            value={outsourcedTo}
-                                                            onChange={e => setOutsourcedTo(e.target.value)}
-                                                            placeholder="Contractor / Freelancer name (optional)"
-                                                            className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 p-2 pl-8 text-sm rounded outline-none focus:border-amber-400 font-medium"
-                                                        />
-                                                        <ExternalLink size={14} className="absolute left-2.5 top-2.5 text-amber-400" />
-                                                    </div>
-                                                    <span className="text-[10px] text-amber-400/80 block italic">
-                                                        Outsourced to contractor · Exempt from staff hours
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
                                             <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Mileage</label>
                                             <div className="relative">
-                                                <input type="number" disabled={readOnly} onFocus={(e) => e.target.select()} value={mileage} onChange={e => setMileage(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60" placeholder="0" />
+                                                <input type="number" disabled={readOnly} onFocus={(e) => e.target.select()} value={mileage} onChange={e => setMileage(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded-lg border border-slate-700 disabled:opacity-60 focus:border-brand focus:outline-none" placeholder="0" />
                                                 <Hash size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                             </div>
                                         </div>
-                                        <div>
-                                            <div className="flex justify-between items-center mb-1">
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase block">Est. Hours</label>
-                                                {(!estimatedHours || parseFloat(estimatedHours) === 0) && !readOnly && (
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => setEstimatedHours(getInferredHours().toString())}
-                                                        className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-0.5 transition-colors"
-                                                        title="Auto-estimate based on labor tasks and similar jobs"
-                                                    >
-                                                        ✨ Suggest ({getInferredHours()}h)
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <div className="relative">
-                                                <input type="number" step="0.1" disabled={readOnly} onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded border border-slate-700 disabled:opacity-60" placeholder={getInferredHours() ? `${getInferredHours()}` : "0"} />
-                                                <Clock size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-                                            </div>
+                                    </div>
+
+                                    {/* Assigned Technician */}
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Assigned Technician</label>
+                                        <div className="relative">
+                                            <select
+                                                value={assignedTech}
+                                                disabled={readOnly}
+                                                onChange={e => setAssignedTech(e.target.value)}
+                                                className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded-lg border border-slate-700 disabled:opacity-60 focus:border-brand focus:outline-none"
+                                            >
+                                                <option value="">Unassigned (Any floor technician)</option>
+                                                {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                            <User size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                                        </div>
+                                    </div>
+
+                                    {/* Estimated Hours */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase block">Est. Hours</label>
+                                            {(!estimatedHours || parseFloat(estimatedHours) === 0) && !readOnly && (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setEstimatedHours(getInferredHours().toString())}
+                                                    className="text-[10px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-0.5 transition-colors"
+                                                    title="Auto-estimate based on labor tasks and similar jobs"
+                                                >
+                                                    ✨ Suggest ({getInferredHours()}h)
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="relative">
+                                            <input type="number" step="0.1" disabled={readOnly} onFocus={(e) => e.target.select()} value={estimatedHours} onChange={e => setEstimatedHours(e.target.value)} className="w-full bg-slate-800 text-white p-2 pl-8 text-sm rounded-lg border border-slate-700 disabled:opacity-60 focus:border-brand focus:outline-none" placeholder={getInferredHours() ? `${getInferredHours()}` : "0"} />
+                                            <Clock size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
                                         </div>
                                     </div>
 
                                     {(estimatedHours || job.total_labor_time) && (
-                                        <div className="bg-slate-800/50 p-3 rounded-lg border border-slate-800">
+                                        <div className="p-3 bg-slate-800/50 rounded-lg border border-slate-800">
                                             <div className="flex justify-between items-center mb-1.5">
-                                                <h4 className="text-[10px] font-bold text-slate-500 uppercase">Efficiency</h4>
+                                                <h4 className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
+                                                    <span>Efficiency</span>
+                                                </h4>
                                                 {job.status === 'in_progress' && (
                                                     <span className="text-[10px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded animate-pulse font-bold flex items-center gap-1">
                                                         <Clock size={10} /> REC
@@ -1547,8 +1571,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                         <span className="text-emerald-400 text-[10px] flex items-center gap-1"><CheckCircle size={10}/> On track</span>
                                                 ) : null}
                                             </div>
-                                            <div className="w-full bg-slate-700 h-1.5 mt-2 rounded-full overflow-hidden">
-                                                <div className={`h-full rounded-full ${(job.total_labor_time && estimatedHours && (job.total_labor_time / 60) > parseFloat(estimatedHours)) ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                            <div className="w-full bg-slate-800 h-1.5 mt-2 rounded-full overflow-hidden">
+                                                <div className={`h-full rounded-full transition-all ${
+                                                    ((job.total_labor_time && estimatedHours && (job.total_labor_time / 60) > parseFloat(estimatedHours)) ? 'bg-red-500' : 'bg-emerald-500')
+                                                }`}
                                                     style={{width: `${Math.min(100, (((job.total_labor_time || 0) / 60) / (parseFloat(estimatedHours || '1'))) * 100)}%`}} />
                                             </div>
                                         </div>
@@ -1823,32 +1849,105 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                         ))}
                                                     </div>
 
-                                                    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={laborForm.is_outsourced}
-                                                            onChange={e => setLaborForm(prev => ({ ...prev, is_outsourced: e.target.checked }))}
-                                                            className="rounded border-slate-700 bg-slate-800 text-amber-500 focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5"
-                                                        />
-                                                        <span className={`text-[10px] font-bold uppercase transition-colors ${
-                                                            laborForm.is_outsourced ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-300'
-                                                        }`}>
-                                                            ⚡ Outsourced Task
-                                                        </span>
-                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const next = !laborForm.is_outsourced;
+                                                            setLaborForm(prev => ({
+                                                                ...prev,
+                                                                is_outsourced: next,
+                                                                outsourced_to: next ? prev.outsourced_to : ''
+                                                            }));
+                                                        }}
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border touch-manipulation min-h-[36px] ${
+                                                            laborForm.is_outsourced
+                                                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10'
+                                                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300 hover:border-slate-700'
+                                                        }`}
+                                                    >
+                                                        <Building2 size={13} className={laborForm.is_outsourced ? 'text-amber-400' : 'text-slate-500'} />
+                                                        <span>{laborForm.is_outsourced ? 'Outsourced Sublet' : 'Outsource Task'}</span>
+                                                    </button>
                                                 </div>
                                             )}
 
                                             {laborForm.is_outsourced && (
-                                                <div className="relative animate-fade-in">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Sublet contractor / Freelancer name (optional, e.g. City Lathe)"
-                                                        value={laborForm.outsourced_to}
-                                                        onChange={e => setLaborForm(prev => ({ ...prev, outsourced_to: e.target.value }))}
-                                                        className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 rounded-lg p-2 pl-8 text-xs font-medium outline-none focus:border-amber-400"
-                                                    />
-                                                    <ExternalLink size={12} className="absolute left-2.5 top-2.5 text-amber-400" />
+                                                <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-2 animate-fade-in">
+                                                    <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                                                        <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                                                            <Building2 size={13} className="text-amber-400 shrink-0" />
+                                                            <span>Outsourced Sublet (Cost vs Customer Price)</span>
+                                                        </span>
+                                                        <span className="text-[11px] text-amber-400/90 font-medium">Workshop profit = Margin</span>
+                                                    </div>
+                                                    <div className="relative">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Contractor or specialist name (e.g. City Lathe, Master AC)"
+                                                            value={laborForm.outsourced_to}
+                                                            onChange={e => setLaborForm(prev => ({ ...prev, outsourced_to: e.target.value }))}
+                                                            className="w-full bg-slate-900 border border-amber-500/40 text-amber-100 placeholder-amber-400/40 rounded-lg p-2.5 pl-8 text-xs font-medium outline-none focus:border-amber-400 transition-colors"
+                                                        />
+                                                        <Building2 size={14} className="absolute left-2.5 top-3 text-amber-400/70" />
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                                        <div className="relative">
+                                                            <span className="absolute left-2.5 top-1.5 text-[10px] text-amber-400 font-bold uppercase">Cost Price (We Pay)</span>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                placeholder="0"
+                                                                onFocus={(e) => e.target.select()}
+                                                                value={laborForm.cost_at_time_lkr}
+                                                                onChange={e => setLaborForm({ ...laborForm, cost_at_time_lkr: e.target.value })}
+                                                                className="w-full bg-slate-900 border border-amber-500/40 text-amber-200 placeholder-amber-400/30 rounded-lg p-2 pt-5 pl-2.5 text-sm font-mono outline-none focus:border-amber-400"
+                                                            />
+                                                        </div>
+                                                        <div className="relative">
+                                                            <span className="absolute left-2.5 top-1.5 text-[10px] text-emerald-400 font-bold uppercase">Customer Price (Charge)</span>
+                                                            <input
+                                                                required
+                                                                type="number"
+                                                                min="0"
+                                                                placeholder="0"
+                                                                onFocus={(e) => e.target.select()}
+                                                                value={laborMode === 'fixed' ? laborForm.fixedAmount : laborForm.hourly_rate_lkr}
+                                                                onChange={e => {
+                                                                    const val = e.target.value;
+                                                                    if (laborMode === 'fixed') {
+                                                                        setLaborForm({ ...laborForm, fixedAmount: val });
+                                                                    } else {
+                                                                        setLaborForm({ ...laborForm, hourly_rate_lkr: val });
+                                                                    }
+                                                                }}
+                                                                className="w-full bg-slate-900 border border-emerald-500/40 text-white placeholder-slate-500 rounded-lg p-2 pt-5 pl-2.5 text-sm font-mono outline-none focus:border-emerald-400"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {(() => {
+                                                        const customerUnit = parseFloat(laborMode === 'fixed' ? laborForm.fixedAmount : (laborMode === 'hourly' && laborForm.hours ? String((parseFloat(laborForm.hours) || 1) * (parseFloat(laborForm.hourly_rate_lkr) || 0)) : laborForm.hourly_rate_lkr)) || 0;
+                                                        const costUnit = parseFloat(laborForm.cost_at_time_lkr) || 0;
+                                                        const qty = Math.max(1, parseInt(String(laborForm.quantity), 10) || 1);
+                                                        const chargeTotal = customerUnit * qty;
+                                                        const costTotal = costUnit * qty;
+                                                        const profitTotal = chargeTotal - costTotal;
+                                                        const marginPct = chargeTotal > 0 ? (profitTotal / chargeTotal) * 100 : 0;
+                                                        if (customerUnit > 0 || costUnit > 0) {
+                                                            return (
+                                                                <div className="flex items-center justify-between text-xs px-1 pt-1 flex-wrap gap-1 font-mono">
+                                                                    <span className="text-slate-400 text-[11px]">
+                                                                        {qty > 1 ? `${qty}x units · ` : ''}Workshop Profit:
+                                                                    </span>
+                                                                    <span className={`font-bold ${profitTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                        {profitTotal >= 0 ? '+' : ''}LKR {profitTotal.toLocaleString()} ({marginPct.toFixed(0)}% margin)
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })()}
                                                 </div>
                                             )}
 
@@ -1865,28 +1964,59 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
 
                                             {isTechnician ? (
                                                 <div className="flex gap-2 items-center">
-                                                    <div className="relative w-28">
+                                                    <div className="relative w-20 shrink-0">
+                                                        <span className="absolute left-1.5 top-2 text-[10px] text-slate-400">Qty</span>
+                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={laborForm.quantity} onChange={e => setLaborForm({...laborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1)})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center" />
+                                                    </div>
+                                                    <div className="relative flex-1">
                                                         <span className="absolute left-2.5 top-2 text-[10px] text-slate-400">Hours</span>
                                                         <input required type="number" step="0.5" min="0.1" onFocus={(e) => e.target.select()} placeholder="1.0" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-14 text-white text-sm font-mono text-center" />
                                                     </div>
                                                     <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add Labor</button>
                                                 </div>
+                                            ) : laborForm.is_outsourced ? (
+                                                <div className="flex gap-2 items-center">
+                                                    <div className="relative w-20 shrink-0">
+                                                        <span className="absolute left-1.5 top-2 text-[10px] text-slate-400">Qty</span>
+                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={laborForm.quantity} onChange={e => setLaborForm({...laborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1)})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center" />
+                                                    </div>
+                                                    {laborMode === 'hourly' && (
+                                                        <div className="relative w-24 shrink-0">
+                                                            <span className="absolute left-1.5 top-2 text-[10px] text-slate-400">Hrs</span>
+                                                            <input required type="number" step="0.5" min="0.1" onFocus={(e) => e.target.select()} placeholder="1.0" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-8 text-white text-sm font-mono text-center" />
+                                                        </div>
+                                                    )}
+                                                    <button type="submit" className="btn-brand flex-1 px-4 py-2 rounded-lg font-bold text-sm min-h-[38px]">
+                                                        Add Outsourced Labor
+                                                    </button>
+                                                </div>
                                             ) : laborMode === 'hourly' ? (
                                                 <div className="flex gap-2 items-center">
-                                                    <input required type="number" step="0.5" onFocus={(e) => e.target.select()} placeholder="Hrs" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-16 bg-slate-800 border border-slate-700 rounded-lg p-2 text-white text-sm text-center" />
-                                                    <div className="flex-1 relative">
+                                                    <div className="relative w-16 shrink-0">
+                                                        <span className="absolute left-1.5 top-2 text-[10px] text-slate-400">Qty</span>
+                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={laborForm.quantity} onChange={e => setLaborForm({...laborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1)})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center" />
+                                                    </div>
+                                                    <div className="relative w-20 shrink-0">
+                                                        <span className="absolute left-1.5 top-2 text-[10px] text-slate-400">Hrs</span>
+                                                        <input required type="number" step="0.5" placeholder="1.0" value={laborForm.hours} onChange={e => setLaborForm({...laborForm, hours: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-[100px] relative">
                                                         <span className="absolute left-2 top-2 text-[10px] text-slate-400">LKR/hr</span>
                                                         <input required type="number" onFocus={(e) => e.target.select()} value={laborForm.hourly_rate_lkr} onChange={e => setLaborForm({...laborForm, hourly_rate_lkr: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-12 text-white text-sm font-mono" />
                                                     </div>
-                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
+                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm shrink-0 min-h-[38px]">Add</button>
                                                 </div>
                                             ) : (
                                                 <div className="flex gap-2 items-center">
-                                                    <div className="flex-1 relative">
+                                                    <div className="relative w-16 shrink-0">
+                                                        <span className="absolute left-1.5 top-2 text-[10px] text-slate-400">Qty</span>
+                                                        <input type="number" min="1" onFocus={(e) => e.target.select()} value={laborForm.quantity} onChange={e => setLaborForm({...laborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1)})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-[120px] relative">
                                                         <span className="absolute left-2 top-2 text-[10px] text-slate-400">LKR</span>
                                                         <input required type="number" onFocus={(e) => e.target.select()} placeholder="6500" value={laborForm.fixedAmount} onChange={e => setLaborForm({...laborForm, fixedAmount: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 pl-10 text-white text-sm font-mono" />
                                                     </div>
-                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm">Add</button>
+                                                    <button type="submit" className="btn-brand px-4 py-2 rounded-lg font-bold text-sm shrink-0 min-h-[38px]">Add</button>
                                                 </div>
                                             )}
                                         </form>
@@ -1924,30 +2054,105 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                         </button>
                                                                     </div>
 
-                                                                    <label className="inline-flex items-center gap-1 cursor-pointer select-none">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={editingLaborForm.is_outsourced}
-                                                                            onChange={e => setEditingLaborForm(prev => ({ ...prev, is_outsourced: e.target.checked }))}
-                                                                            className="rounded border-slate-700 bg-slate-800 text-amber-500 w-3 h-3"
-                                                                        />
-                                                                        <span className={`text-[9px] font-bold uppercase ${editingLaborForm.is_outsourced ? 'text-amber-400 font-bold' : 'text-slate-400'}`}>
-                                                                            Outsourced
-                                                                        </span>
-                                                                    </label>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            const next = !editingLaborForm.is_outsourced;
+                                                                            setEditingLaborForm(prev => ({
+                                                                                ...prev,
+                                                                                is_outsourced: next,
+                                                                                outsourced_to: next ? prev.outsourced_to : ''
+                                                                            }));
+                                                                        }}
+                                                                        className={`px-2.5 py-1 rounded-md text-[11px] font-bold uppercase transition-all flex items-center gap-1 border touch-manipulation min-h-[32px] ${
+                                                                            editingLaborForm.is_outsourced
+                                                                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm shadow-amber-500/10'
+                                                                                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-300'
+                                                                        }`}
+                                                                    >
+                                                                        <Building2 size={11} className={editingLaborForm.is_outsourced ? 'text-amber-400' : 'text-slate-500'} />
+                                                                        <span>Outsourced</span>
+                                                                    </button>
                                                                 </div>
                                                             )}
                                                         </div>
                                                         {editingLaborForm.is_outsourced && (
-                                                            <div className="relative animate-fade-in">
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Sublet contractor / Freelancer name (optional)"
-                                                                    value={editingLaborForm.outsourced_to}
-                                                                    onChange={e => setEditingLaborForm(prev => ({ ...prev, outsourced_to: e.target.value }))}
-                                                                    className="w-full bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder-amber-400/40 rounded-lg p-1.5 pl-7 text-xs font-medium outline-none focus:border-amber-400"
-                                                                />
-                                                                <ExternalLink size={12} className="absolute left-2 top-2 text-amber-400" />
+                                                            <div className="p-3 bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-2 animate-fade-in">
+                                                                <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                                                                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                                                                        <Building2 size={13} className="text-amber-400 shrink-0" />
+                                                                        <span>Outsourced Sublet (Cost vs Customer Price)</span>
+                                                                    </span>
+                                                                    <span className="text-[11px] text-amber-400/90 font-medium">Workshop profit = Margin</span>
+                                                                </div>
+                                                                <div className="relative">
+                                                                    <input
+                                                                        type="text"
+                                                                        placeholder="Sublet contractor / Workshop name"
+                                                                        value={editingLaborForm.outsourced_to}
+                                                                        onChange={e => setEditingLaborForm(prev => ({ ...prev, outsourced_to: e.target.value }))}
+                                                                        className="w-full bg-slate-900 border border-amber-500/40 text-amber-100 placeholder-amber-400/40 rounded-lg p-2 pl-8 text-xs font-medium outline-none focus:border-amber-400 transition-colors"
+                                                                    />
+                                                                    <Building2 size={13} className="absolute left-2.5 top-2.5 text-amber-400" />
+                                                                </div>
+
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2.5 top-1.5 text-[10px] text-amber-400 font-bold uppercase">Cost Price (We Pay)</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            placeholder="0"
+                                                                            onFocus={(e) => e.target.select()}
+                                                                            value={editingLaborForm.cost_at_time_lkr}
+                                                                            onChange={e => setEditingLaborForm({ ...editingLaborForm, cost_at_time_lkr: e.target.value })}
+                                                                            className="w-full bg-slate-900 border border-amber-500/40 text-amber-200 placeholder-amber-400/30 rounded-lg p-2 pt-5 pl-2.5 text-sm font-mono outline-none focus:border-amber-400"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="relative">
+                                                                        <span className="absolute left-2.5 top-1.5 text-[10px] text-emerald-400 font-bold uppercase">Customer Price (Charge)</span>
+                                                                        <input
+                                                                            required
+                                                                            type="number"
+                                                                            min="0"
+                                                                            placeholder="0"
+                                                                            onFocus={(e) => e.target.select()}
+                                                                            value={editingLaborForm.is_fixed ? editingLaborForm.fixedAmount : editingLaborForm.hourly_rate_lkr}
+                                                                            onChange={e => {
+                                                                                const val = e.target.value;
+                                                                                if (editingLaborForm.is_fixed) {
+                                                                                    setEditingLaborForm({ ...editingLaborForm, fixedAmount: val });
+                                                                                } else {
+                                                                                    setEditingLaborForm({ ...editingLaborForm, hourly_rate_lkr: val });
+                                                                                }
+                                                                            }}
+                                                                            className="w-full bg-slate-900 border border-emerald-500/40 text-white placeholder-slate-500 rounded-lg p-2 pt-5 pl-2.5 text-sm font-mono outline-none focus:border-emerald-400"
+                                                                        />
+                                                                    </div>
+                                                                </div>
+
+                                                                {(() => {
+                                                                    const customerUnit = parseFloat(editingLaborForm.is_fixed ? editingLaborForm.fixedAmount : (editingLaborForm.hours ? String((parseFloat(editingLaborForm.hours) || 1) * (parseFloat(editingLaborForm.hourly_rate_lkr) || 0)) : editingLaborForm.hourly_rate_lkr)) || 0;
+                                                                    const costUnit = parseFloat(editingLaborForm.cost_at_time_lkr) || 0;
+                                                                    const qty = Math.max(1, parseInt(String(editingLaborForm.quantity), 10) || 1);
+                                                                    const chargeTotal = customerUnit * qty;
+                                                                    const costTotal = costUnit * qty;
+                                                                    const profitTotal = chargeTotal - costTotal;
+                                                                    const marginPct = chargeTotal > 0 ? (profitTotal / chargeTotal) * 100 : 0;
+                                                                    if (customerUnit > 0 || costUnit > 0) {
+                                                                        return (
+                                                                            <div className="flex items-center justify-between text-xs px-1 pt-1 flex-wrap gap-1 font-mono">
+                                                                                <span className="text-slate-400 text-[11px]">
+                                                                                    {qty > 1 ? `${qty}x units · ` : ''}Workshop Profit:
+                                                                                </span>
+                                                                                <span className={`font-bold ${profitTotal >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                                                    {profitTotal >= 0 ? '+' : ''}LKR {profitTotal.toLocaleString()} ({marginPct.toFixed(0)}% margin)
+                                                                                </span>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })()}
                                                             </div>
                                                         )}
                                                         <AutoSuggestInput
@@ -1971,20 +2176,69 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             inputClassName="bg-slate-900 border-slate-700 focus:border-brand"
                                                         />
                                                         {isTechnician ? (
-                                                            <div className="relative">
-                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
-                                                                <input
-                                                                    required
-                                                                    type="number"
-                                                                    step="0.5"
-                                                                    min="0.1"
-                                                                    value={editingLaborForm.hours}
-                                                                    onChange={e => setEditingLaborForm({ ...editingLaborForm, hours: e.target.value })}
-                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-14 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
-                                                                />
+                                                            <div className="flex gap-2 items-center">
+                                                                <div className="relative w-20 shrink-0">
+                                                                    <span className="absolute left-1.5 top-2 text-[10px] text-slate-400 font-semibold">Qty</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={editingLaborForm.quantity}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                                <div className="relative flex-1">
+                                                                    <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
+                                                                    <input
+                                                                        required
+                                                                        type="number"
+                                                                        step="0.5"
+                                                                        min="0.1"
+                                                                        value={editingLaborForm.hours}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, hours: e.target.value })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-14 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ) : editingLaborForm.is_outsourced ? (
+                                                            <div className="flex gap-2 items-center">
+                                                                <div className="relative w-20 shrink-0">
+                                                                    <span className="absolute left-1.5 top-2 text-[10px] text-slate-400 font-semibold">Qty</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={editingLaborForm.quantity}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                                {!editingLaborForm.is_fixed && (
+                                                                    <div className="relative w-24 shrink-0">
+                                                                        <span className="absolute left-1.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
+                                                                        <input
+                                                                            required
+                                                                            type="number"
+                                                                            step="0.5"
+                                                                            min="0.1"
+                                                                            value={editingLaborForm.hours}
+                                                                            onChange={e => setEditingLaborForm({ ...editingLaborForm, hours: e.target.value })}
+                                                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-8 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                        />
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ) : !editingLaborForm.is_fixed ? (
-                                                            <div className="grid grid-cols-2 gap-2">
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                <div className="relative">
+                                                                    <span className="absolute left-1.5 top-2 text-[10px] text-slate-400 font-semibold">Qty</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={editingLaborForm.quantity}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
                                                                 <div className="relative">
                                                                     <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Hours</span>
                                                                     <input
@@ -2010,16 +2264,28 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <div className="relative">
-                                                                <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Amount (LKR)</span>
-                                                                <input
-                                                                    required
-                                                                    type="number"
-                                                                    min="1"
-                                                                    value={editingLaborForm.fixedAmount}
-                                                                    onChange={e => setEditingLaborForm({ ...editingLaborForm, fixedAmount: e.target.value })}
-                                                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-24 text-white text-sm font-mono focus:border-brand focus:outline-none"
-                                                                />
+                                                            <div className="flex gap-2 items-center">
+                                                                <div className="relative w-20 shrink-0">
+                                                                    <span className="absolute left-1.5 top-2 text-[10px] text-slate-400 font-semibold">Qty</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={editingLaborForm.quantity}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-7 text-white text-sm font-mono text-center focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
+                                                                <div className="relative flex-1">
+                                                                    <span className="absolute left-2.5 top-2 text-[10px] text-slate-400 font-semibold">Amount (LKR)</span>
+                                                                    <input
+                                                                        required
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={editingLaborForm.fixedAmount}
+                                                                        onChange={e => setEditingLaborForm({ ...editingLaborForm, fixedAmount: e.target.value })}
+                                                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 pl-24 text-white text-sm font-mono focus:border-brand focus:outline-none"
+                                                                    />
+                                                                </div>
                                                             </div>
                                                         )}
                                                         <div className="flex items-center justify-end gap-2 pt-1">
@@ -2038,51 +2304,80 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                             </button>
                                                         </div>
                                                     </form>
-                                                ) : (
-                                                    <div className="flex justify-between items-center gap-2">
-                                                        <div className="min-w-0 flex-1">
-                                                            <div className="font-medium text-white text-sm truncate flex items-center gap-1.5 flex-wrap">
-                                                                <span>{labor.description}</span>
-                                                                {labor.is_outsourced && (
-                                                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0 flex items-center gap-1">
-                                                                        <ExternalLink size={10} />
-                                                                        <span>Outsourced{labor.outsourced_to ? `: ${labor.outsourced_to}` : ''}</span>
+                                                ) : (() => {
+                                                    const qty = Math.max(1, Number(labor.quantity) || 1);
+                                                    const gross = qty * (Number(labor.hourly_rate_lkr) || 0) * (Number(labor.hours) || 0);
+                                                    const off = calcDiscount(gross, labor.discount_type, labor.discount_value);
+                                                    const netAmt = Math.max(0, gross - off);
+                                                    const hasCost = labor.cost_at_time_lkr !== null && labor.cost_at_time_lkr !== undefined && (labor.cost_at_time_lkr as any) !== '';
+                                                    const costAmt = hasCost ? qty * Math.max(0, Number(labor.cost_at_time_lkr)) : netAmt;
+                                                    const profitAmt = Math.max(0, netAmt - costAmt);
+                                                    const marginPct = netAmt > 0 ? (profitAmt / netAmt) * 100 : 0;
+
+                                                    return (
+                                                        <div className="flex justify-between items-center gap-2">
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="font-medium text-white text-sm truncate flex items-center gap-1.5 flex-wrap">
+                                                                    <span>{labor.description}</span>
+                                                                    {qty > 1 && (
+                                                                        <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                                                            &times;{qty}
+                                                                        </span>
+                                                                    )}
+                                                                    {labor.is_outsourced && (
+                                                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0 inline-flex items-center gap-1 shadow-sm shadow-amber-500/5">
+                                                                            <Building2 size={11} className="text-amber-400 shrink-0" />
+                                                                            <span>Sublet{labor.outsourced_to ? `: ${labor.outsourced_to}` : ''}</span>
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                                                                    <span>
+                                                                        {isTechnician
+                                                                            ? `${qty > 1 ? `${qty} \u00d7 ` : ''}${labor.hours} hrs`
+                                                                            : ((labor as unknown as { is_fixed?: boolean }).is_fixed
+                                                                                ? (qty > 1 ? `${qty} \u00d7 LKR ${(Number(labor.hourly_rate_lkr) || 0).toLocaleString()}` : 'Fixed price')
+                                                                                : `${qty > 1 ? `${qty} \u00d7 ` : ''}${labor.hours} hrs @ LKR ${(Number(labor.hourly_rate_lkr) || 0).toLocaleString()}`)}
                                                                     </span>
+                                                                    {labor.is_outsourced && (
+                                                                        hasCost ? (
+                                                                            <span className="text-[10px] text-amber-400 font-mono">
+                                                                                Cost: LKR {costAmt.toLocaleString()} &middot; Margin: +LKR {profitAmt.toLocaleString()} ({marginPct.toFixed(0)}%)
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-[10px] text-amber-400/80 font-medium">
+                                                                                (Sublet cost &middot; 0% margin)
+                                                                            </span>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                <LineAmount row={labor} gross={gross} table="job_labor" />
+                                                                {canEditLineItems && (
+                                                                    <>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleStartEditLabor(labor)}
+                                                                            title="Edit labor"
+                                                                            className="flex items-center justify-center h-8 w-8 rounded-lg text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 hover:text-sky-300 border border-sky-500/30 active:bg-sky-500/30 transition-colors touch-manipulation shrink-0"
+                                                                        >
+                                                                            <Pencil size={13} />
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveLabor(labor.id)}
+                                                                            title="Remove labor"
+                                                                            className="flex items-center justify-center h-8 w-8 rounded-lg text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/30 active:bg-rose-500/30 transition-colors touch-manipulation shrink-0"
+                                                                        >
+                                                                            <Trash2 size={13} />
+                                                                        </button>
+                                                                    </>
                                                                 )}
                                                             </div>
-                                                            <div className="text-xs text-slate-500">
-                                                                {isTechnician
-                                                                    ? `${labor.hours} hrs`
-                                                                    : ((labor as unknown as { is_fixed?: boolean }).is_fixed
-                                                                        ? 'Fixed price'
-                                                                        : `${labor.hours} hrs @ LKR ${labor.hourly_rate_lkr.toLocaleString()}`)}
-                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                            <LineAmount row={labor} gross={labor.hourly_rate_lkr * labor.hours} table="job_labor" />
-                                                            {canEditLineItems && (
-                                                                <>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleStartEditLabor(labor)}
-                                                                        title="Edit labor"
-                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-sky-400 bg-sky-500/10 hover:bg-sky-500/20 hover:text-sky-300 border border-sky-500/30 active:bg-sky-500/30 transition-colors touch-manipulation shrink-0"
-                                                                    >
-                                                                        <Pencil size={13} />
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => handleRemoveLabor(labor.id)}
-                                                                        title="Remove labor"
-                                                                        className="flex items-center justify-center h-8 w-8 rounded-lg text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 hover:text-rose-300 border border-rose-500/30 active:bg-rose-500/30 transition-colors touch-manipulation shrink-0"
-                                                                    >
-                                                                        <Trash2 size={13} />
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                    );
+                                                })()}
                                                 <LineDiscountEditor table="job_labor" id={labor.id} />
                                             </div>
                                         ))}
@@ -2230,6 +2525,31 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                         LKR {jobTotalAmount.toLocaleString()}
                                     </div>
                                 </div>
+
+                                {!isTechnician && totalDirectCost > 0 && (
+                                    <div className="mt-2.5 pt-2 border-t border-slate-800/80 space-y-1 mb-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/60">
+                                        <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                                            <span className="text-slate-400 font-medium">Direct Cost:</span>
+                                            <span className="font-mono text-slate-300 font-semibold">
+                                                LKR {totalDirectCost.toLocaleString()}
+                                                {outsourcedLaborCost > 0 && (
+                                                    <span className="text-[10px] text-amber-400 font-mono ml-1.5">
+                                                        (incl. LKR {outsourcedLaborCost.toLocaleString()} sublet)
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between text-xs flex-wrap gap-1">
+                                            <span className="text-slate-400 font-medium">Est. Gross Profit:</span>
+                                            <span className={`font-mono font-bold ${estimatedGrossProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                LKR {estimatedGrossProfit.toLocaleString()}{' '}
+                                                <span className="text-[10px] font-sans font-normal text-slate-400">
+                                                    ({estimatedGrossMarginPct.toFixed(0)}% margin)
+                                                </span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                                     </>
                                 )}
                                 {readOnly || (savedSuccessfully && !isDirty) ? (

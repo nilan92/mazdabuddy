@@ -64,7 +64,7 @@ export const Invoices = () => {
                         discount_value,
                         vehicles!inner (license_plate, make, model, year, vin, color, customers!inner(title, name, address, phone, email)),
                         job_parts ( quantity, price_at_time_lkr, custom_name, discount_type, discount_value, parts(name) ),
-                        job_labor ( description, hours, hourly_rate_lkr, is_fixed, is_outsourced, outsourced_to, discount_type, discount_value )
+                        job_labor (*)
                     )
                 `)
                 .order('created_at', { ascending: false })
@@ -111,6 +111,8 @@ export const Invoices = () => {
                     paidAmount,
                     balanceDue,
                     paid_amount_lkr: inv.paid_amount_lkr,
+                    is_outsourced: inv.job_cards?.is_outsourced,
+                    outsourced_to: inv.job_cards?.outsourced_to,
                     date: new Date(inv.created_at).toLocaleDateString('en-GB', { 
                         day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' 
                     }),
@@ -151,12 +153,16 @@ export const Invoices = () => {
     });
 
     // 3. Filter Logic (Updated to include Date)
-    const filteredInvoices = invoices.filter(inv => 
-        inv.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.vehicle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        inv.date.includes(searchTerm) // <--- Added Date Search
-    );
+    const filteredInvoices = invoices.filter(inv => {
+        const q = searchTerm.toLowerCase().trim();
+        if (!q) return true;
+        return (
+            inv.customer.toLowerCase().includes(q) ||
+            inv.vehicle.toLowerCase().includes(q) ||
+            inv.invoiceNumber.toLowerCase().includes(q) ||
+            inv.date.includes(searchTerm)
+        );
+    });
 
     const refreshInvoices = () => queryClient.invalidateQueries({ queryKey: ['invoices'] });
 
@@ -503,11 +509,10 @@ export const Invoices = () => {
             const anyHourly = inv.labor.some((l: any) => !l.is_fixed);
             sectionHeader('Labour / Description', anyHourly ? 'RATE' : undefined, anyHourly ? 'HOURS' : undefined);
             inv.labor.forEach((l: any) => {
-                const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
+                const qty = Math.max(1, Number(l.quantity) || 1);
+                const gross = qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
                 const off = calcDiscount(gross, l.discount_type, l.discount_value);
-                const desc = l.is_outsourced && l.outsourced_to 
-                    ? `${l.description || 'Service'} (Outsourced: ${l.outsourced_to})`
-                    : (l.is_outsourced ? `${l.description || 'Service'} (Outsourced)` : (l.description || 'Service'));
+                const desc = qty > 1 ? `${l.description || 'Service'} (x${qty})` : (l.description || 'Service');
                 row(
                     desc,
                     Math.max(0, gross - off),
@@ -886,7 +891,9 @@ export const Invoices = () => {
                                     <div className="font-bold text-white text-sm md:text-base">{inv.customer}</div>
                                     <div className="text-[10px] md:text-xs text-slate-500 whitespace-nowrap">{inv.date}</div>
                                 </div>
-                                <div className="text-sm text-slate-400 mb-2">{inv.vehicle}</div>
+                                <div className="text-sm text-slate-400 mb-2">
+                                    <div className="leading-snug">{inv.vehicle}</div>
+                                </div>
                                 <div className="flex justify-between items-center">
                                     <span className={`text-xs px-2 py-1 rounded font-bold uppercase flex items-center gap-1 ${
                                         inv.status === 'Paid' 
@@ -1112,22 +1119,26 @@ export const Invoices = () => {
                                             </tr>
                                         )}
                                         {selectedInvoice.labor.map((l: any, i: number) => {
-                                            const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
+                                            const qty = Math.max(1, Number(l.quantity) || 1);
+                                            const gross = qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0);
                                             const off = calcDiscount(gross, l.discount_type, l.discount_value);
                                             return (
                                                 <tr key={`l-${i}`} className="hover:bg-slate-900/50">
                                                     <td className="px-3 py-3 md:px-6 md:py-4">
-                                                        <div className="font-medium text-white text-sm flex items-center gap-1.5 flex-wrap">
+                                                        <div className="font-medium text-white text-sm flex items-center gap-2">
                                                             <span>{l.description}</span>
-                                                            {l.is_outsourced && (
-                                                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                                                                    Outsourced{l.outsourced_to ? `: ${l.outsourced_to}` : ''}
+                                                            {qty > 1 && (
+                                                                <span className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                                                    &times;{qty}
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <div className="flex flex-wrap items-center gap-2 text-[10px] md:text-xs text-slate-400 mt-0.5">
                                                             {!l.is_fixed && (
-                                                                <span>{l.hours} hrs &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}</span>
+                                                                <span>{qty > 1 ? `${qty} \u00d7 ` : ''}{l.hours} hrs &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}</span>
+                                                            )}
+                                                            {l.is_fixed && qty > 1 && (
+                                                                <span>{qty} &times; LKR {Number(l.hourly_rate_lkr).toLocaleString()}</span>
                                                             )}
                                                             {off > 0 && (
                                                                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
@@ -1293,6 +1304,9 @@ export const Invoices = () => {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Bottom spacer so all content and labour lines scroll completely clear of the pinned buttons */}
+                            <div className="h-28 shrink-0 pointer-events-none" aria-hidden="true" />
 
                             {/* Actions - Pinned Bottom */}
                             <div className="flex gap-3 p-4 mt-auto border-t border-slate-800 bg-slate-900 sticky bottom-0 z-20">

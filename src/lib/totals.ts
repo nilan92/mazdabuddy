@@ -3,12 +3,15 @@ export const DEFAULT_LABOR_RATE_LKR = 1500;
 /** Pure: no Supabase import, so it stays runnable outside the browser. */
 export function calcInvoiceTotal(
     parts: { quantity: number | null; price_at_time_lkr: number | null }[],
-    labor: { hours: number | string | null; hourly_rate_lkr: number | null }[],
+    labor: { hours: number | string | null; hourly_rate_lkr: number | null; quantity?: number | string | null }[],
 ): number {
     const partsTotal = parts.reduce(
         (sum, p) => sum + (Number(p.quantity) || 0) * (Number(p.price_at_time_lkr) || 0), 0);
     const laborTotal = labor.reduce(
-        (sum, l) => sum + (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || DEFAULT_LABOR_RATE_LKR), 0);
+        (sum, l) => {
+            const qty = Math.max(1, Number(l.quantity) || 1);
+            return sum + qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || DEFAULT_LABOR_RATE_LKR);
+        }, 0);
     return partsTotal + laborTotal;
 }
 
@@ -67,7 +70,8 @@ export function calcInvoiceSummary(
     let grossLabor = 0;
     let laborDiscount = 0;
     for (const l of labor) {
-        const gross = (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || DEFAULT_LABOR_RATE_LKR);
+        const qty = Math.max(1, Number(l.quantity) || 1);
+        const gross = qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || DEFAULT_LABOR_RATE_LKR);
         const off = calcDiscount(gross, l.discount_type, l.discount_value);
         grossLabor += gross;
         laborDiscount += off;

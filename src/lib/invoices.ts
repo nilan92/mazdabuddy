@@ -22,9 +22,21 @@ export async function ensureInvoiceForJob(
     if (lookupError) return { created: false, error: lookupError.message };
     if (existing) return { created: false };
 
+    const fetchLabor = async () => {
+        const withQty = await supabase
+            .from('job_labor')
+            .select('quantity, hours, hourly_rate_lkr, discount_type, discount_value')
+            .eq('job_id', jobId);
+        if (!withQty.error) return withQty;
+        return supabase
+            .from('job_labor')
+            .select('hours, hourly_rate_lkr, discount_type, discount_value')
+            .eq('job_id', jobId);
+    };
+
     const [partsRes, laborRes, jobRes] = await Promise.all([
         supabase.from('job_parts').select('quantity, price_at_time_lkr, discount_type, discount_value').eq('job_id', jobId),
-        supabase.from('job_labor').select('hours, hourly_rate_lkr, discount_type, discount_value').eq('job_id', jobId),
+        fetchLabor(),
         supabase.from('job_cards').select('discount_type, discount_value').eq('id', jobId).single(),
     ]);
 

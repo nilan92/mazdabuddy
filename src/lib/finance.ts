@@ -12,7 +12,7 @@
 export type EntryKind = 'income' | 'expense';
 
 /** Where a line came from, which decides whether it can be edited or deleted. */
-export type EntrySource = 'labour' | 'parts_sale' | 'parts_cost' | 'manual' | 'discount';
+export type EntrySource = 'labour' | 'parts_sale' | 'parts_cost' | 'manual' | 'discount' | 'outsourced_labour_cost';
 
 export interface LedgerEntry {
     id: string;
@@ -38,6 +38,8 @@ export interface ProfitAndLoss {
     /** What was actually invoiced — the authoritative top line. */
     revenueTotal: number;
     costOfParts: number;
+    costOfOutsourcedLabor: number;
+    costOfSales: number;
     grossProfit: number;
     grossMarginPct: number;
     operatingExpenses: number;
@@ -118,13 +120,15 @@ export function depreciate(asset: Asset, periodStart: Date, periodEnd: Date): As
     };
 }
 
-import { calcDiscount, type DiscountType } from './totals';
+import { calcDiscount, type DiscountType } from './totals.ts';
 
 export interface LedgerSources {
     invoices: { total_amount_lkr: unknown; discount_lkr?: unknown; created_at: string }[];
     jobLabour: { id: string; created_at: string; description?: string | null; hours: unknown;
         hourly_rate_lkr: unknown; is_fixed?: boolean; jobRef?: string; mechanic_name?: string | null;
-        discount_type?: DiscountType | null; discount_value?: unknown }[];
+        quantity?: unknown; cost_at_time_lkr?: unknown;
+        discount_type?: DiscountType | null; discount_value?: unknown;
+        is_outsourced?: boolean | null; outsourced_to?: string | null }[];
     jobParts: { id: string; created_at: string; quantity: unknown; price_at_time_lkr: unknown;
         cost_at_time_lkr?: unknown; is_custom?: boolean; custom_name?: string | null;
         partName?: string | null; jobRef?: string;
@@ -138,7 +142,8 @@ export function buildLedger(src: LedgerSources): LedgerEntry[] {
     const entries: LedgerEntry[] = [];
 
     for (const l of src.jobLabour) {
-        const gross = round2(n(l.hours) * n(l.hourly_rate_lkr));
+        const qty = Math.max(1, n(l.quantity) || 1);
+        const gross = round2(qty * n(l.hours) * n(l.hourly_rate_lkr));
         const lineDisc = calcDiscount(gross, l.discount_type, l.discount_value as number | string | null | undefined);
         const netAmt = round2(Math.max(0, gross - lineDisc));
         entries.push({
@@ -165,6 +170,25 @@ export function buildLedger(src: LedgerSources): LedgerEntry[] {
                 jobRef: l.jobRef,
                 editable: false,
             });
+        }
+        if (l.is_outsourced) {
+            // When cost_at_time_lkr is specified, use qty * cost_at_time_lkr.
+            // If missing/null (legacy rows before migration), fallback to netAmt (old behavior).
+            const hasCost = l.cost_at_time_lkr !== null && l.cost_at_time_lkr !== undefined && l.cost_at_time_lkr !== '';
+            const costAmt = hasCost ? round2(qty * Math.max(0, n(l.cost_at_time_lkr))) : netAmt;
+            if (costAmt > 0) {
+                entries.push({
+                    id: `outlabourcost-${l.id}`,
+                    date: l.created_at,
+                    description: `Cost of outsourced labour: ${l.description || 'Sublet'}${l.outsourced_to ? ` (${l.outsourced_to})` : ''}`,
+                    category: 'Cost of outsourced labour',
+                    kind: 'expense',
+                    amount: costAmt,
+                    source: 'outsourced_labour_cost',
+                    jobRef: l.jobRef,
+                    editable: false,
+                });
+            }
         }
     }
 
@@ -258,6 +282,8 @@ export function profitAndLoss(
     const revenueParts = sum(e => e.source === 'parts_sale');
     const revenueOther = sum(e => e.kind === 'income' && e.source === 'manual');
     const costOfParts = sum(e => e.source === 'parts_cost');
+    const costOfOutsourcedLabor = sum(e => e.source === 'outsourced_labour_cost');
+    const costOfSales = round2(costOfParts + costOfOutsourcedLabor);
 
     const operatingEntries = inPeriod.filter(e =>
         e.kind === 'expense' && e.source === 'manual' && e.category !== STOCK_PURCHASE_CATEGORY
@@ -268,12 +294,12 @@ export function profitAndLoss(
         expensesByCategory[e.category] = round2((expensesByCategory[e.category] || 0) + e.amount);
     }
 
-    const grossProfit = round2(revenueTotal - costOfParts);
+    const grossProfit = round2(revenueTotal - costOfSales);
     const netProfit = round2(grossProfit + revenueOther - operatingExpenses - depreciationForPeriod);
 
     return {
         revenueLabour, revenueParts, revenueOther, discounts, revenueTotal,
-        costOfParts, grossProfit,
+        costOfParts, costOfOutsourcedLabor, costOfSales, grossProfit,
         grossMarginPct: revenueTotal > 0 ? round2((grossProfit / revenueTotal) * 100) : 0,
         operatingExpenses, expensesByCategory,
         depreciation: round2(depreciationForPeriod),
@@ -520,7 +546,8 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
     const entries: JournalEntry[] = [];
 
     for (const l of src.jobLabour) {
-        const gross = round2(n(l.hours) * n(l.hourly_rate_lkr));
+        const qty = Math.max(1, n(l.quantity) || 1);
+        const gross = round2(qty * n(l.hours) * n(l.hourly_rate_lkr));
         if (gross === 0) continue;
         entries.push({
             id: `j-lab-${l.id}`, date: l.created_at,
@@ -535,6 +562,19 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
                 narrative: `Labour discount — ${l.description || 'service'}`,
                 lines: [dr(ACCOUNTS.DISCOUNTS, lineDisc), cr(ACCOUNTS.RECEIVABLES, lineDisc)],
             });
+        }
+
+        if (l.is_outsourced) {
+            const hasCost = l.cost_at_time_lkr !== null && l.cost_at_time_lkr !== undefined && l.cost_at_time_lkr !== '';
+            const netAmt = round2(Math.max(0, gross - lineDisc));
+            const costAmt = hasCost ? round2(qty * Math.max(0, n(l.cost_at_time_lkr))) : netAmt;
+            if (costAmt > 0) {
+                entries.push({
+                    id: `j-sublet-${l.id}`, date: l.created_at,
+                    narrative: `Outsourced labour cost — ${l.description || 'sublet'}${l.outsourced_to ? ` (${l.outsourced_to})` : ''}`,
+                    lines: [dr(ACCOUNTS.COGS, costAmt), cr(ACCOUNTS.PAYABLES, costAmt)],
+                });
+            }
         }
     }
 

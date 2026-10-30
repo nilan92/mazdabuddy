@@ -204,7 +204,8 @@ export function buildAuditPack(input: AuditPackInput): jsPDF {
     line('Total revenue', pl.revenueTotal, { bold: true, indent: 6 });
     y += 2;
     line('Cost of sales', undefined, { bold: true });
-    line('Parts consumed, at cost', -pl.costOfParts, { indent: 6, col: AMT2, rule: 'single' });
+    line('Parts consumed, at cost', -pl.costOfParts, { indent: 6, col: AMT2, rule: pl.costOfOutsourcedLabor > 0 ? undefined : 'single' });
+    if (pl.costOfOutsourcedLabor > 0) line('Outsourced labour / sublet, at cost', -pl.costOfOutsourcedLabor, { indent: 6, col: AMT2, rule: 'single' });
     line('Gross profit', pl.grossProfit, { bold: true, indent: 6 });
     line(`Gross margin  ${pl.grossMarginPct.toFixed(1)}%`, undefined, { indent: 6 });
     y += 2;

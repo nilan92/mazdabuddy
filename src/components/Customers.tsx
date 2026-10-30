@@ -352,14 +352,23 @@ export const Customers = () => {
             return;
         }
 
-        const { data: jobs } = await supabase
+        let jobsRes = await supabase
             .from('job_cards')
             // @ts-ignore
-            .select('*, vehicles(make, model, license_plate), job_parts(quantity, price_at_time_lkr), job_labor(hours, hourly_rate_lkr)')
+            .select('*, vehicles(make, model, license_plate), job_parts(quantity, price_at_time_lkr), job_labor(quantity, hours, hourly_rate_lkr)')
             .in('vehicle_id', vehicleIds)
             .order('created_at', { ascending: false });
+
+        if (jobsRes.error) {
+            jobsRes = await supabase
+                .from('job_cards')
+                // @ts-ignore
+                .select('*, vehicles(make, model, license_plate), job_parts(quantity, price_at_time_lkr), job_labor(hours, hourly_rate_lkr)')
+                .in('vehicle_id', vehicleIds)
+                .order('created_at', { ascending: false });
+        }
             
-        if (jobs) setCustomerHistory(jobs as HistoryJob[]);
+        if (jobsRes.data) setCustomerHistory(jobsRes.data as HistoryJob[]);
     };
 
     /** Searches what the workshop actually remembers a job by — the complaint,

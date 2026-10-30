@@ -163,8 +163,11 @@ export interface JobPart {
     part_id: string | null;
     quantity: number;
     price_at_time_lkr: number;
+    cost_at_time_lkr?: number;
     is_custom?: boolean;
     custom_name?: string;
+    discount_type?: 'amount' | 'percent';
+    discount_value?: number | string;
     parts?: Part; // Join
 }
 
@@ -172,9 +175,14 @@ export interface JobLabor {
     id: string;
     job_id: string;
     mechanic_name?: string;
+    quantity?: number;
     hours: number;
     description: string;
     hourly_rate_lkr: number;
+    cost_at_time_lkr?: number | null;
+    is_fixed?: boolean;
+    discount_type?: 'amount' | 'percent';
+    discount_value?: number | string;
     is_outsourced?: boolean;
     outsourced_to?: string;
 }
