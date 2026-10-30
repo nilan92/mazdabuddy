@@ -14,8 +14,7 @@ import {
     Truck,
     KeyRound,
     Award,
-    Calendar,
-    ShieldCheck
+    Calendar
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
@@ -30,7 +29,7 @@ interface LayoutProps {
 export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, profile, isSuperAdmin, isImpersonating, resetTenantContext } = useAuth();
+  const { signOut, profile, isImpersonating, resetTenantContext } = useAuth();
   const queryClient = useQueryClient();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -59,7 +58,6 @@ export const Layout = ({ children }: LayoutProps) => {
 
     { to: '/finances', icon: PieChart, label: 'Finance', roles: ['admin', 'manager', 'accountant'] },
     { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager', 'technician', 'accountant'] },
-    ...(isSuperAdmin ? [{ to: '/super-admin', icon: ShieldCheck, label: 'Super Admin', roles: ['admin', 'manager', 'technician', 'accountant', 'super_admin'] }] : []),
   ];
 
   const allowedLinks = allLinks.filter(link => link.roles.includes(role));

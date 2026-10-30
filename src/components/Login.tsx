@@ -1,14 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Lock, AlertCircle, User } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const Login = () => {
     const navigate = useNavigate();
+    const { profile, isSuperAdmin, isImpersonating, loading: authLoading } = useAuth();
     const [loading, setLoading] = useState(false);
     const [loginInput, setLoginInput] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+
+    // If user is already authenticated, route them appropriately
+    useEffect(() => {
+        if (!authLoading && profile) {
+            if (isSuperAdmin && !isImpersonating) {
+                navigate('/super-admin', { replace: true });
+            } else {
+                navigate('/', { replace: true });
+            }
+        }
+    }, [authLoading, profile, isSuperAdmin, isImpersonating, navigate]);
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -83,8 +96,22 @@ export const Login = () => {
                     setError(loginError.message);
                 }
             } else if (authData.session) {
-                console.log('[Login] Success! Session established. Redirecting...');
-                navigate('/');
+                console.log('[Login] Success! Session established. Checking destination...');
+                try {
+                    const { data: prof } = await supabase
+                        .from('profiles')
+                        .select('is_super_admin, role')
+                        .eq('id', authData.session.user.id)
+                        .maybeSingle();
+
+                    if (prof && (prof.is_super_admin || prof.role === 'super_admin')) {
+                        navigate('/super-admin');
+                    } else {
+                        navigate('/');
+                    }
+                } catch {
+                    navigate('/');
+                }
             } else {
                 setError("Login failed. No session created.");
             }

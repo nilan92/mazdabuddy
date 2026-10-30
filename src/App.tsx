@@ -27,6 +27,7 @@ const Bookings = lazy(() => import('./components/Bookings').then(module => ({ de
 const PublicBooking = lazy(() => import('./components/PublicBooking').then(module => ({ default: module.PublicBooking })));
 const PublicBookingStatus = lazy(() => import('./components/PublicBookingStatus').then(module => ({ default: module.PublicBookingStatus })));
 const SuperAdminDashboard = lazy(() => import('./components/SuperAdminDashboard').then(module => ({ default: module.SuperAdminDashboard })));
+const SuperAdminLogin = lazy(() => import('./components/SuperAdminLogin').then(module => ({ default: module.SuperAdminLogin })));
 
 // Reusable Loading Screen
 const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) => (
@@ -77,6 +78,9 @@ const AuthGuard = ({ children }: { children: React.ReactNode }) => {
     // 3. New User Check: If authenticated but no Tenant ID, force Onboarding
     // This fixes the Google Login "Homeless User" bug.
     if (!loading && profile && !profile.tenant_id) {
+        if (profile.is_super_admin || profile.role === 'super_admin') {
+            return <>{children}</>;
+        }
         // Allow them to access the onboarding page, obviously
         if (window.location.hash !== '#/onboarding') {
             return <Navigate to="/onboarding" replace />;
@@ -156,6 +160,14 @@ const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
     return <>{children}</>;
 };
 
+const DashboardRedirect = () => {
+    const { isSuperAdmin, isImpersonating } = useAuth();
+    if (isSuperAdmin && !isImpersonating) {
+        return <Navigate to="/super-admin" replace />;
+    }
+    return <Dashboard />;
+};
+
 const App = () => {
   // Register SW on app load (needed for push to work later)
   useEffect(() => { registerServiceWorker(); }, []);
@@ -210,6 +222,8 @@ const App = () => {
         <Suspense fallback={<LoadingScreen message="Loading Interface..." />}>
             <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/super-admin/login" element={<SuperAdminLogin />} />
+                <Route path="/admin/login" element={<SuperAdminLogin />} />
                 <Route path="/register" element={<Register />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
@@ -221,11 +235,21 @@ const App = () => {
                 <Route path="/book" element={<PublicBooking />} />
                 <Route path="/booking/:token" element={<PublicBookingStatus />} />
                 
+                {/* Standalone Super Admin Dashboard (outside workshop layout) */}
+                <Route path="/super-admin" element={
+                    <AuthGuard>
+                        <SuperAdminRoute>
+                            <SuperAdminDashboard />
+                        </SuperAdminRoute>
+                    </AuthGuard>
+                } />
+
+                {/* Workshop App routes (wrapped in workshop Layout) */}
                 <Route path="/*" element={
                     <AuthGuard>
                         <Layout>
                             <Routes>
-                                <Route path="/" element={<Dashboard />} />
+                                <Route path="/" element={<DashboardRedirect />} />
                                 <Route path="/jobs" element={<Jobs />} />
                                 <Route path="/bookings" element={<Bookings />} />
                                 <Route path="/performance" element={
@@ -259,11 +283,6 @@ const App = () => {
                                     <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
                                         <Finances />
                                     </RoleRoute>
-                                } />
-                                <Route path="/super-admin" element={
-                                    <SuperAdminRoute>
-                                        <SuperAdminDashboard />
-                                    </SuperAdminRoute>
                                 } />
                             </Routes>
                         </Layout>

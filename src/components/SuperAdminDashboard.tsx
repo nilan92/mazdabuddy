@@ -22,7 +22,8 @@ import {
     MapPin,
     Eye,
     TrendingUp,
-    Sparkles
+    Sparkles,
+    LogOut
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
@@ -30,7 +31,7 @@ import { useNavigate } from 'react-router-dom';
 import type { SuperAdminTenant, SuperAdminMetrics, SuperAdminUser } from '../types';
 
 export const SuperAdminDashboard: React.FC = () => {
-    const { profile, isSuperAdmin, switchTenantContext, resetTenantContext, isImpersonating } = useAuth();
+    const { profile, isSuperAdmin, switchTenantContext, resetTenantContext, isImpersonating, signOut } = useAuth();
     const navigate = useNavigate();
 
     // Data states
@@ -310,8 +311,51 @@ export const SuperAdminDashboard: React.FC = () => {
         );
     }
 
+    const handleSignOut = async () => {
+        await signOut();
+        navigate('/login');
+    };
+
     return (
-        <div className="space-y-6 max-w-7xl mx-auto pb-12">
+        <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-cyan-500 selection:text-slate-950 flex flex-col">
+            {/* Top Standalone Navigation Bar */}
+            <header className="sticky top-0 z-40 bg-slate-900/90 border-b border-slate-800/90 backdrop-blur-md px-4 sm:px-8 py-3.5 flex items-center justify-between shadow-xl">
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-cyan-400 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-cyan-500/20">
+                            <ShieldCheck size={20} className="text-white" />
+                        </div>
+                        <div>
+                            <span className="text-base font-black tracking-tight text-white uppercase leading-none">
+                                AUTO<span className="text-cyan-400">PULSE</span>
+                            </span>
+                            <span className="hidden sm:inline-block ml-2 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                Super Admin
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <div className="hidden sm:flex items-center gap-2 text-xs bg-slate-950/60 border border-slate-800 px-3 py-1.5 rounded-xl">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="text-slate-400 font-medium">Super Admin:</span>
+                        <span className="text-white font-bold">{profile?.full_name || profile?.username || 'Nilan'}</span>
+                    </div>
+
+                    <button
+                        onClick={handleSignOut}
+                        className="px-3.5 py-2 bg-slate-800/80 hover:bg-red-500/20 text-slate-300 hover:text-red-300 rounded-xl text-xs font-semibold transition-all border border-slate-700/60 hover:border-red-500/30 flex items-center gap-1.5 active:scale-95"
+                        title="Sign Out"
+                    >
+                        <LogOut size={14} />
+                        <span className="hidden sm:inline">Sign Out</span>
+                    </button>
+                </div>
+            </header>
+
+            {/* Main Content Area */}
+            <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6 pb-16">
             {/* Toast Notification */}
             {toastMessage && (
                 <div className="fixed top-5 right-5 z-50 bg-slate-900 border border-cyan-500/40 text-cyan-200 px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 animate-fade-in text-sm backdrop-blur-xl">
@@ -1145,6 +1189,7 @@ export const SuperAdminDashboard: React.FC = () => {
                     </div>
                 </div>
             )}
+            </main>
         </div>
     );
 };
