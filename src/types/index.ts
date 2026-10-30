@@ -185,6 +185,8 @@ export interface JobLabor {
     discount_value?: number | string;
     is_outsourced?: boolean;
     outsourced_to?: string;
+    is_paid?: boolean;
+    paid_at?: string | null;
 }
 
 export type InspectionStatus = 

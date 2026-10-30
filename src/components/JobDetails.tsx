@@ -124,7 +124,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         cost_at_time_lkr: string;
         is_outsourced: boolean;
         outsourced_to: string;
-    }>({ description: '', is_fixed: false, quantity: 1, hours: '', hourly_rate_lkr: '', fixedAmount: '', cost_at_time_lkr: '', is_outsourced: false, outsourced_to: '' });
+        is_paid: boolean;
+        paid_at: string | null;
+    }>({ description: '', is_fixed: false, quantity: 1, hours: '', hourly_rate_lkr: '', fixedAmount: '', cost_at_time_lkr: '', is_outsourced: false, outsourced_to: '', is_paid: false, paid_at: null });
 
     // Memory state for auto-suggestions
     const [partsMemory, setPartsMemory] = useState<PartMemoryItem[]>(() => loadPartsMemory(profile?.tenant_id));
@@ -394,7 +396,10 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
     // Calculate or infer estimated hours from labor items or service patterns
     const getInferredHours = useCallback(() => {
         // 1. If labor items exist with hours > 0, sum of labor is the most accurate benchmark
-        const laborSum = jobLabor.reduce((sum, item) => sum + (parseFloat(item.hours?.toString() || '0') || 0), 0);
+        const laborSum = jobLabor.reduce((sum, item) => {
+            const qty = Math.max(1, Number(item.quantity) || 1);
+            return sum + qty * (parseFloat(item.hours?.toString() || '0') || 0);
+        }, 0);
         if (laborSum > 0) return Number(laborSum.toFixed(1));
 
         // 2. Otherwise infer from description & parts based on workshop historical patterns
@@ -1169,6 +1174,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             cost_at_time_lkr: labor.cost_at_time_lkr !== null && labor.cost_at_time_lkr !== undefined ? String(labor.cost_at_time_lkr) : '',
             is_outsourced: !!labor.is_outsourced,
             outsourced_to: labor.outsourced_to || '',
+            is_paid: !!labor.is_paid,
+            paid_at: labor.paid_at || null,
         });
     };
 
@@ -1209,9 +1216,17 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             cost_at_time_lkr: costPrice,
             is_outsourced: editingLaborForm.is_outsourced,
             outsourced_to: editingLaborForm.is_outsourced ? (editingLaborForm.outsourced_to?.trim() || null) : null,
+            is_paid: editingLaborForm.is_outsourced ? editingLaborForm.is_paid : false,
+            paid_at: editingLaborForm.is_outsourced && editingLaborForm.is_paid ? (editingLaborForm.paid_at || new Date().toISOString()) : null,
         };
 
         let { error } = await supabase.from('job_labor').update(updatePayload).eq('id', laborId);
+        if (error && (error.code === 'PGRST204' || error.message?.includes('is_paid') || error.message?.includes('paid_at'))) {
+            delete updatePayload.is_paid;
+            delete updatePayload.paid_at;
+            const retry = await supabase.from('job_labor').update(updatePayload).eq('id', laborId);
+            error = retry.error;
+        }
         if (error && (error.code === 'PGRST204' || error.message?.includes('quantity') || error.message?.includes('cost_at_time_lkr'))) {
             delete updatePayload.quantity;
             delete updatePayload.cost_at_time_lkr;
@@ -1234,8 +1249,34 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             setEditingLaborId(null);
             fetchJobDetails();
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
+            queryClient.invalidateQueries({ queryKey: ['finances'] });
+            window.dispatchEvent(new CustomEvent('app:refresh'));
             toast("Labor entry updated.", 'success');
         }
+    };
+
+    const handleToggleLaborPaid = async (laborId: string, currentlyPaid: boolean) => {
+        const nextPaid = !currentlyPaid;
+        const updatePayload: any = {
+            is_paid: nextPaid,
+            paid_at: nextPaid ? new Date().toISOString() : null,
+        };
+
+        const { error } = await supabase.from('job_labor').update(updatePayload).eq('id', laborId);
+        if (error) {
+            if (error.code === 'PGRST204' || error.message?.includes('is_paid') || error.message?.includes('paid_at')) {
+                toast("Payment status column not migrated yet.", 'warning');
+                return;
+            }
+            toast(error.message, 'error');
+            return;
+        }
+
+        fetchJobDetails();
+        queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        queryClient.invalidateQueries({ queryKey: ['finances'] });
+        window.dispatchEvent(new CustomEvent('app:refresh'));
+        toast(nextPaid ? "Marked sublet contractor cost as paid." : "Unmarked sublet payment.", 'success');
     };
 
     const handleAiAssist = async () => {
@@ -2153,6 +2194,27 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                     }
                                                                     return null;
                                                                 })()}
+
+                                                                <div className="flex items-center justify-between pt-2 border-t border-amber-500/20 text-xs">
+                                                                    <label className="flex items-center gap-2 cursor-pointer text-amber-200 text-[11px] font-semibold select-none">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={editingLaborForm.is_paid}
+                                                                            onChange={e => setEditingLaborForm(prev => ({
+                                                                                ...prev,
+                                                                                is_paid: e.target.checked,
+                                                                                paid_at: e.target.checked ? (prev.paid_at || new Date().toISOString()) : null,
+                                                                            }))}
+                                                                            className="rounded bg-slate-900 border-amber-500/40 text-emerald-500 focus:ring-emerald-500"
+                                                                        />
+                                                                        <span>Contractor cost paid</span>
+                                                                    </label>
+                                                                    {editingLaborForm.is_paid && (
+                                                                        <span className="text-[10px] text-emerald-400 font-mono">
+                                                                            {editingLaborForm.paid_at ? new Date(editingLaborForm.paid_at).toLocaleDateString() : 'Today'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         )}
                                                         <AutoSuggestInput
@@ -2329,6 +2391,49 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                                                             <Building2 size={11} className="text-amber-400 shrink-0" />
                                                                             <span>Sublet{labor.outsourced_to ? `: ${labor.outsourced_to}` : ''}</span>
                                                                         </span>
+                                                                    )}
+                                                                    {labor.is_outsourced && (
+                                                                        readOnly ? (
+                                                                            labor.is_paid || labor.paid_at ? (
+                                                                                <span
+                                                                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shrink-0 inline-flex items-center gap-1"
+                                                                                    title={`Paid to contractor on ${labor.paid_at ? new Date(labor.paid_at).toLocaleDateString() : 'record'}`}
+                                                                                >
+                                                                                    <CheckCircle size={10} className="text-emerald-400 shrink-0" />
+                                                                                    <span>Paid{labor.paid_at ? ` (${new Date(labor.paid_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})` : ''}</span>
+                                                                                </span>
+                                                                            ) : (
+                                                                                <span
+                                                                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 shrink-0 inline-flex items-center gap-1"
+                                                                                    title="Contractor cost not settled"
+                                                                                >
+                                                                                    <Clock size={10} className="text-slate-400 shrink-0" />
+                                                                                    <span>Unpaid</span>
+                                                                                </span>
+                                                                            )
+                                                                        ) : (
+                                                                            labor.is_paid || labor.paid_at ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleToggleLaborPaid(labor.id, true)}
+                                                                                    title={`Paid to contractor on ${labor.paid_at ? new Date(labor.paid_at).toLocaleDateString() : 'record'}. Tap to mark unpaid.`}
+                                                                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 shrink-0 inline-flex items-center gap-1 transition-colors cursor-pointer touch-manipulation"
+                                                                                >
+                                                                                    <CheckCircle size={10} className="text-emerald-400 shrink-0" />
+                                                                                    <span>Paid{labor.paid_at ? ` (${new Date(labor.paid_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})` : ''}</span>
+                                                                                </button>
+                                                                            ) : (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => handleToggleLaborPaid(labor.id, false)}
+                                                                                    title="Mark contractor cost as paid"
+                                                                                    className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/30 shrink-0 inline-flex items-center gap-1 transition-all cursor-pointer touch-manipulation"
+                                                                                >
+                                                                                    <Clock size={10} className="text-rose-400 shrink-0" />
+                                                                                    <span>Unpaid &bull; Mark Paid</span>
+                                                                                </button>
+                                                                            )
+                                                                        )
                                                                     )}
                                                                 </div>
                                                                 <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">

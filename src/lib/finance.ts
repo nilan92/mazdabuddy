@@ -127,6 +127,7 @@ export interface LedgerSources {
     jobLabour: { id: string; created_at: string; description?: string | null; hours: unknown;
         hourly_rate_lkr: unknown; is_fixed?: boolean; jobRef?: string; mechanic_name?: string | null;
         quantity?: unknown; cost_at_time_lkr?: unknown;
+        is_paid?: boolean | null; paid_at?: string | null;
         discount_type?: DiscountType | null; discount_value?: unknown;
         is_outsourced?: boolean | null; outsourced_to?: string | null }[];
     jobParts: { id: string; created_at: string; quantity: unknown; price_at_time_lkr: unknown;
@@ -366,6 +367,7 @@ export interface AgedItem {
     daysOld: number;
     bucket: AgeBucket;
     phone?: string | null;
+    kind?: 'bill' | 'sublet';
 }
 
 export type AgeBucket = 'current' | '1-30' | '31-60' | '61-90' | '90+';
@@ -392,7 +394,7 @@ export function bucketFor(days: number): AgeBucket {
  * invoices owed to the workshop, and unpaid bills the workshop owes.
  */
 export function ageItems(
-    items: { id: string; reference: string; counterparty: string; date: string; amount: number; phone?: string | null }[],
+    items: { id: string; reference: string; counterparty: string; date: string; amount: number; phone?: string | null; kind?: 'bill' | 'sublet' }[],
     asOf: Date = new Date(),
 ): { items: AgedItem[]; byBucket: Record<AgeBucket, number>; total: number; overdue: number } {
     const byBucket = Object.fromEntries(AGE_BUCKETS.map(b => [b, 0])) as Record<AgeBucket, number>;
@@ -574,6 +576,16 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
                     narrative: `Outsourced labour cost — ${l.description || 'sublet'}${l.outsourced_to ? ` (${l.outsourced_to})` : ''}`,
                     lines: [dr(ACCOUNTS.COGS, costAmt), cr(ACCOUNTS.PAYABLES, costAmt)],
                 });
+
+                // When marked paid, post the settlement entry to clear the payable without duplicating the cost
+                if (l.is_paid || l.paid_at) {
+                    const payDate = l.paid_at || l.created_at;
+                    entries.push({
+                        id: `j-subletpay-${l.id}`, date: payDate,
+                        narrative: `Paid outsourced contractor — ${l.description || 'sublet'}${l.outsourced_to ? ` (${l.outsourced_to})` : ''}`,
+                        lines: [dr(ACCOUNTS.PAYABLES, costAmt), cr(ACCOUNTS.BANK, costAmt)],
+                    });
+                }
             }
         }
     }
@@ -851,7 +863,7 @@ export function cashFlow(
 
         if (e.id.startsWith('j-rcpt-')) bucket.rcpt += cashMoved;
         else if (e.id.startsWith('j-oi-')) bucket.oi += cashMoved;
-        else if (e.id.startsWith('j-billpay-')) bucket.billpay += cashMoved;
+        else if (e.id.startsWith('j-billpay-') || e.id.startsWith('j-subletpay-')) bucket.billpay += cashMoved;
         else if (e.id.startsWith('j-asset-')) bucket.asset += cashMoved;
         else bucket.exp += cashMoved;
     }

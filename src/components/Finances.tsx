@@ -22,6 +22,7 @@ import {
 import { waMeUrl } from '../lib/whatsapp';
 import { sendSMS } from '../lib/sms';
 import { withTitle } from '../lib/textCase';
+import { calcDiscount } from '../lib/totals';
 import { buildAuditPack, STATEMENTS, STATEMENT_COLOURS, type StatementKey } from '../lib/financePdf';
 
 /* Built-in categories. Tenants add their own alongside these, stored in
@@ -246,6 +247,10 @@ export const Finances = () => {
         setLoading(true);
         try {
             const fetchLabour = async () => {
+                const withPaidCols = await supabase.from('job_labor')
+                    .select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, is_outsourced, outsourced_to, quantity, cost_at_time_lkr, is_paid, paid_at, mechanic_name, job_id, discount_type, discount_value, job_cards!inner(id, status)')
+                    .eq('job_cards.status', 'completed');
+                if (!withPaidCols.error) return withPaidCols;
                 const withNewCols = await supabase.from('job_labor')
                     .select('id, created_at, description, hours, hourly_rate_lkr, is_fixed, is_outsourced, outsourced_to, quantity, cost_at_time_lkr, mechanic_name, job_id, discount_type, discount_value, job_cards!inner(id, status)')
                     .eq('job_cards.status', 'completed');
@@ -321,6 +326,8 @@ export const Finances = () => {
             cost_at_time_lkr: l.cost_at_time_lkr,
             is_outsourced: l.is_outsourced,
             outsourced_to: l.outsourced_to,
+            is_paid: l.is_paid,
+            paid_at: l.paid_at,
         })),
         // cost_at_time_lkr is written by the add-part RPC; older rows predate it,
         // so fall back to the catalogue cost rather than treating them as free.
@@ -362,16 +369,43 @@ export const Finances = () => {
             };
         })), [raw.debtors]);
 
-    /* Trade payables are simply the expenses not yet settled — no separate
-       supplier ledger to keep, and the balance sheet figure maintains itself. */
-    const payables = useMemo(() => ageItems(
-        raw.manual.filter((m: any) => !m.is_income && m.paid === false).map((m: any) => ({
-            id: m.id,
-            reference: m.supplier || m.category || 'Bill',
-            counterparty: m.description || m.category || '—',
-            date: m.due_date || m.date,
-            amount: Number(m.amount_lkr) || 0,
-        }))), [raw.manual]);
+    /* Trade payables are expenses and outsourced contractor costs not yet settled. */
+    const payables = useMemo(() => {
+        const manualBills = raw.manual
+            .filter((m: any) => !m.is_income && m.paid === false)
+            .map((m: any) => ({
+                id: m.id,
+                reference: m.supplier || m.category || 'Bill',
+                counterparty: m.description || m.category || '—',
+                date: m.due_date || m.date,
+                amount: Number(m.amount_lkr) || 0,
+                kind: 'bill' as const,
+            }));
+
+        const unpaidSublet = raw.labour
+            .filter((l: any) => l.is_outsourced && !l.is_paid && !l.paid_at)
+            .map((l: any) => {
+                const qty = Math.max(1, Number(l.quantity) || 1);
+                const hasCost = l.cost_at_time_lkr !== null && l.cost_at_time_lkr !== undefined && l.cost_at_time_lkr !== '';
+                const gross = round2(qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0));
+                const lineDisc = calcDiscount(gross, l.discount_type, l.discount_value);
+                const netAmt = round2(Math.max(0, gross - lineDisc));
+                const costAmt = hasCost ? round2(qty * Math.max(0, Number(l.cost_at_time_lkr) || 0)) : netAmt;
+                const ref = l.outsourced_to ? `Sublet: ${l.outsourced_to}` : 'Sublet contractor';
+                const desc = `${l.description || 'Outsourced labour'} (${l.job_cards?.id?.slice(0, 8).toUpperCase() || 'Job'})`;
+                return {
+                    id: l.id,
+                    reference: ref,
+                    counterparty: desc,
+                    date: l.created_at,
+                    amount: costAmt,
+                    kind: 'sublet' as const,
+                };
+            })
+            .filter((item: any) => item.amount > 0);
+
+        return ageItems([...manualBills, ...unpaidSublet]);
+    }, [raw.manual, raw.labour]);
 
     const positionsMap = useMemo(() => {
         const m: Record<string, number> = {};
@@ -390,6 +424,8 @@ export const Finances = () => {
             cost_at_time_lkr: l.cost_at_time_lkr,
             is_outsourced: l.is_outsourced,
             outsourced_to: l.outsourced_to,
+            is_paid: l.is_paid,
+            paid_at: l.paid_at,
         })),
         jobParts: raw.parts.map((p: any) => ({
             ...p,
@@ -505,8 +541,29 @@ export const Finances = () => {
             if (m.category) cur.categories.add(m.category);
             byName.set(name.toLowerCase(), cur);
         }
+        for (const l of raw.labour as any[]) {
+            if (!l.is_outsourced) continue;
+            const name = (l.outsourced_to || '').trim();
+            if (!name) continue;
+            const qty = Math.max(1, Number(l.quantity) || 1);
+            const hasCost = l.cost_at_time_lkr !== null && l.cost_at_time_lkr !== undefined && l.cost_at_time_lkr !== '';
+            const gross = round2(qty * (Number(l.hours) || 0) * (Number(l.hourly_rate_lkr) || 0));
+            const lineDisc = calcDiscount(gross, l.discount_type, l.discount_value);
+            const netAmt = round2(Math.max(0, gross - lineDisc));
+            const costAmt = hasCost ? round2(qty * Math.max(0, Number(l.cost_at_time_lkr) || 0)) : netAmt;
+            if (costAmt <= 0) continue;
+            const cur = byName.get(name.toLowerCase()) ?? {
+                name, billCount: 0, total: 0, outstanding: 0, lastDate: l.created_at, categories: new Set<string>(),
+            };
+            cur.billCount += 1;
+            cur.total = round2(cur.total + costAmt);
+            if (!l.is_paid && !l.paid_at) cur.outstanding = round2(cur.outstanding + costAmt);
+            if (new Date(l.created_at) > new Date(cur.lastDate)) cur.lastDate = l.created_at;
+            cur.categories.add('Sublet');
+            byName.set(name.toLowerCase(), cur);
+        }
         return [...byName.values()].sort((a, b) => b.outstanding - a.outstanding || b.total - a.total);
-    }, [raw.manual]);
+    }, [raw.manual, raw.labour]);
 
     const cashEntered = raw.positions.some(p => ['bank', 'cash'].includes(p.key));
     const availableCash = round2(balance.bank + balance.cash);
@@ -720,6 +777,20 @@ export const Finances = () => {
     };
 
     const markBillPaid = async (item: AgedItem) => {
+        if (item.kind === 'sublet') {
+            const { error } = await supabase.from('job_labor')
+                .update({ is_paid: true, paid_at: new Date().toISOString() })
+                .eq('id', item.id);
+            if (error) {
+                if (error.code === 'PGRST204' || error.message?.includes('is_paid') || error.message?.includes('paid_at')) {
+                    return toast("Payment status column not migrated yet.", 'warning');
+                }
+                return toast(error.message, 'error');
+            }
+            fetchAll();
+            return toast('Marked sublet contractor as paid.', 'success');
+        }
+
         const { error } = await supabase.from('user_expenses')
             .update({ paid: true, paid_on: toISODate(new Date()) }).eq('id', item.id);
         if (error) return toast(error.message, 'error');
@@ -1308,12 +1379,11 @@ export const Finances = () => {
                                 <span className="font-mono text-rose-400 font-bold">{lkr(payables.total)}</span>
                             </div>
                             <p className="text-[11px] text-slate-500 mb-3">
-                                Bills you have recorded but not settled. Add one by recording an expense and
-                                marking it unpaid — there is no separate supplier ledger to keep.
+                                Unsettled supplier bills and outsourced contractor costs.
                             </p>
                             {payables.items.length === 0 ? (
                                 <p className="text-slate-600 text-sm italic py-6 text-center">
-                                    Nothing outstanding. Every bill you have recorded is paid.
+                                    Nothing outstanding. Every bill and sublet cost you have recorded is paid.
                                 </p>
                             ) : (
                                 <div className="space-y-1.5">
@@ -1321,7 +1391,14 @@ export const Finances = () => {
                                         <div key={item.id}
                                             className="flex items-center gap-2 sm:gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2.5">
                                             <div className="min-w-0 flex-1">
-                                                <div className="text-sm text-white font-medium truncate">{item.reference}</div>
+                                                <div className="text-sm text-white font-medium truncate flex items-center gap-1.5">
+                                                    <span>{item.reference}</span>
+                                                    {item.kind === 'sublet' && (
+                                                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
+                                                            Sublet
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="text-[11px] text-slate-500 truncate">{item.counterparty}</div>
                                             </div>
                                             <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase shrink-0 hidden sm:inline ${
@@ -1329,8 +1406,8 @@ export const Finances = () => {
                                                 {item.daysOld === 0 ? 'due' : `${item.daysOld}d`}
                                             </span>
                                             <span className="font-mono text-sm text-white font-bold shrink-0 tabular-nums sm:w-28 sm:text-right">{lkr(item.amount)}</span>
-                                            <button onClick={() => markBillPaid(item)} title="Mark this bill as paid"
-                                                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-xs font-bold transition-colors shrink-0">
+                                            <button onClick={() => markBillPaid(item)} title={item.kind === 'sublet' ? "Mark this sublet contractor cost as paid" : "Mark this bill as paid"}
+                                                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white text-xs font-bold transition-colors shrink-0 cursor-pointer">
                                                 <Check size={13} /> <span className="hidden sm:inline">Paid</span>
                                             </button>
                                         </div>
