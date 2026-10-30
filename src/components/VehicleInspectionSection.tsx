@@ -584,6 +584,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                 job,
                 inspections: items,
                 tenant: tenantDetails,
+                currentMileage: currentMileage || job?.mileage || job?.vehicles?.mileage || null,
                 nextServiceMileage: nextServiceMileage ? parseInt(nextServiceMileage) : null,
                 nextServiceDate: nextServiceDate || null,
                 generalNotes: inspectionNotes,
@@ -599,6 +600,9 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
     };
 
     const counts = getInspectionCounts(items);
+    const rawOdo = currentMileage || job?.mileage || job?.vehicles?.mileage;
+    const cleanOdo = rawOdo ? String(rawOdo).replace(/[^0-9]/g, '') : '';
+    const displayOdo = cleanOdo ? `${Number(cleanOdo).toLocaleString()} km` : null;
 
     return (
         <div className="border-t border-slate-800 bg-slate-900/60 relative">
@@ -665,6 +669,11 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                                     {counts.problem > 0 && (
                                         <span className="px-1.5 py-0.5 rounded bg-red-500/15 text-red-400 border border-red-500/30">
                                             {counts.problem} X
+                                        </span>
+                                    )}
+                                    {displayOdo && (
+                                        <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 font-mono" title="Current recorded odometer">
+                                            Odo: {displayOdo}
                                         </span>
                                     )}
                                 </div>
@@ -873,7 +882,7 @@ export const VehicleInspectionSection: React.FC<VehicleInspectionSectionProps> =
                             <div>
                                 <div className="flex items-center justify-between mb-1">
                                     <label className="text-[10px] font-bold text-slate-400 uppercase">
-                                        Target Mileage (km)
+                                        Target Mileage (km) {displayOdo && <span className="text-slate-500 font-normal">· Current: {displayOdo}</span>}
                                     </label>
                                     <div className="flex items-center gap-1.5">
                                         <button

@@ -43,6 +43,7 @@ export const Jobs = () => {
         vehicleMake: '',
         vehicleModel: '',
         licensePlate: '',
+        chassisNumber: '',
         is_outsourced: false,
         outsourced_to: ''
     });
@@ -164,7 +165,7 @@ export const Jobs = () => {
 
                 const [{ data: existingCustomers }, { data: existingVehicles }] = await Promise.all([
                     supabase.from('customers').select('id, name, phone'),
-                    supabase.from('vehicles').select('id, license_plate, customer_id'),
+                    supabase.from('vehicles').select('id, license_plate, customer_id, vin'),
                 ]);
 
                 // The plate identifies the car outright, so if it is already on
@@ -202,6 +203,11 @@ export const Jobs = () => {
 
                 if (vehicleMatch) {
                     finalVehicleId = vehicleMatch.id;
+                    if (newJobForm.chassisNumber?.trim() && !vehicleMatch.vin) {
+                        await supabase.from('vehicles').update({ 
+                            vin: newJobForm.chassisNumber.trim().toUpperCase() 
+                        }).eq('id', vehicleMatch.id);
+                    }
                 } else {
                     const { data: vehicleData, error: vehError } = await supabase
                         .from('vehicles')
@@ -210,6 +216,7 @@ export const Jobs = () => {
                             make: tidyName(newJobForm.vehicleMake),
                             model: tidyName(newJobForm.vehicleModel),
                             license_plate: plate,
+                            vin: newJobForm.chassisNumber?.trim().toUpperCase() || null,
                             tenant_id: profile?.tenant_id
                         }])
                         .select()
@@ -252,6 +259,7 @@ export const Jobs = () => {
                 vehicleMake: '',
                 vehicleModel: '',
                 licensePlate: '',
+                chassisNumber: '',
                 is_outsourced: false,
                 outsourced_to: ''
             });
@@ -600,9 +608,9 @@ export const Jobs = () => {
                                     />
                                 </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="col-span-1">
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Make</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Make *</label>
                                     <input 
                                         required
                                         type="text"
@@ -612,8 +620,8 @@ export const Jobs = () => {
                                         onChange={(e) => setNewJobForm({...newJobForm, vehicleMake: e.target.value})}
                                     />
                                 </div>
-                                <div className="col-span-1">
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Model</label>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Model *</label>
                                     <input 
                                         required
                                         type="text"
@@ -623,8 +631,8 @@ export const Jobs = () => {
                                         onChange={(e) => setNewJobForm({...newJobForm, vehicleModel: e.target.value})}
                                     />
                                 </div>
-                                <div className="col-span-1">
-                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">License Plate</label>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">License Plate *</label>
                                     <input 
                                         required
                                         type="text"
@@ -632,6 +640,18 @@ export const Jobs = () => {
                                         className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none font-mono uppercase"
                                         value={newJobForm.licensePlate}
                                         onChange={(e) => setNewJobForm({...newJobForm, licensePlate: e.target.value})}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                                        Chassis No. <span className="text-slate-600 font-normal">(Opt)</span>
+                                    </label>
+                                    <input 
+                                        type="text"
+                                        placeholder="JM0ER293..."
+                                        className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2.5 text-white text-sm focus:border-brand focus:outline-none font-mono uppercase placeholder:normal-case placeholder:text-slate-600"
+                                        value={newJobForm.chassisNumber}
+                                        onChange={(e) => setNewJobForm({...newJobForm, chassisNumber: e.target.value})}
                                     />
                                 </div>
                             </div>

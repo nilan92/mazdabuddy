@@ -291,11 +291,12 @@ export async function buildVehicleHealthPdf(opts: {
     job: any;
     inspections: JobInspectionRecord[];
     tenant: any;
+    currentMileage?: string | number | null;
     nextServiceMileage?: number | null;
     nextServiceDate?: string | null;
     generalNotes?: string | null;
 }): Promise<{ doc: jsPDF; filename: string }> {
-    const { job, inspections, tenant, nextServiceMileage, nextServiceDate, generalNotes } = opts;
+    const { job, inspections, tenant, currentMileage: passedMileage, nextServiceMileage, nextServiceDate, generalNotes } = opts;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -377,7 +378,13 @@ export async function buildVehicleHealthPdf(opts: {
     const customerName = withTitle(job.vehicles?.customers?.title, job.vehicles?.customers?.name) || 'Walk-in Customer';
     const plate = (job.vehicles?.license_plate || 'No Plate').toUpperCase();
     const vehicleDesc = [job.vehicles?.year, job.vehicles?.make, job.vehicles?.model].filter(Boolean).join(' ') || 'Vehicle';
-    const currentMileage = job.mileage ? `${Number(job.mileage).toLocaleString()} km` : 'N/A';
+    
+    // Resolve mileage: check passedMileage -> job.mileage -> job.vehicles.mileage
+    const effectiveKm = (passedMileage !== undefined && passedMileage !== null && passedMileage !== '')
+        ? passedMileage
+        : (job.mileage || job.vehicles?.mileage || null);
+    const cleanMileage = effectiveKm ? String(effectiveKm).replace(/[^0-9]/g, '') : '';
+    const currentMileage = cleanMileage ? `${Number(cleanMileage).toLocaleString()} km` : 'N/A';
 
     // Headers
     doc.setFontSize(7);
@@ -411,6 +418,9 @@ export async function buildVehicleHealthPdf(opts: {
         doc.text(splitVeh[1], marginLeft + 65, yPos + 14.8);
     } else if (job.vehicles?.vin) {
         doc.text(`VIN: ${job.vehicles.vin}`, marginLeft + 65, yPos + 14.8);
+    }
+    if (nextServiceMileage) {
+        doc.text(`Target: ${Number(nextServiceMileage).toLocaleString()} km`, marginLeft + 138, yPos + 14.8);
     }
 
     yPos += 22.5;

@@ -307,6 +307,7 @@ export const Customers = () => {
             // Jobs.tsx already uppercases plates on express intake; this form
             // did not, which is how a lowercase plate got in.
             license_plate: vehicleForm.license_plate.trim().toUpperCase(),
+            vin: vehicleForm.vin?.trim().toUpperCase() || null,
             customer_id: selectedCustomer.id,
             tenant_id: profile?.tenant_id
         };
@@ -574,7 +575,14 @@ export const Customers = () => {
                                         <div key={vehicle.id} className="bg-slate-800/50 border border-slate-800 rounded-xl p-3 flex justify-between items-center group">
                                             <div>
                                                 <div className="text-white font-medium">{vehicle.make} {vehicle.model}</div>
-                                                <div className="text-xs font-mono text-cyan-500">{vehicle.license_plate}</div>
+                                                <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                                    <span className="text-xs font-mono text-cyan-500 font-bold">{vehicle.license_plate}</span>
+                                                    {vehicle.vin && (
+                                                        <span className="text-[10px] font-mono text-slate-400 bg-slate-900/80 px-1.5 py-0.5 rounded border border-slate-700/60" title="Chassis Number / VIN">
+                                                            VIN: {vehicle.vin}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <button 
@@ -672,6 +680,18 @@ export const Customers = () => {
                             <label className="block text-sm font-medium text-slate-400 mb-1">License Plate *</label>
                             <input type="text" required className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 font-mono" value={vehicleForm.license_plate} onChange={e => setVehicleForm({...vehicleForm, license_plate: e.target.value})} />
                         </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-400 mb-1">
+                            Chassis Number / VIN <span className="text-xs text-slate-500 font-normal">(Optional)</span>
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="e.g. JM0ER293..."
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3 font-mono text-sm uppercase placeholder:normal-case placeholder:text-slate-600 focus:border-cyan-500 outline-none"
+                            value={vehicleForm.vin}
+                            onChange={e => setVehicleForm({...vehicleForm, vin: e.target.value.toUpperCase()})}
+                        />
                     </div>
                     <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">Save Vehicle</button>
                 </form>

@@ -290,16 +290,18 @@ export const Invoices = () => {
         doc.text(`#${inv.invoiceNumber}`, pageWidth - marginRight, 32, { align: 'right' });
         doc.text(`Date: ${inv.date}`, pageWidth - marginRight, 37, { align: 'right' });
         
-        // Status is stored capitalised ('Paid'), so a lowercase comparison never
-        // matched and every paid invoice printed in the unpaid red.
+        // Status display: Show PAID or PARTIALLY PAID.
+        // User requirement: 'Unpaid' must NOT be visible on the invoice PDF.
+        const invStatus = inv.status?.toLowerCase();
         doc.setFont('helvetica', 'bold');
-        if (inv.status?.toLowerCase() === 'paid') {
+        if (invStatus === 'paid') {
             doc.setTextColor(34, 197, 94);
             doc.text('STATUS: PAID', pageWidth - marginRight, 42, { align: 'right' });
-        } else if (inv.status?.toLowerCase() === 'partially paid' || (Number(inv.paidAmount) > 0 && Number(inv.balanceDue) > 0)) {
+        } else if (invStatus === 'partially paid' || (Number(inv.paidAmount) > 0 && Number(inv.balanceDue) > 0)) {
             doc.setTextColor(217, 119, 6);
             doc.text('STATUS: PARTIALLY PAID', pageWidth - marginRight, 42, { align: 'right' });
-        } else {
+        } else if (invStatus && invStatus !== 'unpaid') {
+            // Any other specific non-unpaid custom status
             doc.setTextColor(239, 68, 68);
             doc.text(`STATUS: ${inv.status.toUpperCase()}`, pageWidth - marginRight, 42, { align: 'right' });
         }

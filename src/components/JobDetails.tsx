@@ -1332,8 +1332,13 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                             <div className="px-4 py-3 md:px-6 md:py-4 border-b border-slate-800 flex items-start justify-between bg-slate-950">
                                 <div>
                                     <h2 className="text-lg md:text-xl font-black text-white">{job.vehicles?.make} {job.vehicles?.model}</h2>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded font-mono">{job.vehicles?.license_plate}</span>
+                                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <span className="bg-slate-800 text-slate-300 text-[10px] px-2 py-0.5 rounded font-mono font-bold">{job.vehicles?.license_plate}</span>
+                                        {job.vehicles?.vin && (
+                                            <span className="bg-slate-800/80 text-slate-400 text-[10px] px-2 py-0.5 rounded font-mono border border-slate-700/60" title="Chassis Number / VIN">
+                                                VIN: {job.vehicles.vin}
+                                            </span>
+                                        )}
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full uppercase font-bold
                                             ${job.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' :
                                               job.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400' :
