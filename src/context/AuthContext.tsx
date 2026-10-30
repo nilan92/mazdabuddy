@@ -10,11 +10,17 @@ interface AuthContextType {
     profile: UserProfile | null;
     loading: boolean;
     error: string | null;
+    isSuperAdmin: boolean;
+    isImpersonating: boolean;
+    originalTenantId: string | null;
+    switchTenantContext: (tenantId: string) => Promise<boolean>;
+    resetTenantContext: () => Promise<boolean>;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
 }
 
 const AUTH_RECOVER_KEY = 'autopulse_auth_recover';
+const ORIGINAL_TENANT_KEY = 'autopulse_super_admin_original_tenant';
 const PROFILE_FETCH_TIMEOUT_MS = 6000;
 const PROFILE_FETCH_RETRIES = 2;
 
@@ -38,6 +44,11 @@ const AuthContext = createContext<AuthContextType>({
     profile: null,
     loading: true,
     error: null,
+    isSuperAdmin: false,
+    isImpersonating: false,
+    originalTenantId: null,
+    switchTenantContext: async () => false,
+    resetTenantContext: async () => false,
     signOut: async () => {},
     refreshProfile: async () => {},
 });
@@ -49,11 +60,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isInactiveSignout, setIsInactiveSignout] = useState(false);
+    const [originalTenantId, setOriginalTenantId] = useState<string | null>(() => {
+        return localStorage.getItem(ORIGINAL_TENANT_KEY);
+    });
     
     // Refs for tracking activity and timeouts
     const lastActiveRef = useRef<number>(Date.now());
     const timeoutRef = useRef<any>(null);
     const profileIdRef = useRef<string | null>(null);
+
+    const isSuperAdmin = Boolean(profile?.is_super_admin || profile?.role === 'super_admin');
+    const isImpersonating = Boolean(isSuperAdmin && originalTenantId && profile?.tenant_id && originalTenantId !== profile.tenant_id);
 
     // ⚡️ SPEED HACK 1 REMOVED: No more relying on localStorage for initial loading state.
     // We trust Supabase's async check completely to avoid "flash of unauthenticated content".
@@ -65,6 +82,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(null);
             setProfile(null);
             setLoading(false);
+            setOriginalTenantId(null);
+            window.localStorage.removeItem(ORIGINAL_TENANT_KEY);
             window.localStorage.clear(); 
             await supabase.auth.signOut(); 
         } catch (err) {
@@ -156,6 +175,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 profileIdRef.current = userId;
                 setProfile(data as any);
                 setError(null);
+
+                // If super admin and no original tenant tracked yet, initialize it
+                if ((data.is_super_admin || data.role === 'super_admin') && data.tenant_id) {
+                    const storedOrig = localStorage.getItem(ORIGINAL_TENANT_KEY);
+                    if (!storedOrig) {
+                        localStorage.setItem(ORIGINAL_TENANT_KEY, data.tenant_id);
+                        setOriginalTenantId(data.tenant_id);
+                    }
+                }
             }
         } catch (e: any) {
             console.error("[Auth] Fetch exception:", e);
@@ -359,6 +387,63 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [user]);
 
+    const switchTenantContext = useCallback(async (tenantId: string): Promise<boolean> => {
+        if (!user || !isSuperAdmin) return false;
+        try {
+            setLoading(true);
+            const orig = originalTenantId || profile?.tenant_id || null;
+            if (orig && !localStorage.getItem(ORIGINAL_TENANT_KEY)) {
+                localStorage.setItem(ORIGINAL_TENANT_KEY, orig);
+                setOriginalTenantId(orig);
+            }
+            const { error: rpcErr } = await supabase.rpc('super_admin_switch_tenant', {
+                target_tenant_id: tenantId,
+            });
+            if (rpcErr) {
+                console.error('[Auth] Switch Tenant Error:', rpcErr);
+                setError(rpcErr.message);
+                return false;
+            }
+            profileIdRef.current = null;
+            await fetchProfile(user.id);
+            return true;
+        } catch (err: any) {
+            console.error('[Auth] Switch Tenant Exception:', err);
+            setError(err.message);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    }, [user, isSuperAdmin, originalTenantId, profile, fetchProfile]);
+
+    const resetTenantContext = useCallback(async (): Promise<boolean> => {
+        if (!user || !isSuperAdmin) return false;
+        try {
+            const orig = originalTenantId || localStorage.getItem(ORIGINAL_TENANT_KEY);
+            if (!orig) return false;
+            setLoading(true);
+            const { error: rpcErr } = await supabase.rpc('super_admin_switch_tenant', {
+                target_tenant_id: orig,
+            });
+            if (rpcErr) {
+                console.error('[Auth] Reset Tenant Error:', rpcErr);
+                setError(rpcErr.message);
+                return false;
+            }
+            localStorage.removeItem(ORIGINAL_TENANT_KEY);
+            setOriginalTenantId(null);
+            profileIdRef.current = null;
+            await fetchProfile(user.id);
+            return true;
+        } catch (err: any) {
+            console.error('[Auth] Reset Tenant Exception:', err);
+            setError(err.message);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    }, [user, isSuperAdmin, originalTenantId, fetchProfile]);
+
     if (isInactiveSignout) {
         return (
             <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
@@ -397,7 +482,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ session, user, profile, loading, error, signOut, refreshProfile }}>
+        <AuthContext.Provider value={{ 
+            session, 
+            user, 
+            profile, 
+            loading, 
+            error, 
+            isSuperAdmin,
+            isImpersonating,
+            originalTenantId,
+            switchTenantContext,
+            resetTenantContext,
+            signOut, 
+            refreshProfile 
+        }}>
             {children}
         </AuthContext.Provider>
     );

@@ -14,7 +14,8 @@ import {
     Truck,
     KeyRound,
     Award,
-    Calendar
+    Calendar,
+    ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
@@ -29,7 +30,7 @@ interface LayoutProps {
 export const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut, profile } = useAuth();
+  const { signOut, profile, isSuperAdmin, isImpersonating, resetTenantContext } = useAuth();
   const queryClient = useQueryClient();
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
@@ -58,6 +59,7 @@ export const Layout = ({ children }: LayoutProps) => {
 
     { to: '/finances', icon: PieChart, label: 'Finance', roles: ['admin', 'manager', 'accountant'] },
     { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager', 'technician', 'accountant'] },
+    ...(isSuperAdmin ? [{ to: '/super-admin', icon: ShieldCheck, label: 'Super Admin', roles: ['admin', 'manager', 'technician', 'accountant', 'super_admin'] }] : []),
   ];
 
   const allowedLinks = allLinks.filter(link => link.roles.includes(role));
@@ -330,6 +332,46 @@ export const Layout = ({ children }: LayoutProps) => {
          <div className="absolute top-0 left-0 w-full h-96 bg-cyan-500/5 rounded-full blur-[120px] -translate-y-1/2 pointer-events-none" />
          <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-500/5 rounded-full blur-[120px] translate-y-1/2 pointer-events-none" />
          
+         {/* Super Admin Impersonation Notice Banner */}
+         {isImpersonating && (
+           <div className="relative z-20 mb-5 bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-amber-500/15 border border-amber-500/40 rounded-2xl p-3.5 px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xl shadow-amber-950/20 backdrop-blur-md animate-fade-in">
+             <div className="flex items-center gap-3">
+               <span className="flex h-3 w-3 relative shrink-0">
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+               </span>
+               <div>
+                 <p className="text-xs font-bold text-amber-200 uppercase tracking-wider flex items-center gap-2">
+                   <span>⚡ Super Admin Impersonation Mode</span>
+                   <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                     Active
+                   </span>
+                 </p>
+                 <p className="text-xs text-slate-300">
+                   Viewing and managing: <strong className="text-white font-bold">{profile?.tenants?.name}</strong>
+                 </p>
+               </div>
+             </div>
+             <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+               <button
+                 onClick={() => navigate('/super-admin')}
+                 className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition-all"
+               >
+                 Super Admin Portal
+               </button>
+               <button
+                 onClick={async () => {
+                   await resetTenantContext();
+                   navigate('/super-admin');
+                 }}
+                 className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all shadow-md active:scale-95 flex items-center gap-1.5"
+               >
+                 <span>Exit View</span>
+               </button>
+             </div>
+           </div>
+         )}
+
          {/* CSS-only fade — no unmount, no Suspense flash */}
          <div key={location.pathname} className="relative z-10 animate-page-in">
            <PullToRefreshContainer onRefresh={handlePullRefresh}>

@@ -26,6 +26,7 @@ const Performance = lazy(() => import('./components/Performance').then(module =>
 const Bookings = lazy(() => import('./components/Bookings').then(module => ({ default: module.Bookings })));
 const PublicBooking = lazy(() => import('./components/PublicBooking').then(module => ({ default: module.PublicBooking })));
 const PublicBookingStatus = lazy(() => import('./components/PublicBookingStatus').then(module => ({ default: module.PublicBookingStatus })));
+const SuperAdminDashboard = lazy(() => import('./components/SuperAdminDashboard').then(module => ({ default: module.SuperAdminDashboard })));
 
 // Reusable Loading Screen
 const LoadingScreen = ({ message = "Loading Module..." }: { message?: string }) => (
@@ -146,6 +147,15 @@ const RoleRoute = ({ allowedRoles, children }: { allowedRoles: string[]; childre
     return <>{children}</>;
 };
 
+const SuperAdminRoute = ({ children }: { children: React.ReactNode }) => {
+    const { isSuperAdmin, loading } = useAuth();
+    if (loading) return <LoadingScreen message="Verifying Permissions..." />;
+    if (!isSuperAdmin) {
+        return <Navigate to="/" replace />;
+    }
+    return <>{children}</>;
+};
+
 const App = () => {
   // Register SW on app load (needed for push to work later)
   useEffect(() => { registerServiceWorker(); }, []);
@@ -249,6 +259,11 @@ const App = () => {
                                     <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
                                         <Finances />
                                     </RoleRoute>
+                                } />
+                                <Route path="/super-admin" element={
+                                    <SuperAdminRoute>
+                                        <SuperAdminDashboard />
+                                    </SuperAdminRoute>
                                 } />
                             </Routes>
                         </Layout>

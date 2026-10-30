@@ -19,10 +19,57 @@ export interface Tenant {
 export interface UserProfile {
     id: string;
     full_name: string;
-    role: 'admin' | 'manager' | 'technician' | 'accountant';
+    role: 'admin' | 'manager' | 'technician' | 'accountant' | 'super_admin';
     tenant_id: string;
     username?: string;
+    is_super_admin?: boolean;
     tenants?: Tenant;
+}
+
+export interface SuperAdminTenant {
+    id: string;
+    name: string;
+    address: string | null;
+    phone: string | null;
+    email: string | null;
+    currency: string;
+    brand_color: string | null;
+    logo_url: string | null;
+    created_at: string;
+    default_labor_rate: number;
+    booking_enabled: boolean;
+    staff_count: number;
+    jobs_count: number;
+    active_jobs_count: number;
+    completed_jobs_count: number;
+    customers_count: number;
+    vehicles_count: number;
+    total_revenue: number;
+    total_invoiced: number;
+}
+
+export interface SuperAdminMetrics {
+    total_tenants: number;
+    total_staff: number;
+    total_jobs: number;
+    total_active_jobs: number;
+    total_completed_jobs: number;
+    total_customers: number;
+    total_vehicles: number;
+    total_revenue: number;
+    total_invoiced: number;
+}
+
+export interface SuperAdminUser {
+    id: string;
+    full_name: string | null;
+    username: string | null;
+    role: string;
+    is_super_admin: boolean;
+    tenant_id: string | null;
+    tenant_name: string | null;
+    email: string | null;
+    created_at: string;
 }
 
 export type JobStatus = 'pending' | 'in_progress' | 'waiting_parts' | 'completed' | 'cancelled';
