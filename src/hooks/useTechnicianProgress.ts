@@ -341,7 +341,8 @@ export const useTechnicianProgress = (overrideMonthDate?: Date) => {
           job_labor (
             id,
             description,
-            hours
+            hours,
+            quantity
           )
         `);
 
@@ -374,7 +375,10 @@ export const useTechnicianProgress = (overrideMonthDate?: Date) => {
       const workingDays = calculateShopWorkingDays(currentYear, currentMonth, currentDay, daysInMonth);
 
       const getCreditedHours = (job: any) => {
-        const laborSum = (job.job_labor || []).reduce((sum: number, l: any) => sum + (Number(l.hours) || 0), 0);
+        const laborSum = (job.job_labor || []).reduce((sum: number, l: any) => {
+          const qty = Math.max(1, Number(l.quantity) || 1);
+          return sum + qty * (Number(l.hours) || 0);
+        }, 0);
         const est = Number(job.estimated_hours) || 0;
         return laborSum > 0 ? laborSum : (est > 0 ? est : 0);
       };

@@ -257,6 +257,72 @@ assert.ok(tb2.balanced);
 const pay2 = tb2.rows.find(r => r.account.code === '2000');
 assert.equal(pay2, undefined, 'payable is cleared once the bill is paid');
 
+// ---- outsourced labour settlement & clearing payables -----------------------
+// 1) When outsourced labour is unpaid, it is an outstanding payable
+const journalSubletUnpaid = buildJournal({
+  ...sources,
+  jobLabour: [
+    { id: 'l-sub-1', created_at: '2026-08-01T00:00:00Z', description: 'Lathe job', hours: 1, hourly_rate_lkr: 8000, cost_at_time_lkr: 5000, is_outsourced: true, is_paid: false }
+  ],
+  invoicesFull: [], manualFull: [], assets: [], depreciationByAsset: [], periodEndISO: '2027-03-31'
+});
+const tbSubletUnpaid = trialBalance(journalSubletUnpaid, FY_START, FY_END);
+assert.ok(tbSubletUnpaid.balanced);
+const payUnpaid = tbSubletUnpaid.rows.find(r => r.account.code === '2000');
+assert.equal(payUnpaid?.credit, 5000, 'unpaid outsourced labour is recorded as trade payable');
+
+// 2) When marked paid, the payable is cleared and paid from Bank (no double-counting cost)
+const journalSubletPaid = buildJournal({
+  ...sources,
+  jobLabour: [
+    { id: 'l-sub-1', created_at: '2026-08-01T00:00:00Z', description: 'Lathe job', hours: 1, hourly_rate_lkr: 8000, cost_at_time_lkr: 5000, is_outsourced: true, is_paid: true, paid_at: '2026-08-05T00:00:00Z' }
+  ],
+  invoicesFull: [], manualFull: [], assets: [], depreciationByAsset: [], periodEndISO: '2027-03-31'
+});
+const tbSubletPaid = trialBalance(journalSubletPaid, FY_START, FY_END);
+assert.ok(tbSubletPaid.balanced);
+const payPaid = tbSubletPaid.rows.find(r => r.account.code === '2000');
+assert.equal(payPaid, undefined, 'payable is cleared once outsourced contractor is marked paid');
+const bankPaid = tbSubletPaid.rows.find(r => r.account.code === '1300');
+assert.equal(bankPaid?.credit, 5000, 'bank is credited when outsourced contractor is paid');
+
+// 3) Multi-quantity sublet (e.g. 2 x wheel alignment @ 2500 cost = 5000 payable)
+const journalSubletQty = buildJournal({
+  ...sources,
+  jobLabour: [
+    { id: 'l-sub-qty', created_at: '2026-08-01T00:00:00Z', description: '2x Machining', quantity: 2, hours: 1, hourly_rate_lkr: 6000, cost_at_time_lkr: 2500, is_outsourced: true, is_paid: true, paid_at: '2026-08-03T00:00:00Z' }
+  ],
+  invoicesFull: [], manualFull: [], assets: [], depreciationByAsset: [], periodEndISO: '2027-03-31'
+});
+const tbSubletQty = trialBalance(journalSubletQty, FY_START, FY_END);
+assert.ok(tbSubletQty.balanced);
+assert.equal(tbSubletQty.rows.find(r => r.account.code === '2000'), undefined, 'qty-multiplied sublet payable cleared');
+assert.equal(tbSubletQty.rows.find(r => r.account.code === '1300')?.credit, 5000, 'bank credited 2 x 2500 = 5000');
+
+// 4) P&L expense and net profit are identical whether paid or unpaid (no double-counting)
+const ledgerSubUnpaid = buildLedger({
+  ...sources,
+  jobLabour: [{ id: 'l-sub-check', created_at: '2026-08-01T00:00:00Z', description: 'Sublet test', hours: 1, hourly_rate_lkr: 10000, cost_at_time_lkr: 4000, is_outsourced: true, is_paid: false }]
+});
+const ledgerSubPaid = buildLedger({
+  ...sources,
+  jobLabour: [{ id: 'l-sub-check', created_at: '2026-08-01T00:00:00Z', description: 'Sublet test', hours: 1, hourly_rate_lkr: 10000, cost_at_time_lkr: 4000, is_outsourced: true, is_paid: true, paid_at: '2026-08-05T00:00:00Z' }]
+});
+const plSubUnpaid = profitAndLoss(ledgerSubUnpaid, [], FY_START, FY_END);
+const plSubPaid = profitAndLoss(ledgerSubPaid, [], FY_START, FY_END);
+assert.equal(plSubUnpaid.costOfOutsourcedLabor, 4000);
+assert.equal(plSubPaid.costOfOutsourcedLabor, 4000, 'cost recorded once in COGS, not double-counted when paid');
+assert.equal(plSubUnpaid.netProfit, plSubPaid.netProfit, 'P&L net profit unchanged by payment');
+
+// 5) ageItems handles both bills and sublet items
+const agedPayables = ageItems([
+  { id: 'b1', reference: 'CEB', counterparty: 'Electricity', date: '2026-08-01', amount: 15000, kind: 'bill' },
+  { id: 's1', reference: 'Sublet: City Lathe', counterparty: 'Lathe job', date: '2026-08-02', amount: 5000, kind: 'sublet' },
+]);
+assert.equal(agedPayables.total, 20000);
+assert.equal(agedPayables.items.length, 2);
+assert.equal(agedPayables.items.find(i => i.id === 's1')?.kind, 'sublet');
+
 // Opening balances participate and must keep it balanced.
 const tb3 = trialBalance(journal, FY_START, FY_END, [
   { account: ACCOUNTS.BANK, amount: 500000 },
@@ -359,5 +425,11 @@ const bankRow = tbCash.rows.find(r => r.account.code === '1300');
 const cashRow = tbCash.rows.find(r => r.account.code === '1310');
 const tbClosing = round2((bankRow ? bankRow.debit - bankRow.credit : 0) + (cashRow ? cashRow.debit - cashRow.credit : 0));
 assert.equal(cf.closing, tbClosing, 'cash flow ties to the balance sheet');
+
+// Sublet contractor settlements (j-subletpay-) must file under paymentsToSuppliers like j-billpay-
+const cfSublet = cashFlow(journalSubletPaid, FY_START, FY_END, 50000, 0);
+assert.equal(cfSublet.paymentsToSuppliers, 5000, 'sublet settlement is classified under paymentsToSuppliers');
+assert.equal(cfSublet.paymentsForExpenses, 0, 'sublet settlement is not filed under general expenses');
+assert.equal(cfSublet.closing, 45000, 'closing cash reduced by sublet contractor payment');
 
 console.log('ok');
