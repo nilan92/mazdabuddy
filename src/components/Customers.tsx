@@ -430,6 +430,7 @@ export const Customers = () => {
                             setCustomerForm({ title: 'Mr.', name: '', phone: '', email: '', address: '' });
                             setIsCustomerModalOpen(true);
                         }}
+                        data-track="customer:new"
                         className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-bold shadow-lg shadow-cyan-500/20"
                     >
                         <Plus size={20} /> Add Customer
@@ -532,6 +533,7 @@ export const Customers = () => {
                                     <button
                                         type="button"
                                         onClick={() => handleWhatsApp(customer)}
+                                        data-track="customer:whatsapp_reminder"
                                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(37,211,102,0.15)')}
                                         onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         className="p-2 bg-slate-800 rounded-lg text-[#25D366] hover:bg-[#25D366]/20 transition-colors flex items-center justify-center"
@@ -663,7 +665,7 @@ export const Customers = () => {
                         <label className="block text-sm font-medium text-slate-400 mb-1">Address</label>
                         <textarea className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-3" rows={2} value={customerForm.address} onChange={e => setCustomerForm({...customerForm, address: e.target.value})} />
                     </div>
-                    <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">Save Customer</button>
+                    <button type="submit" data-track="customer:save" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">Save Customer</button>
                 </form>
             </Modal>
 
@@ -702,7 +704,7 @@ export const Customers = () => {
                             onChange={e => setVehicleForm({...vehicleForm, vin: e.target.value.toUpperCase()})}
                         />
                     </div>
-                    <button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">Save Vehicle</button>
+                    <button type="submit" data-track="vehicle:save" className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-lg shadow-lg">Save Vehicle</button>
                 </form>
             </Modal>
 

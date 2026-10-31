@@ -1,22 +1,14 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-    LayoutDashboard, 
-    PenTool as Tool, 
-    FileText, 
-    Settings,
     LogOut,
-    Package,
-    PieChart,
     HelpCircle,
     RefreshCw,
-    Users,
-    Truck,
     KeyRound,
-    Award,
-    Calendar,
-    ClipboardList
+    Users
 } from 'lucide-react';
+import { NAV_ITEMS } from '../lib/navConfig';
+import { UsageTracker } from './UsageTracker';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
 import { ChangePasswordModal } from './ChangePasswordModal';
@@ -47,22 +39,9 @@ export const Layout = ({ children }: LayoutProps) => {
   if (!profile) return null; // Handled by AuthGuard, but safety first
   const role = profile.role;
 
-  const allLinks = [
-    { to: '/', icon: LayoutDashboard, label: 'Dashboard', roles: ['admin', 'manager', 'technician', 'accountant'] },
-    { to: '/jobs', icon: Tool, label: 'Jobs Board', roles: ['admin', 'manager', 'technician'] },
-    { to: '/bookings', icon: Calendar, label: 'Bookings', roles: ['admin', 'manager', 'technician', 'accountant'] },
-    { to: '/performance', icon: Award, label: 'Performance', roles: ['admin', 'manager'] },
-    { to: '/quotations', icon: ClipboardList, label: 'Quotations', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/suppliers', icon: Truck, label: 'Suppliers', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },
+  const allLinks = NAV_ITEMS;
 
-    { to: '/finances', icon: PieChart, label: 'Finance', roles: ['admin', 'manager', 'accountant'] },
-    { to: '/settings', icon: Settings, label: 'Settings', roles: ['admin', 'manager', 'technician', 'accountant'] },
-  ];
-
-  const allowedLinks = allLinks.filter(link => link.roles.includes(role));
+  const allowedLinks = allLinks.filter(link => (link.roles as string[]).includes(role));
 
   // Mobile: Show first 4 + More button
   const mobileLinks = allowedLinks.slice(0, 4);
@@ -186,6 +165,8 @@ export const Layout = ({ children }: LayoutProps) => {
               <Link
                 key={link.to}
                 to={link.to}
+                data-track={`nav:${link.key}`}
+                data-track-from="sidebar"
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
                   isActive 
                     ? 'active-link font-semibold border' 
@@ -250,6 +231,8 @@ export const Layout = ({ children }: LayoutProps) => {
                 <Link 
                     key={link.to} 
                     to={link.to} 
+                    data-track={`nav:${link.key}`}
+                    data-track-from="bottom"
                     className={`flex flex-col items-center gap-1 transition-colors ${isActive ? 'text-cyan-400' : 'text-slate-500'}`}
                 >
                     <Icon size={22} />
@@ -260,6 +243,8 @@ export const Layout = ({ children }: LayoutProps) => {
         {/* More Button */}
         <button 
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            data-track="nav:more"
+            data-track-from="bottom"
             className={`flex flex-col items-center gap-1 transition-colors ${isMobileMenuOpen ? 'text-cyan-400' : 'text-slate-500'}`}
         >
             <div className="flex gap-0.5 mt-2 mb-1">
@@ -281,6 +266,8 @@ export const Layout = ({ children }: LayoutProps) => {
                       <Link 
                         key={link.to} 
                         to={link.to} 
+                        data-track={`nav:${link.key}`}
+                        data-track-from="more"
                         onClick={() => setIsMobileMenuOpen(false)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl mb-1 ${isActive ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-300 hover:bg-slate-700'}`}
                       >
@@ -320,6 +307,7 @@ export const Layout = ({ children }: LayoutProps) => {
           </div>
       )}
       
+      <UsageTracker />
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
       

@@ -21,6 +21,7 @@ import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { sendSMS, smsTemplates } from '../lib/sms';
 import { logAudit } from '../lib/audit';
+import { trackClick } from '../lib/usage';
 import { sendPushNotification } from '../lib/push';
 import type { JobCard, JobPart, Part, JobLabor } from '../types';
 import { generateDiagnosis } from '../lib/ai';
@@ -841,6 +842,8 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
             }
             onUpdate();
             setJob(prev => prev ? { ...prev, ...updates } : null);
+            if (status !== job.status) trackClick('job:status_change', { from: job.status, to: status });
+            if (invoiceCreated) trackClick('invoice:create', { from: 'job_complete' });
             if (job?.tenant_id) {
                 logAudit(job.tenant_id, profile?.id, `job.status_changed`, 'job_card', jobId, {
                     from: job.status, to: status,
@@ -1485,6 +1488,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                      {/* WhatsApp */}
                                      <button
                                         onClick={handleWhatsApp}
+                                        data-track="job:whatsapp"
                                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(37,211,102,0.12)')}
                                         onMouseLeave={e => (e.currentTarget.style.background = '')}
                                         className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors"
@@ -1513,6 +1517,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                      {!readOnly && (
                                      <button
                                         onClick={() => handleSendSMS(status === 'completed' ? 'completed' : 'status')}
+                                        data-track="job:sms"
                                         className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
                                         title="Send SMS to Customer"
                                      >
@@ -2708,6 +2713,7 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                 ) : (
                                     <button
                                         onClick={handleUpdateJob}
+                                        data-track="job:save"
                                         disabled={!isDirty}
                                         className={`w-full py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 text-sm ${
                                             isDirty

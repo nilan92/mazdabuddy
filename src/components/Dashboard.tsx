@@ -206,6 +206,8 @@ export const Dashboard = () => {
           </button>
           <button 
                 onClick={() => navigate('/jobs?action=new')}
+                data-track="job:new"
+                data-track-from="dashboard"
                 className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group">
             {/* Classy Shimmer Light Beam */}
             <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />

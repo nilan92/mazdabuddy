@@ -142,6 +142,7 @@ export const Inventory = () => {
                     </button>
                     <button 
                         onClick={openAddModal}
+                        data-track="part:new"
                         className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-lg shadow-cyan-500/20">
                         <Plus size={20} />
                         Add Part
@@ -347,6 +348,7 @@ export const Inventory = () => {
                         </button>
                         <button 
                             type="submit"
+                            data-track="part:save"
                             className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium shadow-lg shadow-cyan-500/20 transition-all"
                         >
                             {editingPart ? 'Update Part' : 'Add Part'}
