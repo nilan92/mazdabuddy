@@ -151,6 +151,9 @@ export interface JobCard {
   next_service_date?: string;
   inspection_notes?: string;
 
+  // Set when the job was created from an accepted quotation
+  quotation_id?: string | null;
+
   // Joins
   vehicles?: Vehicle;
   parts?: JobPart[];
