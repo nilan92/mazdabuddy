@@ -1660,6 +1660,11 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
                                     <div>
                                         <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Description</label>
                                         <textarea rows={2} readOnly value={job.description} className="w-full bg-slate-900 text-slate-400 p-3 text-sm rounded border border-slate-800 focus:outline-none" />
+                                        {job.quotation_id && (
+                                            <a href={`#/quotations?quote=${job.quotation_id}`} className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold text-cyan-400 hover:text-cyan-300">
+                                                <LinkIcon size={11} /> From quotation QUO-{job.quotation_id.slice(0, 8).toUpperCase()}
+                                            </a>
+                                        )}
                                     </div>
 
                                     <div>

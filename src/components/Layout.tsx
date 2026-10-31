@@ -14,7 +14,8 @@ import {
     Truck,
     KeyRound,
     Award,
-    Calendar
+    Calendar,
+    ClipboardList
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { HelpModal } from './HelpModal';
@@ -51,6 +52,7 @@ export const Layout = ({ children }: LayoutProps) => {
     { to: '/jobs', icon: Tool, label: 'Jobs Board', roles: ['admin', 'manager', 'technician'] },
     { to: '/bookings', icon: Calendar, label: 'Bookings', roles: ['admin', 'manager', 'technician', 'accountant'] },
     { to: '/performance', icon: Award, label: 'Performance', roles: ['admin', 'manager'] },
+    { to: '/quotations', icon: ClipboardList, label: 'Quotations', roles: ['admin', 'manager', 'accountant'] },
     { to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { to: '/customers', icon: Users, label: 'Customers', roles: ['admin', 'manager', 'accountant'] },
     { to: '/suppliers', icon: Truck, label: 'Suppliers', roles: ['admin', 'manager', 'accountant'] },

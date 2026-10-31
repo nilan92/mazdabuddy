@@ -10,6 +10,7 @@ import { CHUNK_RELOAD_KEY } from './components/ErrorBoundary';
 const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
 const Jobs = lazy(() => import('./components/Jobs').then(module => ({ default: module.Jobs })));
 const Inventory = lazy(() => import('./components/Inventory').then(module => ({ default: module.Inventory })));
+const Quotations = lazy(() => import('./components/Quotations').then(module => ({ default: module.Quotations })));
 const Invoices = lazy(() => import('./components/Invoices').then(module => ({ default: module.Invoices })));
 const SmartScan = lazy(() => import('./components/SmartScan').then(module => ({ default: module.SmartScan })));
 const Customers = lazy(() => import('./components/Customers').then(module => ({ default: module.Customers })));
@@ -260,6 +261,11 @@ const App = () => {
                                 <Route path="/inventory" element={
                                     <RoleRoute allowedRoles={['admin', 'manager']}>
                                         <Inventory />
+                                    </RoleRoute>
+                                } />
+                                <Route path="/quotations" element={
+                                    <RoleRoute allowedRoles={['admin', 'manager', 'accountant']}>
+                                        <Quotations />
                                     </RoleRoute>
                                 } />
                                 <Route path="/invoices" element={
