@@ -718,7 +718,7 @@ export const Customers = () => {
                         <div className="bg-slate-800 p-3 rounded-lg text-center col-span-2">
                              <div className="text-xs text-slate-500 uppercase">Total Value</div>
                              <div className="text-xl font-bold text-cyan-400">
-                                LKR {customerHistory.reduce((sum, job) => sum + jobTotal(job), 0).toLocaleString()}
+                                LKR {customerHistory.filter(job => job.status !== 'cancelled').reduce((sum, job) => sum + jobTotal(job), 0).toLocaleString()}
                              </div>
                         </div>
                     </div>

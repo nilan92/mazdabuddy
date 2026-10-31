@@ -432,4 +432,20 @@ assert.equal(cfSublet.paymentsToSuppliers, 5000, 'sublet settlement is classifie
 assert.equal(cfSublet.paymentsForExpenses, 0, 'sublet settlement is not filed under general expenses');
 assert.equal(cfSublet.closing, 45000, 'closing cash reduced by sublet contractor payment');
 
+// ---- cancelled invoices -------------------------------------------------------
+// A cancelled invoice is not revenue and posts nothing to the journal.
+const plCancelled = profitAndLoss(buildLedger(sources), [
+  { total_amount_lkr: 27850, discount_lkr: 0, created_at: '2026-10-07T09:58:03Z', status: 'Unpaid' },
+  { total_amount_lkr: 27850, discount_lkr: 500, created_at: '2026-10-29T08:08:50Z', status: 'Cancelled' },
+], FY_START, FY_END);
+assert.equal(plCancelled.revenueTotal, 27850, 'cancelled invoice is excluded from revenue');
+const journalCancelled = buildJournal({
+  ...sources, manualFull: [], assets: [], depreciationByAsset: [], periodEndISO: '2027-03-31',
+  invoicesFull: [
+    { id: 'ic', created_at: '2026-10-29T08:08:50Z', total_amount_lkr: 27850, discount_lkr: 500, status: 'Cancelled', paid_on: null, payment_method: 'Cash' },
+  ],
+});
+assert.equal(journalCancelled.filter(e => e.id.endsWith('-ic')).length, 0, 'cancelled invoice posts no discount or receipt');
+assert.ok(trialBalance(journalCancelled, FY_START, FY_END).balanced);
+
 console.log('ok');
