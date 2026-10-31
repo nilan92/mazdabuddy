@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, RefreshCcw, Archive, UserCheck, Download, Clock, Trophy } from 'lucide-react';
+import { Plus, Search, RefreshCcw, Archive, UserCheck, Download, Clock, Trophy, ClipboardList } from 'lucide-react';
 import { downloadCSV } from '../lib/csv';
 import { supabase } from '../lib/supabase';
 import { ensureInvoiceForJob } from '../lib/invoices';
@@ -10,7 +10,7 @@ import { Modal } from './Modal';
 import { TechnicianHoursModal } from './TechnicianHoursModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTechnicianProgress } from '../hooks/useTechnicianProgress';
 import type { JobCard, Vehicle } from '../types';
@@ -118,6 +118,9 @@ export const Jobs = () => {
 
 
     const location = useLocation();
+    const navigate = useNavigate();
+    // Same roles that see Quotations in the menu (Layout / App route).
+    const canQuote = ['admin', 'manager', 'accountant'].includes(profile?.role || '');
     const queryParams = new URLSearchParams(location.search);
 
     // Initial role check & SmartScan redirect
@@ -414,6 +417,16 @@ export const Jobs = () => {
                     <button onClick={() => fetchJobs()} className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors">
                         <RefreshCcw size={20} className={loading ? 'animate-spin' : ''} />
                     </button>
+                    {canQuote && (
+                        <button
+                            onClick={() => navigate('/quotations?action=new')}
+                            className="inline-flex items-center gap-2 px-3 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs sm:text-sm border border-slate-700 transition-all active:scale-95"
+                            title="New Quote"
+                        >
+                            <ClipboardList size={18} className="text-cyan-400 shrink-0" />
+                            <span>New Quote</span>
+                        </button>
+                    )}
                     <button 
                         onClick={() => setIsNewJobModalOpen(true)} 
                         className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group"
