@@ -713,6 +713,39 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         }
     };
 
+    // Cancelling a job must also cancel its invoice, otherwise the invoice keeps
+    // counting towards revenue. An invoice with money already taken is left alone.
+    const cancelInvoiceForJob = async () => {
+        const { data: invs, error: invErr } = await supabase
+            .from('invoices')
+            .select('id, status, paid_amount_lkr')
+            .eq('job_id', jobId);
+        if (invErr) {
+            toast('Job cancelled, but its invoice could not be checked: ' + invErr.message, 'error');
+            return;
+        }
+        const open = (invs || []).filter(i => i.status !== 'Cancelled');
+        const paid = open.filter(i => (Number(i.paid_amount_lkr) || 0) > 0);
+        const cancellable = open.filter(i => !((Number(i.paid_amount_lkr) || 0) > 0));
+        if (cancellable.length > 0) {
+            const { error } = await supabase
+                .from('invoices')
+                .update({ status: 'Cancelled' })
+                .in('id', cancellable.map(i => i.id));
+            if (error) {
+                toast('Job cancelled, but its invoice is still active: ' + error.message, 'error');
+            } else if (job?.tenant_id) {
+                for (const i of cancellable) {
+                    logAudit(job.tenant_id, profile?.id, 'invoice.cancelled', 'invoice', i.id, { via: 'job_cancelled', job_id: jobId });
+                }
+            }
+            queryClient.invalidateQueries({ queryKey: ['invoices'] });
+        }
+        if (paid.length > 0) {
+            toast('Job cancelled. Its invoice already has a payment, so it was not cancelled — refund and cancel it on the Invoices page.', 'warning');
+        }
+    };
+
     const handleUpdateJob = async () => {
         if (!job) return;
 
@@ -803,6 +836,9 @@ export const JobDetails = ({ jobId, onClose, onUpdate, readOnly = false }: JobDe
         if (error) {
             toast(error.message, 'error');
         } else {
+            if (status === 'cancelled' && job?.status !== 'cancelled') {
+                await cancelInvoiceForJob();
+            }
             onUpdate();
             setJob(prev => prev ? { ...prev, ...updates } : null);
             if (job?.tenant_id) {

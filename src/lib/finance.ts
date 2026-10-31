@@ -621,6 +621,7 @@ export function buildJournal(src: JournalSources): JournalEntry[] {
     }
 
     for (const inv of src.invoicesFull) {
+        if (inv.status === 'Cancelled') continue;
         const discount = round2(n(inv.discount_lkr));
         if (discount > 0) {
             entries.push({
