@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, lazy } from 'react';
 import { 
     ShieldCheck, 
     Building2, 
@@ -23,12 +23,15 @@ import {
     Eye,
     TrendingUp,
     Sparkles,
-    LogOut
+    LogOut,
+    BarChart3
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import type { SuperAdminTenant, SuperAdminMetrics, SuperAdminUser } from '../types';
+
+const UsagePanel = lazy(() => import('./UsagePanel'));
 
 export const SuperAdminDashboard: React.FC = () => {
     const { profile, isSuperAdmin, switchTenantContext, resetTenantContext, isImpersonating, signOut } = useAuth();
@@ -44,7 +47,7 @@ export const SuperAdminDashboard: React.FC = () => {
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
     // Active tab
-    const [activeTab, setActiveTab] = useState<'tenants' | 'users' | 'overview'>('tenants');
+    const [activeTab, setActiveTab] = useState<'tenants' | 'users' | 'usage' | 'overview'>('tenants');
 
     // Tenant search & filter
     const [tenantSearch, setTenantSearch] = useState('');
@@ -524,6 +527,18 @@ export const SuperAdminDashboard: React.FC = () => {
                     <Users size={15} />
                     <span>Staff & User Accounts ({users.length})</span>
                 </button>
+
+                <button
+                    onClick={() => setActiveTab('usage')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                        activeTab === 'usage'
+                            ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                    }`}
+                >
+                    <BarChart3 size={15} />
+                    <span>Usage</span>
+                </button>
             </div>
 
             {/* Error Message */}
@@ -532,6 +547,12 @@ export const SuperAdminDashboard: React.FC = () => {
                     <AlertCircle size={18} className="text-red-400 shrink-0" />
                     <span>{error}</span>
                 </div>
+            )}
+
+            {activeTab === 'usage' && (
+                <Suspense fallback={<p className="text-xs text-slate-500 py-8 text-center">Loading usage…</p>}>
+                    <UsagePanel />
+                </Suspense>
             )}
 
             {/* TAB 1: WORKSHOPS DIRECTORY */}

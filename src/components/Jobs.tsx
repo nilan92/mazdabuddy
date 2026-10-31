@@ -416,6 +416,8 @@ export const Jobs = () => {
                     </button>
                     <button 
                         onClick={() => setIsNewJobModalOpen(true)} 
+                        data-track="job:new"
+                        data-track-from="jobs"
                         className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group"
                     >
                         {/* Classy Shimmer Light Beam */}
@@ -660,7 +662,7 @@ export const Jobs = () => {
                         />
                     </div>
                     
-                    <button type="submit" className="w-full btn-brand py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all">
+                    <button type="submit" data-track="job:create" className="w-full btn-brand py-3 rounded-xl font-bold shadow-lg active:scale-95 transition-all">
                         {intakeMode === 'EXPRESS' ? 'Register & Start Job' : 'Create Job Card'}
                     </button>
                     {intakeMode === 'SELECT' && (

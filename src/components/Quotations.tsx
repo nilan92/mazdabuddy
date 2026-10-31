@@ -221,6 +221,7 @@ export const Quotations = () => {
                     </button>
                     <button
                         onClick={openNew}
+                        data-track="quote:new"
                         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95"
                     >
                         <Plus size={18} strokeWidth={3} /> New Quote
@@ -275,7 +276,7 @@ export const Quotations = () => {
                         <div className="font-bold text-slate-300 mb-1">{rows.length ? 'No quotes match' : 'No quotations yet'}</div>
                         <div className="text-sm mb-4">Price up parts and labour, send it as a PDF, convert to a job when the customer says yes.</div>
                         {!rows.length && (
-                            <button onClick={openNew} className="btn-brand px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2">
+                            <button onClick={openNew} data-track="quote:new" data-track-from="empty" className="btn-brand px-4 py-2 rounded-xl text-sm font-bold inline-flex items-center gap-2">
                                 <Plus size={16} /> New Quote
                             </button>
                         )}
@@ -1125,13 +1126,13 @@ const QuotationEditor = ({ quote, tenant, today, onClose, onSaved, onDeleted, on
                 {/* Actions */}
                 <section className="space-y-3 pt-1">
                     <div className="grid grid-cols-3 gap-2">
-                        <button onClick={downloadPdf} disabled={!!busy} className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold disabled:opacity-50">
+                        <button onClick={downloadPdf} data-track="quote:pdf" disabled={!!busy} className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold disabled:opacity-50">
                             <Download size={18} /> {busy === 'pdf' ? 'Preparing…' : 'PDF'}
                         </button>
-                        <button onClick={printPdf} disabled={!!busy} className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold disabled:opacity-50">
+                        <button onClick={printPdf} data-track="quote:print" disabled={!!busy} className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold disabled:opacity-50">
                             <Printer size={18} /> {busy === 'print' ? 'Preparing…' : 'Print'}
                         </button>
-                        <button onClick={sharePdf} disabled={!!busy} className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-bold disabled:opacity-50">
+                        <button onClick={sharePdf} data-track="quote:whatsapp" disabled={!!busy} className="flex flex-col items-center gap-1 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-bold disabled:opacity-50">
                             <MessageCircle size={18} /> {busy === 'share' ? 'Preparing…' : 'WhatsApp'}
                         </button>
                     </div>
@@ -1139,22 +1140,22 @@ const QuotationEditor = ({ quote, tenant, today, onClose, onSaved, onDeleted, on
                     {!locked && (
                         <div className="flex flex-wrap gap-2">
                             {current && status !== 'sent' && status !== 'accepted' && (
-                                <button onClick={() => setStatus('sent')} disabled={disabled} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-300 text-xs font-bold disabled:opacity-50">
+                                <button onClick={() => setStatus('sent')} data-track="quote:mark_sent" disabled={disabled} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-300 text-xs font-bold disabled:opacity-50">
                                     <Send size={14} /> Mark sent
                                 </button>
                             )}
                             {current && status !== 'accepted' && (
-                                <button onClick={() => setStatus('accepted')} disabled={disabled} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-bold disabled:opacity-50">
+                                <button onClick={() => setStatus('accepted')} data-track="quote:mark_accepted" disabled={disabled} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-bold disabled:opacity-50">
                                     <CheckCircle size={14} /> Customer accepted
                                 </button>
                             )}
                             {current && status !== 'declined' && (
-                                <button onClick={() => setStatus('declined')} disabled={disabled} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs font-bold disabled:opacity-50">
+                                <button onClick={() => setStatus('declined')} data-track="quote:mark_declined" disabled={disabled} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs font-bold disabled:opacity-50">
                                     <XCircle size={14} /> Declined
                                 </button>
                             )}
                             {current && (status === 'declined' || status === 'expired') && (
-                                <button onClick={() => { if (validUntil < today) setValidUntil(addDaysISO(today, 14)); setStatus('draft'); }} disabled={disabled}
+                                <button onClick={() => { if (validUntil < today) setValidUntil(addDaysISO(today, 14)); setStatus('draft'); }} data-track="quote:reopen" disabled={disabled}
                                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-600 bg-slate-800 text-slate-300 text-xs font-bold disabled:opacity-50">
                                     <RefreshCcw size={14} /> Reopen
                                 </button>
@@ -1165,12 +1166,12 @@ const QuotationEditor = ({ quote, tenant, today, onClose, onSaved, onDeleted, on
 
                     {!locked && (
                         <div className="flex flex-col sm:flex-row gap-2">
-                            <button onClick={() => save()} disabled={disabled || (!dirty && !!current)}
+                            <button onClick={() => save()} data-track="quote:save" disabled={disabled || (!dirty && !!current)}
                                 className="flex-1 inline-flex justify-center items-center gap-2 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm disabled:opacity-50">
                                 <Save size={16} /> {busy === 'save' ? 'Saving…' : current ? (dirty ? 'Save changes' : 'Saved') : 'Save quote'}
                             </button>
                             {canConvertQuotation(status, current?.job_id) && (
-                                <button onClick={convert} disabled={disabled}
+                                <button onClick={convert} data-track="quote:convert" disabled={disabled}
                                     className="flex-1 inline-flex justify-center items-center gap-2 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 font-black text-sm disabled:opacity-50">
                                     <ArrowRightCircle size={18} /> {busy === 'convert' ? 'Creating job…' : status === 'accepted' ? 'Convert to job' : 'Accept & convert to job'}
                                 </button>

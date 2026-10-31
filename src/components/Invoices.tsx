@@ -22,6 +22,7 @@ import { calcDiscount, calcInvoiceSummary } from '../lib/totals';
 import { downloadCSV } from '../lib/csv';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
+import { trackClick } from '../lib/usage';
 
 type ShareableInvoice = {
     invoiceNumber: string;
@@ -198,6 +199,7 @@ export const Invoices = () => {
             console.error("Error updating invoice:", error);
             toast("Failed to update invoice status: " + error.message, 'error');
         } else {
+            trackClick('invoice:status_change', { to: newStatus });
             const nextPaid = updates.paid_amount_lkr !== undefined ? updates.paid_amount_lkr : selectedInvoice.paidAmount;
             const updatedInv = { 
                 ...selectedInvoice, 
@@ -1312,6 +1314,7 @@ export const Invoices = () => {
                             <div className="flex gap-3 p-4 mt-auto border-t border-slate-800 bg-slate-900 sticky bottom-0 z-20">
                                 <button
                                     onClick={() => shareOnWhatsApp(selectedInvoice)}
+                                    data-track="invoice:whatsapp"
                                     disabled={sharing}
                                     title="Send this invoice to the customer on WhatsApp"
                                     className="flex-1 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
@@ -1320,10 +1323,10 @@ export const Invoices = () => {
                                     <span className="hidden md:inline">{sharing ? 'Preparing…' : 'WhatsApp'}</span>
                                     <span className="md:hidden">{sharing ? '…' : 'WhatsApp'}</span>
                                 </button>
-                                <button onClick={() => generatePDF(selectedInvoice)} className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
+                                <button onClick={() => generatePDF(selectedInvoice)} data-track="invoice:pdf" className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 transition-all active:scale-95">
                                     <Download size={20} /> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span>
                                 </button>
-                                <button onClick={() => printInvoice(selectedInvoice)} title="Print Invoice" className="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold active:scale-95 transition-all">
+                                <button onClick={() => printInvoice(selectedInvoice)} data-track="invoice:print" title="Print Invoice" className="px-6 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold active:scale-95 transition-all">
                                     <Printer size={20} />
                                 </button>
                             </div>

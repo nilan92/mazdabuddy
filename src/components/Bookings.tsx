@@ -479,6 +479,7 @@ export const Bookings: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => setIsShareModalOpen(true)}
+                        data-track="booking:share_portal"
                         className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group"
                     >
                         {/* Classy Shimmer Light Beam */}
@@ -752,6 +753,7 @@ export const Bookings: React.FC = () => {
                                                 type="button"
                                                 disabled={convertingId === b.id}
                                                 onClick={() => handleConvertToJobCard(b)}
+                                                data-track="booking:start_job"
                                                 title="Convert to Job Card"
                                                 className="flex-1 py-2 px-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-sm transition-all active:scale-95"
                                             >
