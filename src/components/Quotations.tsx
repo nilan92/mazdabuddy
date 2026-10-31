@@ -112,7 +112,7 @@ export const Quotations = () => {
 
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<Filter>('all');
-    const [editorOpen, setEditorOpen] = useState(() => new URLSearchParams(location.search).get('action') === 'new');
+    const [editorOpen, setEditorOpen] = useState(false);
     const [editing, setEditing] = useState<QuoteRow | null>(null);
 
     const { data: quotes = [], isLoading, error: quotesError } = useQuery({
@@ -158,12 +158,6 @@ export const Quotations = () => {
     const deepLinked = deepLinkId ? quotes.find(q => q.id === deepLinkId) : undefined;
     useEffect(() => {
         if (new URLSearchParams(location.search).get('quote')) navigate('/quotations', { replace: true });
-    }, [location.search, navigate]);
-
-    // #/quotations?action=new (the "New Quote" shortcuts on the dashboard and
-    // jobs board) arrives with the blank editor already open; tidy the URL.
-    useEffect(() => {
-        if (new URLSearchParams(location.search).get('action') === 'new') navigate('/quotations', { replace: true });
     }, [location.search, navigate]);
 
     const rows = useMemo(() => quotes.map(q => {

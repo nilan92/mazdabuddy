@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Trophy, Target, TrendingUp, Clock, Flame, Calendar, ChevronRight, Plus, ClipboardList } from 'lucide-react';
+import { Briefcase, DollarSign, Users, Activity, RefreshCcw, Quote, X, CheckCircle2, Trophy, Target, TrendingUp, Clock, Flame, Calendar, ChevronRight, Plus } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -43,8 +43,6 @@ export const Dashboard = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  // Same roles that see Quotations in the menu (Layout / App route).
-  const canQuote = ['admin', 'manager', 'accountant'].includes(profile?.role || '');
   const [showQuote, setShowQuote] = useState(false);
   const [currentQuote, setCurrentQuote] = useState('');
   const [selectedStaff, setSelectedStaff] = useState<AdminTechnicianSummary | null>(null);
@@ -193,7 +191,7 @@ export const Dashboard = () => {
           <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
           <p className="text-slate-400">Welcome back, {profile?.full_name?.split(' ')[0] || 'Member'}. Here's what's happening today.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-3">
              <button 
                 onClick={refreshDashboard}
                 className="p-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-all active:scale-95"
@@ -206,25 +204,14 @@ export const Dashboard = () => {
                 className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-all active:scale-95">
             Scanning Tool
           </button>
-          {/* Phones: the two "start something" actions share their own row. */}
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            {canQuote && (
-              <button
-                  onClick={() => navigate('/quotations?action=new')}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-xs sm:text-sm border border-slate-700 transition-all active:scale-95">
-                <ClipboardList size={18} className="text-cyan-400 shrink-0" />
-                <span>New Quote</span>
-              </button>
-            )}
-            <button 
-                  onClick={() => navigate('/jobs?action=new')}
-                  className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group">
-              {/* Classy Shimmer Light Beam */}
-              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />
-              <Plus size={18} className="text-slate-950 shrink-0 stroke-[2.5]" />
-              <span>New Job</span>
-            </button>
-          </div>
+          <button 
+                onClick={() => navigate('/jobs?action=new')}
+                className="relative overflow-hidden inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 via-cyan-400 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-cyan-500/25 border border-cyan-300 transition-all active:scale-95 group">
+            {/* Classy Shimmer Light Beam */}
+            <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer-sweep pointer-events-none" />
+            <Plus size={18} className="text-slate-950 shrink-0 stroke-[2.5]" />
+            <span>New Job</span>
+          </button>
         </div>
       </div>
 
