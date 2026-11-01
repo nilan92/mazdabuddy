@@ -11,7 +11,8 @@ import { JobDetails } from './JobDetails';
 const MONTHS_BACK = 24;
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 
-export const TechHours = () => {
+// Shown inside the Performance page (admins only) as the "Tech hours" view.
+export const TechHours = ({ embedded = false }: { embedded?: boolean }) => {
   const { profile } = useAuth();
   const isAdmin = profile?.role === 'admin';
   const months = useMemo(() => recentMonths(new Date(), MONTHS_BACK), []);
@@ -72,6 +73,9 @@ export const TechHours = () => {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center justify-between gap-3">
+        {embedded ? (
+          <p className="text-xs sm:text-sm text-slate-400 min-w-0 truncate px-1">Completed jobs by technician · admin only</p>
+        ) : (
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-brand shrink-0">
             <Clock size={22} className="sm:w-6 sm:h-6" />
@@ -81,6 +85,7 @@ export const TechHours = () => {
             <p className="text-[11px] sm:text-xs md:text-sm text-slate-400 truncate">Completed jobs by technician · admin only</p>
           </div>
         </div>
+        )}
         <div className="flex items-center gap-1.5 shrink-0">
           <button onClick={() => refetch()} title="Refresh"
             className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white active:scale-95">

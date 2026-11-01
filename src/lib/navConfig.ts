@@ -1,5 +1,5 @@
 import {
-    LayoutDashboard, PenTool, FileText, Settings, Package, PieChart, Users, Truck, Award, Calendar, ClipboardList, Clock,
+    LayoutDashboard, PenTool, FileText, Settings, Package, PieChart, Users, Truck, Award, Calendar, ClipboardList,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -22,7 +22,6 @@ export const NAV_ITEMS: NavItem[] = [
     { key: 'invoices', to: '/invoices', icon: FileText, label: 'Invoices', roles: ['admin', 'manager', 'accountant'] },
     { key: 'bookings', to: '/bookings', icon: Calendar, label: 'Bookings', roles: ['admin', 'manager', 'technician', 'accountant'] },
     { key: 'performance', to: '/performance', icon: Award, label: 'Performance', roles: ['admin', 'manager'] },
-    { key: 'tech-hours', to: '/tech-hours', icon: Clock, label: 'Tech Hours', roles: ['admin'] },
     { key: 'quotations', to: '/quotations', icon: ClipboardList, label: 'Quotations', roles: ['admin', 'manager', 'accountant'] },
     { key: 'suppliers', to: '/suppliers', icon: Truck, label: 'Suppliers', roles: ['admin', 'manager', 'accountant'] },
     { key: 'inventory', to: '/inventory', icon: Package, label: 'Inventory', roles: ['admin', 'manager'] },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Trophy, 
   Clock, 
@@ -18,8 +19,50 @@ import {
 } from '../hooks/useTechnicianProgress';
 import { StaffPerformanceModal } from './StaffPerformanceModal';
 import { JobDetails } from './JobDetails';
+import { useAuth } from '../context/AuthContext';
+import { TechHours } from './TechHours';
 
+type PerfView = 'month' | 'tech-hours';
+
+// Performance page. Admins get a switch at the top: "This month" (the original
+// view, unchanged) | "Tech hours" (past-month hours per technician). Managers
+// never see the switch, and the Tech hours query only runs for admins.
 export const Performance = () => {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
+  const [params, setParams] = useSearchParams();
+  const view: PerfView = isAdmin && params.get('view') === 'tech-hours' ? 'tech-hours' : 'month';
+
+  if (!isAdmin) return <PerformanceThisMonth />;
+
+  const setView = (v: PerfView) => {
+    const next = new URLSearchParams(params);
+    if (v === 'tech-hours') next.set('view', 'tech-hours'); else next.delete('view');
+    setParams(next, { replace: true });
+  };
+
+  return (
+    <div className="space-y-4 sm:space-y-6">
+      <div role="tablist" aria-label="Performance view"
+        className="grid grid-cols-2 gap-1 p-1 bg-slate-900/60 border border-slate-800 rounded-xl sm:rounded-2xl sm:max-w-sm">
+        {([
+          { id: 'month', label: 'This month', icon: Award },
+          { id: 'tech-hours', label: 'Tech hours', icon: Clock },
+        ] as const).map(t => (
+          <button key={t.id} role="tab" aria-selected={view === t.id} onClick={() => setView(t.id)}
+            className={`flex items-center justify-center gap-1.5 py-2 rounded-lg sm:rounded-xl text-sm font-semibold transition-all active:scale-[0.98] ${
+              view === t.id ? 'bg-brand text-slate-950 shadow-md font-bold' : 'text-slate-400 hover:text-white'
+            }`}>
+            <t.icon size={15} /> {t.label}
+          </button>
+        ))}
+      </div>
+      {view === 'tech-hours' ? <TechHours embedded /> : <PerformanceThisMonth />}
+    </div>
+  );
+};
+
+const PerformanceThisMonth = () => {
   const { adminTechData, isLoading, refetch } = useTechnicianProgress();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTier, setSelectedTier] = useState<string>('all');

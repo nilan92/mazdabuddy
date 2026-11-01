@@ -23,7 +23,6 @@ const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(mod
 const ResetPassword = lazy(() => import('./components/ResetPassword').then(module => ({ default: module.ResetPassword })));
 const JobStatus = lazy(() => import('./components/JobStatus').then(module => ({ default: module.JobStatus })));
 const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
-const TechHours = lazy(() => import('./components/TechHours').then(module => ({ default: module.TechHours })));
 const Performance = lazy(() => import('./components/Performance').then(module => ({ default: module.Performance })));
 const Bookings = lazy(() => import('./components/Bookings').then(module => ({ default: module.Bookings })));
 const PublicBooking = lazy(() => import('./components/PublicBooking').then(module => ({ default: module.PublicBooking })));
@@ -259,9 +258,10 @@ const App = () => {
                                         <Performance />
                                     </RoleRoute>
                                 } />
+                                {/* Tech hours now lives inside Performance (admin-only switch); old link redirects there */}
                                 <Route path="/tech-hours" element={
                                     <RoleRoute allowedRoles={['admin']}>
-                                        <TechHours />
+                                        <Navigate to="/performance?view=tech-hours" replace />
                                     </RoleRoute>
                                 } />
                                 <Route path="/inventory" element={
