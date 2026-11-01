@@ -23,6 +23,7 @@ const ForgotPassword = lazy(() => import('./components/ForgotPassword').then(mod
 const ResetPassword = lazy(() => import('./components/ResetPassword').then(module => ({ default: module.ResetPassword })));
 const JobStatus = lazy(() => import('./components/JobStatus').then(module => ({ default: module.JobStatus })));
 const Onboarding = lazy(() => import('./components/Onboarding').then(module => ({ default: module.Onboarding })));
+const TechHours = lazy(() => import('./components/TechHours').then(module => ({ default: module.TechHours })));
 const Performance = lazy(() => import('./components/Performance').then(module => ({ default: module.Performance })));
 const Bookings = lazy(() => import('./components/Bookings').then(module => ({ default: module.Bookings })));
 const PublicBooking = lazy(() => import('./components/PublicBooking').then(module => ({ default: module.PublicBooking })));
@@ -256,6 +257,11 @@ const App = () => {
                                 <Route path="/performance" element={
                                     <RoleRoute allowedRoles={['admin', 'manager']}>
                                         <Performance />
+                                    </RoleRoute>
+                                } />
+                                <Route path="/tech-hours" element={
+                                    <RoleRoute allowedRoles={['admin']}>
+                                        <TechHours />
                                     </RoleRoute>
                                 } />
                                 <Route path="/inventory" element={

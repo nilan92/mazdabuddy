@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { calcInvoiceTotal, DEFAULT_LABOR_RATE_LKR } from '../src/lib/totals.ts';
 import { fitLogoBox } from '../src/utils/pdfHelpers.ts';
 import { toSriLankanMsisdn, waMeUrl, invoiceMessage } from '../src/lib/whatsapp.ts';
+import { buildTechHoursReport, jobLabour, recentMonths } from '../src/lib/techHours.ts';
 import { smartTitleCase, tidyName, withTitle, CUSTOMER_TITLES } from '../src/lib/textCase.ts';
 
 // --- calcInvoiceTotal ---
@@ -94,5 +95,29 @@ assert.equal(withTitle(null, 'Kamal'), 'Kamal', 'missing title just returns the 
 assert.equal(withTitle('Dr.', ''), '', 'no name means no output');
 assert.equal(withTitle('Prof.', 'Silva'), 'Prof. Silva', 'Prof. supported');
 assert.equal(CUSTOMER_TITLES.length, 4, 'four titles offered');
+
+// --- techHours ---
+assert.deepEqual(jobLabour([
+    { hours: 2, quantity: 1, hourly_rate_lkr: 1850 },
+    { hours: 1, hourly_rate_lkr: 6500, is_fixed: true },
+    { hours: 3, hourly_rate_lkr: 4000, is_outsourced: true },
+    { hours: '1.5', quantity: 2, hourly_rate_lkr: 2000, discount_type: 'percent', discount_value: 10 },
+]), { hours: 5, fixedLines: 1, value: 3700 + 6500 + 5400 }, 'fixed lines add value not hours; sublet lines skipped; line discount applied');
+{
+    const r = buildTechHoursReport(
+        [{ id: 's1', name: 'Kavindu', profile_id: 'p1' }, { id: 's2', name: 'Sasiru', profile_id: null }],
+        [
+            { id: 'j1', completed_at: '2026-10-03T08:00:00Z', assigned_staff_id: 's1', job_labor: [{ hours: 2, hourly_rate_lkr: 1000 }] },
+            { id: 'j2', completed_at: '2026-10-05T08:00:00Z', assigned_technician_id: 'p1', job_labor: [{ hours: 1, hourly_rate_lkr: 1000 }] },
+            { id: 'j3', completed_at: '2026-10-06T08:00:00Z', assigned_staff_id: 's2', job_labor: [{ hours: 4, hourly_rate_lkr: 1000 }] },
+            { id: 'j4', completed_at: '2026-10-07T08:00:00Z', job_labor: [{ hours: 9, hourly_rate_lkr: 1000 }] },
+            { id: 'j5', completed_at: '2026-10-08T08:00:00Z', assigned_staff_id: 's1', is_outsourced: true, job_labor: [{ hours: 5, hourly_rate_lkr: 1000 }] },
+        ]);
+    assert.deepEqual(r.rows.map(x => [x.name, x.jobCount, x.hours]), [['Sasiru', 1, 4], ['Kavindu', 2, 3], ['No tech', 1, 9]],
+        'grouped by staff or profile, unassigned last, outsourced jobs skipped');
+    assert.deepEqual(r.totals, { jobCount: 4, hours: 16, fixedLines: 0, value: 16000 }, 'totals add up');
+    assert.equal(r.rows[1].jobs[0].id, 'j2', 'drill-down newest first');
+}
+assert.deepEqual(recentMonths(new Date(2026, 0, 15), 3), [{ year: 2026, month: 0 }, { year: 2025, month: 11 }, { year: 2025, month: 10 }], 'months roll over the year');
 
 console.log('selfcheck: all assertions passed');
