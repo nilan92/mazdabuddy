@@ -258,6 +258,12 @@ const App = () => {
                                         <Performance />
                                     </RoleRoute>
                                 } />
+                                {/* Tech hours now lives inside Performance (admin-only switch); old link redirects there */}
+                                <Route path="/tech-hours" element={
+                                    <RoleRoute allowedRoles={['admin']}>
+                                        <Navigate to="/performance?view=tech-hours" replace />
+                                    </RoleRoute>
+                                } />
                                 <Route path="/inventory" element={
                                     <RoleRoute allowedRoles={['admin', 'manager']}>
                                         <Inventory />
